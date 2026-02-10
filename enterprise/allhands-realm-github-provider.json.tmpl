@@ -1772,6 +1772,40 @@
         "sendIdTokenOnLogout": "true",
         "passMaxAge": "false"
       }
+    },
+    {
+      "alias": "bitbucket-data-center",
+      "displayName": "BitBucket Data Center",
+      "internalId": "b77b4ead-20e8-451c-ad27-99f92d561616",
+      "providerId": "oauth2",
+      "enabled": true,
+      "updateProfileFirstLoginMode": "on",
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "hideOnLogin": false,
+      "config": {
+        "givenNameClaim": "given_name",
+        "userInfoUrl": "$BITBUCKET_DATA_CENTER_USER_INFO_URL",
+        "clientId": "$BITBUCKET_DATA_CENTER_CLIENT_ID",
+        "tokenUrl": "$BITBUCKET_DATA_CENTER_TOKEN_URL",
+        "acceptsPromptNoneForwardFromClient": "false",
+        "fullNameClaim": "name",
+        "userIDClaim": "sub",
+        "emailClaim": "email",
+        "userNameClaim": "preferred_username",
+        "caseSensitiveOriginalUsername": "false",
+        "familyNameClaim": "family_name",
+        "pkceEnabled": "false",
+        "authorizationUrl": "$BITBUCKET_DATA_CENTER_AUTHORIZATION_URL",
+        "clientAuthMethod": "client_secret_post",
+        "syncMode": "IMPORT",
+        "clientSecret": "$BITBUCKET_DATA_CENTER_CLIENT_SECRET",
+        "allowedClockSkew": "0",
+        "defaultScope": "PUBLIC_REPOS"
+      }
     }
   ],
   "identityProviderMappers": [
@@ -1826,6 +1860,28 @@
       "identityProviderMapper": "hardcoded-attribute-idp-mapper",
       "config": {
         "attribute.value": "bitbucket",
+        "syncMode": "FORCE",
+        "attribute": "identity_provider"
+      }
+    },
+    {
+      "id": "c8f3a2d1-5e7b-4c9a-b6d8-1f2e3a4b5c6d",
+      "name": "id-mapper",
+      "identityProviderAlias": "bitbucket-data-center",
+      "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+      "config": {
+        "syncMode": "FORCE",
+        "claim": "sub",
+        "user.attribute": "bitbucket_data_center_id"
+      }
+    },
+    {
+      "id": "d9e4b3c2-6f8c-5d0b-c7e9-2g3f4a5b6c7e",
+      "name": "identity-provider",
+      "identityProviderAlias": "bitbucket-data-center",
+      "identityProviderMapper": "hardcoded-attribute-idp-mapper",
+      "config": {
+        "attribute.value": "bitbucket-data-center",
         "syncMode": "FORCE",
         "attribute": "identity_provider"
       }
