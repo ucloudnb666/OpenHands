@@ -38,7 +38,7 @@ from openhands.server.user_auth.user_auth import UserAuth
 
 authorize_url_generator = AuthorizeUrlGenerator(
     client_id=SLACK_CLIENT_ID,
-    scopes=['app_mentions:read', 'chat:write'],
+    scopes=['app_mentions:read', 'chat:write', 'channels:read', 'groups:read'],
     user_scopes=['search:read'],
 )
 
@@ -90,6 +90,45 @@ class SlackManager(Manager):
             repo = match.group(1) if match.group(1) else match.group(2)
             return repo
 
+        return None
+
+    def _parse_repo_from_channel_description(self, description: str) -> str | None:
+        """Parse repo:{org}/{repo} pattern from channel description/purpose."""
+        if not description:
+            return None
+        # Match repo:{org}/{repo} pattern (case-insensitive)
+        pattern = r'repo:([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)'
+        match = re.search(pattern, description, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        return None
+
+    async def _get_default_repo_from_channel(
+        self, channel_id: str, bot_access_token: str
+    ) -> str | None:
+        """Get the default repo from channel description if set."""
+        try:
+            client = AsyncWebClient(token=bot_access_token)
+            result = await client.conversations_info(channel=channel_id)
+            if result.get('ok') and result.get('channel'):
+                channel = result['channel']
+                # Check purpose (description) first, then topic
+                purpose = channel.get('purpose', {}).get('value', '')
+                topic = channel.get('topic', {}).get('value', '')
+                repo = self._parse_repo_from_channel_description(
+                    purpose
+                ) or self._parse_repo_from_channel_description(topic)
+                if repo:
+                    logger.info(
+                        'Found default repo from channel description',
+                        extra={'channel_id': channel_id, 'repo': repo},
+                    )
+                return repo
+        except Exception as e:
+            logger.warning(
+                f'Failed to get channel info for default repo: {e}',
+                extra={'channel_id': channel_id},
+            )
         return None
 
     async def _get_repositories(self, user_auth: UserAuth) -> list[Repository]:
@@ -258,10 +297,35 @@ class SlackManager(Manager):
                 slack_view.user_msg, user_repos
             )
 
-            # User mentioned a matching repo is their message, start job without repo selection form
+            # User mentioned a matching repo in their message, start job without repo selection form
             if match:
                 slack_view.selected_repo = repos[0].full_name
                 return True
+
+            # Check if channel has a default repo set in its description
+            default_repo = await self._get_default_repo_from_channel(
+                slack_view.channel_id, slack_view.bot_access_token
+            )
+            if default_repo:
+                # Verify the default repo is in user's accessible repos
+                for repo in user_repos:
+                    if repo.full_name.lower() == default_repo.lower():
+                        slack_view.selected_repo = repo.full_name
+                        logger.info(
+                            'Using default repo from channel description',
+                            extra={
+                                'channel_id': slack_view.channel_id,
+                                'repo': repo.full_name,
+                            },
+                        )
+                        return True
+                logger.warning(
+                    'Default repo from channel not in user accessible repos',
+                    extra={
+                        'channel_id': slack_view.channel_id,
+                        'default_repo': default_repo,
+                    },
+                )
 
             logger.info(
                 'render_repository_selector',

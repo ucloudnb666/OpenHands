@@ -331,7 +331,12 @@ class SlackNewConversationView(SlackViewInterface):
     def get_response_msg(self) -> str:
         user_info: SlackUser = self.slack_to_openhands_user
         conversation_link = CONVERSATION_URL.format(self.conversation_id)
-        return f"I'm on it! {user_info.slack_display_name} can [track my progress here]({conversation_link})."
+        repo_info = (
+            f' Working on **{self.selected_repo}**.'
+            if self.selected_repo and self.selected_repo != '-'
+            else ''
+        )
+        return f"I'm on it!{repo_info} {user_info.slack_display_name} can [track my progress here]({conversation_link})."
 
 
 @dataclass
