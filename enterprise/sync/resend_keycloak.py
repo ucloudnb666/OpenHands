@@ -134,8 +134,9 @@ def _is_retryable_resend_error(exception: BaseException) -> bool:
         True if the exception should be retried, False otherwise.
     """
     # Check for Resend's RateLimitError directly
+    # Use warning level since rate limit hits indicate API stress and should be monitored
     if isinstance(exception, RateLimitError):
-        logger.debug(f'Retrying due to RateLimitError: {exception}')
+        logger.warning(f'Retrying due to RateLimitError: {exception}')
         return True
 
     # Check for ResendError with retryable status codes
@@ -145,9 +146,15 @@ def _is_retryable_resend_error(exception: BaseException) -> bool:
             try:
                 status_code = int(exception.code)
                 if status_code in RETRYABLE_STATUS_CODES:
-                    logger.debug(
-                        f'Retrying due to ResendError with status code {status_code}'
-                    )
+                    # Use warning for rate limits (429), debug for gateway errors
+                    if status_code == 429:
+                        logger.warning(
+                            f'Retrying due to rate limit (status code {status_code})'
+                        )
+                    else:
+                        logger.debug(
+                            f'Retrying due to gateway error (status code {status_code})'
+                        )
                     return True
             except (ValueError, TypeError):
                 logger.warning(
@@ -158,7 +165,7 @@ def _is_retryable_resend_error(exception: BaseException) -> bool:
     # Note: ConnectionError and TimeoutError are the specific network-related errors
     # We don't catch OSError broadly to avoid retrying on filesystem errors
     if isinstance(exception, (ConnectionError, TimeoutError)):
-        logger.debug(f'Retrying due to connection/timeout error: {exception}')
+        logger.warning(f'Retrying due to connection/timeout error: {exception}')
         return True
 
     return False
