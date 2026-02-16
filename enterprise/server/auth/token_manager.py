@@ -446,18 +446,15 @@ class TokenManager:
         url = BITBUCKET_DATA_CENTER_TOKEN_URL
         logger.info(f'Refreshing Bitbucket Data Center token with URL: {url}')
 
-        auth = base64.b64encode(
-            f'{BITBUCKET_DATA_CENTER_CLIENT_ID}:{BITBUCKET_DATA_CENTER_CLIENT_SECRET}'.encode()
-        ).decode()
-
         headers = {
-            'Authorization': f'Basic {auth}',
             'Content-Type': 'application/x-www-form-urlencoded',
         }
 
         data = {
             'grant_type': 'refresh_token',
             'refresh_token': refresh_token,
+            'client_id': BITBUCKET_DATA_CENTER_CLIENT_ID,
+            'client_secret': BITBUCKET_DATA_CENTER_CLIENT_SECRET,
         }
 
         async with httpx.AsyncClient(verify=httpx_verify_option()) as client:
