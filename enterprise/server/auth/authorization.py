@@ -6,8 +6,7 @@ within organizations. It uses a permission-based authorization model where
 roles (owner, admin, member) are mapped to specific permissions.
 
 This is the SAAS/enterprise implementation that performs real authorization
-checks. It imports the Permission and RoleName enums from the OSS module
-and provides actual enforcement of permissions.
+checks against the database.
 
 Usage:
     from server.auth.authorization import (
@@ -26,16 +25,9 @@ Usage:
     ):
         # Only users with VIEW_LLM_SETTINGS permission can access
         ...
-
-    @router.patch('/{org_id}/settings')
-    async def update_settings(
-        org_id: UUID,
-        user_id: str = Depends(require_permission(Permission.EDIT_LLM_SETTINGS)),
-    ):
-        # Only users with EDIT_LLM_SETTINGS permission can access
-        ...
 """
 
+from enum import Enum
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -44,31 +36,82 @@ from storage.role import Role
 from storage.role_store import RoleStore
 
 from openhands.core.logger import openhands_logger as logger
-from openhands.server.auth.authorization import (
-    Permission,
-    ROLE_PERMISSIONS,
-    RoleName,
-)
-from openhands.server.auth.authorization import (
-    get_role_permissions,
-)
+from openhands.server.auth import Permission
 from openhands.server.user_auth import get_user_id
 
-# Re-export enums and constants from OSS module for convenience
-__all__ = [
-    'Permission',
-    'RoleName',
-    'ROLE_PERMISSIONS',
-    'get_role_permissions',
-    'has_permission',
-    'get_user_org_role',
-    'has_required_role',
-    'require_permission',
-    'require_org_role',
-    'require_org_user',
-    'require_org_admin',
-    'require_org_owner',
-]
+
+class RoleName(str, Enum):
+    """Role names used in the system."""
+
+    OWNER = 'owner'
+    ADMIN = 'admin'
+    MEMBER = 'member'
+
+
+# Permission mappings for each role
+ROLE_PERMISSIONS: dict[RoleName, frozenset[Permission]] = {
+    RoleName.OWNER: frozenset(
+        [
+            # Settings (Full access)
+            Permission.MANAGE_SECRETS,
+            Permission.MANAGE_MCP,
+            Permission.MANAGE_INTEGRATIONS,
+            Permission.MANAGE_APPLICATION_SETTINGS,
+            Permission.MANAGE_API_KEYS,
+            Permission.VIEW_LLM_SETTINGS,
+            Permission.EDIT_LLM_SETTINGS,
+            Permission.VIEW_BILLING,
+            Permission.ADD_CREDITS,
+            # Organization Members
+            Permission.INVITE_USER_TO_ORGANIZATION,
+            Permission.CHANGE_USER_ROLE_MEMBER,
+            Permission.CHANGE_USER_ROLE_ADMIN,
+            Permission.CHANGE_USER_ROLE_OWNER,
+            # Organization Management (Owner only)
+            Permission.CHANGE_ORGANIZATION_NAME,
+            Permission.DELETE_ORGANIZATION,
+        ]
+    ),
+    RoleName.ADMIN: frozenset(
+        [
+            # Settings (Full access)
+            Permission.MANAGE_SECRETS,
+            Permission.MANAGE_MCP,
+            Permission.MANAGE_INTEGRATIONS,
+            Permission.MANAGE_APPLICATION_SETTINGS,
+            Permission.MANAGE_API_KEYS,
+            Permission.VIEW_LLM_SETTINGS,
+            Permission.EDIT_LLM_SETTINGS,
+            Permission.VIEW_BILLING,
+            Permission.ADD_CREDITS,
+            # Organization Members
+            Permission.INVITE_USER_TO_ORGANIZATION,
+            Permission.CHANGE_USER_ROLE_MEMBER,
+            Permission.CHANGE_USER_ROLE_ADMIN,
+        ]
+    ),
+    RoleName.MEMBER: frozenset(
+        [
+            # Settings (Full access)
+            Permission.MANAGE_SECRETS,
+            Permission.MANAGE_MCP,
+            Permission.MANAGE_INTEGRATIONS,
+            Permission.MANAGE_APPLICATION_SETTINGS,
+            Permission.MANAGE_API_KEYS,
+            # LLM Settings (View only)
+            Permission.VIEW_LLM_SETTINGS,
+        ]
+    ),
+}
+
+
+def get_role_permissions(role_name: str) -> frozenset[Permission]:
+    """Get the permissions for a role."""
+    try:
+        role_enum = RoleName(role_name)
+        return ROLE_PERMISSIONS.get(role_enum, frozenset())
+    except ValueError:
+        return frozenset()
 
 
 def get_user_org_role(user_id: str, org_id: UUID) -> Role | None:
