@@ -141,7 +141,8 @@ def _is_retryable_resend_error(exception: BaseException) -> bool:
 
     # Check for ResendError with retryable status codes
     if isinstance(exception, ResendError):
-        # ResendError has a 'code' attribute for HTTP status code
+        # ResendError may have a 'code' attribute for HTTP status code
+        # We use hasattr() defensively as the attribute structure may vary across SDK versions
         if hasattr(exception, 'code'):
             try:
                 status_code = int(exception.code)
@@ -158,6 +159,8 @@ def _is_retryable_resend_error(exception: BaseException) -> bool:
                     return True
             except (ValueError, TypeError):
                 logger.warning(f'ResendError with non-integer code: {exception.code}')
+                # Retry by default if we can't determine the status code
+                return True
 
     # Check for connection/timeout errors (can be raised by underlying HTTP client)
     # Note: ConnectionError and TimeoutError are the specific network-related errors
@@ -344,7 +347,6 @@ def send_welcome_email(
     Raises:
         Exception: If the API call fails after retries.
     """
-
     try:
         # Prepare the recipient name
         recipient_name = ''
