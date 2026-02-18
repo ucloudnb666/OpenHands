@@ -340,9 +340,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             yield task
 
         except Exception as exc:
-            _logger.exception('Error starting conversation: %r', exc, stack_info=True)
+            _logger.exception('Error starting conversation', stack_info=True)
             task.status = AppConversationStartTaskStatus.ERROR
-            task.detail = repr(exc)
+            task.detail = str(exc)
             yield task
 
     async def _build_app_conversations(
@@ -460,18 +460,6 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
             if conversation_url:
                 conversation_url += f'/api/conversations/{app_conversation_info.id.hex}'
-                # In local mode, rewrite localhost URLs to empty string
-                # so the frontend connects to the same origin (nginx proxy)
-                # which routes /sockets/ to the agent server
-                import re
-                if re.match(r'https?://(?:127\.0\.0\.1|localhost):\d+', conversation_url):
-                    conversation_url = ''
-                # Rewrite localhost URLs to go through the reverse proxy
-                # so the browser can reach the agent server
-                import re
-                m = re.match(r'https?://(?:127\.0\.0\.1|localhost):(\d+)(.*)', conversation_url)
-                if m:
-                    conversation_url = f'/agent/{m.group(1)}{m.group(2)}'
             session_api_key = sandbox.session_api_key
 
         return AppConversation(

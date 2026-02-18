@@ -37,8 +37,42 @@ from openhands.app_server.sandbox.sandbox_service import (
 from openhands.app_server.sandbox.sandbox_spec_models import SandboxSpecInfo
 from openhands.app_server.sandbox.sandbox_spec_service import SandboxSpecService
 from openhands.app_server.services.injector import InjectorState
+from openhands.app_server.utils.docker_utils import (
+    replace_localhost_hostname_for_docker,
+)
 
 _logger = logging.getLogger(__name__)
+
+
+def _get_health_check_host() -> str:
+    """Get the health check host from environment variable.
+
+    Defaults to 'localhost', but can be set to '127.0.0.1' via
+    OPENHANDS_HEALTH_CHECK_HOST to avoid IPv6 resolution issues.
+    """
+    return os.environ.get('OPENHANDS_HEALTH_CHECK_HOST', 'localhost')
+
+
+def _is_docker_host_rewrite_disabled() -> bool:
+    """Check if Docker hostname rewrite is disabled.
+
+    Set OPENHANDS_DISABLE_DOCKER_HOST_REWRITE to '1', 'true', or 'yes'
+    to disable replacing 'localhost' with 'host.docker.internal' in
+    non-Docker container environments (e.g., gVisor, LXC).
+    """
+    value = os.environ.get('OPENHANDS_DISABLE_DOCKER_HOST_REWRITE', '').lower()
+    return value in ('1', 'true', 'yes')
+
+
+def _maybe_replace_localhost_for_docker(url: str) -> str:
+    """Conditionally replace localhost hostname for Docker.
+
+    This wrapper allows disabling the Docker hostname rewrite via
+    OPENHANDS_DISABLE_DOCKER_HOST_REWRITE for non-Docker containers.
+    """
+    if _is_docker_host_rewrite_disabled():
+        return url
+    return replace_localhost_hostname_for_docker(url)
 
 
 class ProcessInfo(BaseModel):
@@ -131,38 +165,37 @@ class ProcessSandboxService(SandboxService):
         )
 
         try:
-            stdout_log = open(f'/dev/shm/agent-{sandbox_id}.log', 'w')
-            stderr_log = open(f'/dev/shm/agent-{sandbox_id}_err.log', 'w')
+            # Start the process
             process = subprocess.Popen(
                 cmd,
                 env=env,
                 cwd=working_dir,
-                stdout=stdout_log,
-                stderr=stderr_log,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
 
+            # Wait a moment for the process to start
             await asyncio.sleep(1)
 
+            # Check if process is still running
             if process.poll() is not None:
-                stdout_log.close()
-                stderr_log.close()
-                with open(f'/dev/shm/agent-{sandbox_id}_err.log') as f:
-                    err = f.read()
-                raise SandboxError(f'Agent process failed to start: {err}')
+                stdout, stderr = process.communicate()
+                raise SandboxError(f'Agent process failed to start: {stderr.decode()}')
 
             return process
 
-        except SandboxError:
-            raise
         except Exception as e:
             raise SandboxError(f'Failed to start agent process: {e}')
 
-    async def _wait_for_server_ready(self, port: int, timeout: int = 120) -> bool:
+    async def _wait_for_server_ready(self, port: int, timeout: int = 30) -> bool:
         """Wait for the agent server to be ready."""
         start_time = time.time()
+        health_check_host = _get_health_check_host()
         while time.time() - start_time < timeout:
             try:
-                url = f'http://127.0.0.1:{port}/alive'
+                url = _maybe_replace_localhost_for_docker(
+                    f'http://{health_check_host}:{port}/alive'
+                )
                 response = await self.httpx_client.get(url, timeout=5.0)
                 if response.status_code == 200:
                     data = response.json()
@@ -179,7 +212,11 @@ class ProcessSandboxService(SandboxService):
             process = psutil.Process(process_info.pid)
             if process.is_running():
                 status = process.status()
-                if status in (psutil.STATUS_RUNNING, psutil.STATUS_SLEEPING, psutil.STATUS_DISK_SLEEP):
+                if status in (
+                    psutil.STATUS_RUNNING,
+                    psutil.STATUS_SLEEPING,
+                    psutil.STATUS_DISK_SLEEP,
+                ):
                     return SandboxStatus.RUNNING
                 elif status == psutil.STATUS_STOPPED:
                     return SandboxStatus.PAUSED
@@ -198,17 +235,20 @@ class ProcessSandboxService(SandboxService):
 
         exposed_urls = None
         session_api_key = None
+        health_check_host = _get_health_check_host()
 
         if status == SandboxStatus.RUNNING:
             # Check if server is actually responding
             try:
-                url = f'http://127.0.0.1:{process_info.port}{self.health_check_path}'
+                url = _maybe_replace_localhost_for_docker(
+                    f'http://{health_check_host}:{process_info.port}{self.health_check_path}'
+                )
                 response = await self.httpx_client.get(url, timeout=5.0)
                 if response.status_code == 200:
                     exposed_urls = [
                         ExposedUrl(
                             name=AGENT_SERVER,
-                            url=f'http://127.0.0.1:{process_info.port}',
+                            url=f'http://localhost:{process_info.port}',
                             port=process_info.port,
                         ),
                     ]
