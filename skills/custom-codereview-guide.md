@@ -1,4 +1,6 @@
 ---
+name: custom-codereview-guide
+description: Repo-specific code review guidelines for OpenHands/OpenHands. Provides additional review rules alongside the default code review skill.
 triggers:
 - /codereview
 ---
