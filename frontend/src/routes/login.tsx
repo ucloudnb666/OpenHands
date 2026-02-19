@@ -41,9 +41,17 @@ export default function LoginPage() {
   // Redirect authenticated users away from login page
   React.useEffect(() => {
     if (!isAuthLoading && isAuthed) {
-      navigate(returnTo, { replace: true });
+      // Preserve login_method query param when redirecting
+      const loginMethod = searchParams.get("login_method");
+      let destination = returnTo;
+      if (loginMethod) {
+        const destUrl = new URL(destination, window.location.origin);
+        destUrl.searchParams.set("login_method", loginMethod);
+        destination = destUrl.pathname + destUrl.search;
+      }
+      navigate(destination, { replace: true });
     }
-  }, [isAuthed, isAuthLoading, navigate, returnTo]);
+  }, [isAuthed, isAuthLoading, navigate, returnTo, searchParams]);
 
   if (isAuthLoading || config.isLoading) {
     return (
