@@ -1,10 +1,7 @@
 import { Provider } from "#/types/settings";
 
 // Providers used for authentication only — no git repository operations supported
-const AUTH_ONLY_PROVIDERS = new Set<Provider>([
-  "bitbucket_data_center",
-  "enterprise_sso",
-]);
+const AUTH_ONLY_PROVIDERS = new Set<Provider>(["enterprise_sso"]);
 
 export const convertRawProvidersToList = (
   raw: Partial<Record<Provider, string | null>> | undefined,
