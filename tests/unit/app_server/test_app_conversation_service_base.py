@@ -1284,6 +1284,27 @@ async def test_maybe_run_setup_script_handles_repo_name_without_owner():
 
 
 @pytest.mark.asyncio
+async def test_maybe_run_setup_script_handles_repo_name_with_git_suffix():
+    """Repo root computation should preserve .git suffix when present."""
+    mock_user_context = Mock(spec=UserContext)
+    with patch.object(AppConversationServiceBase, '__abstractmethods__', set()):
+        service = AppConversationServiceBase(
+            init_git_in_empty_workspace=True, user_context=mock_user_context
+        )
+        mock_workspace = MockWorkspace(working_dir='/workspace/project')
+
+        await service.maybe_run_setup_script(
+            mock_workspace, selected_repository='owner/my-repo.git'
+        )
+
+        call_args = mock_workspace.execute_command.call_args
+        command = call_args[0][0]
+        cwd = call_args[0][1]
+        assert '/workspace/project/my-repo.git/.openhands/setup.sh' in command
+        assert cwd == '/workspace/project/my-repo.git'
+
+
+@pytest.mark.asyncio
 async def test_maybe_setup_git_hooks_uses_absolute_paths_for_remote_file_ops():
     """Remote file upload/download APIs require absolute paths."""
     mock_user_context = Mock(spec=UserContext)

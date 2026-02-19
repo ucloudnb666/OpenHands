@@ -360,16 +360,18 @@ class AppConversationServiceBase(AppConversationService, ABC):
         """Set up git hooks if .openhands/pre-commit.sh exists in the workspace or repository."""
         repo_root = self._compute_repo_root(workspace, selected_repository)
 
-        pre_commit_hook = str(repo_root / PRE_COMMIT_HOOK)
+        pre_commit_script = repo_root / '.openhands' / 'pre-commit.sh'
+        pre_commit_hook = repo_root / PRE_COMMIT_HOOK
+        pre_commit_local = repo_root / PRE_COMMIT_LOCAL
 
-        command = 'mkdir -p .git/hooks && chmod +x .openhands/pre-commit.sh'
+        command = f'mkdir -p {pre_commit_hook.parent} && chmod +x {pre_commit_script}'
         result = await workspace.execute_command(command, str(repo_root))
         if result.exit_code:
             return
 
         # Check if there's an existing pre-commit hook
         with tempfile.NamedTemporaryFile(mode='w+b') as temp_file:
-            result = await workspace.file_download(pre_commit_hook, temp_file.name)
+            result = await workspace.file_download(str(pre_commit_hook), temp_file.name)
             if result.success:
                 _logger.info('Preserving existing pre-commit hook')
                 # an existing pre-commit hook exists
@@ -378,8 +380,8 @@ class AppConversationServiceBase(AppConversationService, ABC):
                 if 'This hook was installed by OpenHands' not in existing_hook:
                     # Move the existing hook to pre-commit.local
                     command = (
-                        f'mv {PRE_COMMIT_HOOK} {PRE_COMMIT_LOCAL} &&'
-                        f'chmod +x {PRE_COMMIT_LOCAL}'
+                        f'mv {pre_commit_hook} {pre_commit_local} &&'
+                        f'chmod +x {pre_commit_local}'
                     )
                     result = await workspace.execute_command(command, str(repo_root))
                     if result.exit_code != 0:
@@ -391,7 +393,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
         # write the pre-commit hook
         upload_result = await workspace.file_upload(
             source_path=Path(__file__).parent / 'git' / 'pre-commit.sh',
-            destination_path=pre_commit_hook,
+            destination_path=str(pre_commit_hook),
         )
         if not upload_result.success:
             _logger.error(f'Failed to install pre-commit hook: {upload_result.error}')
@@ -399,7 +401,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
 
         # Make the pre-commit hook executable
         result = await workspace.execute_command(
-            f'chmod +x {PRE_COMMIT_HOOK}', str(repo_root)
+            f'chmod +x {pre_commit_hook}', str(repo_root)
         )
         if result.exit_code:
             _logger.error(f'Failed to make pre-commit hook executable: {result.stderr}')
