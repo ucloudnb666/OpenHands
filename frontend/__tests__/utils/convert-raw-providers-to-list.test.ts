@@ -37,8 +37,8 @@ describe("convertRawProvidersToList", () => {
       enterprise_sso: null,
     };
 
-    expect(convertRawProvidersToList(bdcOnly)).toEqual([]);
-    expect(convertRawProvidersToList(bdcWithGitHub)).toEqual(["github"]);
+    expect(convertRawProvidersToList(bdcOnly)).toEqual(["bitbucket_data_center"]);
+    expect(convertRawProvidersToList(bdcWithGitHub)).toEqual(["github", "bitbucket_data_center"]);
     expect(convertRawProvidersToList(ssoOnly)).toEqual([]);
   });
 });
