@@ -236,6 +236,7 @@ export const getProviderName = (gitProvider: Provider) => {
   if (gitProvider === "bitbucket") return "Bitbucket";
   if (gitProvider === "azure_devops") return "Azure DevOps";
   if (gitProvider === "forgejo") return "Forgejo";
+  if (gitProvider === "bitbucket_data_center") return "Bitbucket Data Center";
   return "GitHub";
 };
 

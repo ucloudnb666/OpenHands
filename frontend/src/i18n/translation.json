@@ -7231,7 +7231,7 @@
     "es": "Actualmente no hay un plan para este repositorio",
     "tr": "Şu anda bu depo için bir plan yok"
   },
-    "SIDEBAR$NAVIGATION_LABEL": {
+  "SIDEBAR$NAVIGATION_LABEL": {
     "en": "Sidebar navigation",
     "zh-CN": "侧边栏导航",
     "zh-TW": "側邊欄導航",
@@ -10416,13 +10416,52 @@
     "uk": "натисніть тут, щоб отримати інструкції"
   },
   "BITBUCKET_DATA_CENTER$TOKEN_LABEL": {
-    "en": "Bitbucket Data Center Token"
+    "en": "Bitbucket Data Center Token",
+    "ja": "Bitbucket Data Centerトークン",
+    "zh-CN": "Bitbucket Data Center令牌",
+    "zh-TW": "Bitbucket Data Center權杖",
+    "ko-KR": "Bitbucket Data Center 토큰",
+    "no": "Bitbucket Data Center-token",
+    "ar": "رمز Bitbucket Data Center",
+    "de": "Bitbucket Data Center-Token",
+    "fr": "Jeton Bitbucket Data Center",
+    "it": "Token Bitbucket Data Center",
+    "pt": "Token do Bitbucket Data Center",
+    "es": "Token de Bitbucket Data Center",
+    "tr": "Bitbucket Data Center Token",
+    "uk": "Токен Bitbucket Data Center"
   },
   "BITBUCKET_DATA_CENTER$HOST_LABEL": {
-    "en": "Bitbucket Data Center Host"
+    "en": "Bitbucket Data Center Host",
+    "ja": "Bitbucket Data Centerホスト",
+    "zh-CN": "Bitbucket Data Center主机",
+    "zh-TW": "Bitbucket Data Center主機",
+    "ko-KR": "Bitbucket Data Center 호스트",
+    "no": "Bitbucket Data Center-vert",
+    "ar": "مضيف Bitbucket Data Center",
+    "de": "Bitbucket Data Center-Host",
+    "fr": "Hôte Bitbucket Data Center",
+    "it": "Host Bitbucket Data Center",
+    "pt": "Host do Bitbucket Data Center",
+    "es": "Host de Bitbucket Data Center",
+    "tr": "Bitbucket Data Center Sunucu",
+    "uk": "Хост Bitbucket Data Center"
   },
   "BITBUCKET_DATA_CENTER$TOKEN_HELP_TEXT": {
-    "en": "Create an <0>HTTP access token</0> in your Bitbucket Data Center instance with repository read/write and pull request read/write permissions."
+    "en": "Create an <0>HTTP access token</0> in your Bitbucket Data Center instance with repository read/write and pull request read/write permissions.",
+    "ja": "リポジトリの読み取り/書き込みおよびプルリクエストの読み取り/書き込み権限を持つBitbucket Data Centerインスタンスで<0>HTTPアクセストークン</0>を作成してください。",
+    "zh-CN": "在您的Bitbucket Data Center实例中创建一个具有仓库读写和拉取请求读写权限的<0>HTTP访问令牌</0>。",
+    "zh-TW": "在您的Bitbucket Data Center實例中建立一個具有儲存庫讀寫和拉取請求讀寫權限的<0>HTTP存取權杖</0>。",
+    "ko-KR": "Bitbucket Data Center 인스턴스에서 저장소 읽기/쓰기 및 풀 리퀘스트 읽기/쓰기 권한이 있는 <0>HTTP 액세스 토큰</0>을 생성하세요.",
+    "no": "Opprett et <0>HTTP-tilgangstoken</0> i din Bitbucket Data Center-instans med lese-/skrivetilgang til repositorier og pull-forespørsler.",
+    "ar": "أنشئ <0>رمز وصول HTTP</0> في مثيل Bitbucket Data Center الخاص بك مع أذونات قراءة/كتابة للمستودع وقراءة/كتابة لطلبات السحب.",
+    "de": "Erstellen Sie ein <0>HTTP-Zugriffstoken</0> in Ihrer Bitbucket Data Center-Instanz mit Lese-/Schreibberechtigungen für Repositories und Pull Requests.",
+    "fr": "Créez un <0>jeton d'accès HTTP</0> dans votre instance Bitbucket Data Center avec des permissions de lecture/écriture sur les dépôts et les pull requests.",
+    "it": "Crea un <0>token di accesso HTTP</0> nella tua istanza Bitbucket Data Center con permessi di lettura/scrittura per repository e pull request.",
+    "pt": "Crie um <0>token de acesso HTTP</0> na sua instância do Bitbucket Data Center com permissões de leitura/gravação de repositório e pull request.",
+    "es": "Cree un <0>token de acceso HTTP</0> en su instancia de Bitbucket Data Center con permisos de lectura/escritura de repositorio y pull request.",
+    "tr": "Bitbucket Data Center örneğinizde depo okuma/yazma ve pull request okuma/yazma izinlerine sahip bir <0>HTTP erişim jetonu</0> oluşturun.",
+    "uk": "Створіть <0>HTTP-токен доступу</0> у вашому екземплярі Bitbucket Data Center з правами читання/запису репозиторію та pull request."
   },
   "GITLAB$OR_SEE": {
     "en": "or see the",
@@ -11721,7 +11760,20 @@
     "uk": "Посилання для перегляду більше про токен Bitbucket"
   },
   "GIT$BITBUCKET_DC_TOKEN_HELP_LINK": {
-    "en": "Bitbucket Data Center HTTP access token docs"
+    "en": "Bitbucket Data Center HTTP access token docs",
+    "ja": "Bitbucket Data Center HTTPアクセストークンドキュメント",
+    "zh-CN": "Bitbucket Data Center HTTP访问令牌文档",
+    "zh-TW": "Bitbucket Data Center HTTP存取權杖文件",
+    "ko-KR": "Bitbucket Data Center HTTP 액세스 토큰 문서",
+    "no": "Bitbucket Data Center HTTP-tilgangstoken-dokumentasjon",
+    "ar": "وثائق رمز وصول HTTP لـ Bitbucket Data Center",
+    "de": "Bitbucket Data Center HTTP-Zugriffstoken-Dokumentation",
+    "fr": "Documentation du jeton d'accès HTTP Bitbucket Data Center",
+    "it": "Documentazione token di accesso HTTP Bitbucket Data Center",
+    "pt": "Documentação do token de acesso HTTP do Bitbucket Data Center",
+    "es": "Documentación del token de acceso HTTP de Bitbucket Data Center",
+    "tr": "Bitbucket Data Center HTTP erişim jetonu belgeleri",
+    "uk": "Документація HTTP-токена доступу Bitbucket Data Center"
   },
   "GIT$GITHUB_TOKEN_HELP_LINK": {
     "en": "GitHub token help link",
