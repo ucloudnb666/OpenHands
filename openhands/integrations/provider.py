@@ -756,7 +756,7 @@ class ProviderHandler:
                         remote_url = f'{protocol}://{token_value}@{domain}/{scm_path}'
                     else:
                         # HTTP Access Token (PAT) — use as password in Basic auth
-                        remote_url = f'{protocol}://jlaverty:{token_value}@{domain}/{scm_path}'
+                        remote_url = f'{protocol}://x-token-auth:{token_value}@{domain}/{scm_path}'
                 elif provider == ProviderType.AZURE_DEVOPS:
                     # Azure DevOps uses PAT with Basic auth
                     # Format: https://{anything}:{PAT}@dev.azure.com/{org}/{project}/_git/{repo}
