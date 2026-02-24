@@ -15,8 +15,8 @@ function StepHeader({ title, currentStep, totalSteps }: StepHeaderProps) {
           <div
             key={index}
             className={cn(
-              `w-[6px] h-[4px] rounded-full transition-colors
-              ${index < currentStep ? "bg-white" : "bg-neutral-600"}`,
+              "w-[6px] h-[4px] rounded-full transition-colors",
+              index < currentStep ? "bg-white" : "bg-neutral-600",
             )}
           />
         ))}

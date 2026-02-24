@@ -47,21 +47,6 @@ class AuthService {
       appMode === "saas" ? "/api/logout" : "/api/unset-provider-tokens";
     await openHands.post(endpoint);
   }
-
-  /**
-   * Mark onboarding as complete for the current user
-   * @param redirectUrl URL to redirect to after completion
-   * @returns Response with redirect URL
-   */
-  static async completeOnboarding(
-    redirectUrl: string,
-  ): Promise<{ redirect_url: string }> {
-    const { data } = await openHands.post<{ redirect_url: string }>(
-      "/api/complete_onboarding",
-      { redirect_url: redirectUrl },
-    );
-    return data;
-  }
 }
 
 export default AuthService;
