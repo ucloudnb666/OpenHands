@@ -22,7 +22,6 @@ describe("frontend/routes/_oh", () => {
         enable_jira: false,
         enable_jira_dc: false,
         enable_linear: false,
-        enable_onboarding: false,
       };
 
       return {
@@ -140,7 +139,6 @@ describe("frontend/routes/_oh", () => {
         enable_jira: false,
         enable_jira_dc: false,
         enable_linear: false,
-        enable_onboarding: false,
       },
     });
 
@@ -179,7 +177,6 @@ describe("frontend/routes/_oh", () => {
         enable_jira: false,
         enable_jira_dc: false,
         enable_linear: false,
-        enable_onboarding: false,
       },
     });
     useConfigMock.mockReturnValue({
@@ -268,7 +265,6 @@ describe("frontend/routes/_oh", () => {
         enable_jira: false,
         enable_jira_dc: false,
         enable_linear: false,
-        enable_onboarding: false,
       },
     });
     useConfigMock.mockReturnValue({

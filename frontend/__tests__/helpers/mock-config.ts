@@ -15,7 +15,6 @@ export const createMockWebClientConfig = (
     enable_jira: false,
     enable_jira_dc: false,
     enable_linear: false,
-    enable_onboarding: false,
     ...overrides.feature_flags,
   },
   providers_configured: [],

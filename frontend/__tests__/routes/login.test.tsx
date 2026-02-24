@@ -115,7 +115,6 @@ describe("LoginPage", () => {
         enable_jira: false,
         enable_jira_dc: false,
         enable_linear: false,
-        enable_onboarding: false,
       },
     });
 
@@ -180,7 +179,6 @@ describe("LoginPage", () => {
           enable_jira: false,
           enable_jira_dc: false,
           enable_linear: false,
-        enable_onboarding: false,
         },
       });
 
@@ -217,7 +215,6 @@ describe("LoginPage", () => {
           enable_jira: false,
           enable_jira_dc: false,
           enable_linear: false,
-        enable_onboarding: false,
         },
       });
 
@@ -352,7 +349,6 @@ describe("LoginPage", () => {
           enable_jira: false,
           enable_jira_dc: false,
           enable_linear: false,
-        enable_onboarding: false,
         },
       });
 
