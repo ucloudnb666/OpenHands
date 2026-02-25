@@ -7,7 +7,8 @@ that returns scripted responses without making real LLM API calls.
 from collections import deque
 from typing import Any, ClassVar, Sequence
 
-from litellm.types.utils import Choices, Message as LiteLLMMessage, ModelResponse
+from litellm.types.utils import Choices, ModelResponse
+from litellm.types.utils import Message as LiteLLMMessage
 from pydantic import ConfigDict, Field, PrivateAttr
 
 from openhands.sdk.llm.llm import LLM
@@ -16,7 +17,6 @@ from openhands.sdk.llm.message import Message, TextContent
 from openhands.sdk.llm.streaming import TokenCallbackType
 from openhands.sdk.llm.utils.metrics import MetricsSnapshot, TokenUsage
 from openhands.sdk.tool.tool import ToolDefinition
-
 
 __all__ = ['TestLLM', 'TestLLMExhaustedError']
 

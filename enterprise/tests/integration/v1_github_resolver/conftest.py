@@ -7,9 +7,7 @@ using TestLLM to replay pre-recorded trajectories.
 
 import hashlib
 import hmac
-import json
 import os
-import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -18,7 +16,6 @@ from uuid import UUID
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -43,23 +40,37 @@ os.environ.setdefault('OPENHANDS_RESOLVER_TEMPLATES_DIR', str(_templates_dir) + 
 
 # Import storage models for database setup
 # Note: Import ALL models to ensure tables are created
-from server.constants import ORG_SETTINGS_VERSION
-from storage.auth_tokens import AuthTokens
-from storage.base import Base
-from storage.billing_session import BillingSession  # noqa: F401
-from storage.conversation_work import ConversationWork  # noqa: F401
-from storage.device_code import DeviceCode  # noqa: F401
-from storage.feedback import Feedback  # noqa: F401
-from storage.github_app_installation import GithubAppInstallation
-from storage.org import Org
-from storage.org_invitation import OrgInvitation  # noqa: F401
-from storage.org_member import OrgMember
-from storage.role import Role
-from storage.stored_conversation_metadata import StoredConversationMetadata  # noqa: F401
-from storage.stored_conversation_metadata_saas import StoredConversationMetadataSaas  # noqa: F401
-from storage.stored_offline_token import StoredOfflineToken
-from storage.stripe_customer import StripeCustomer  # noqa: F401
-from storage.user import User
+# NOTE: Imports must come after environment setup, hence noqa: E402
+from server.constants import ORG_SETTINGS_VERSION  # noqa: E402
+from storage.auth_tokens import AuthTokens  # noqa: E402
+from storage.base import Base  # noqa: E402
+from storage.billing_session import BillingSession  # noqa: E402, F401
+from storage.conversation_work import ConversationWork  # noqa: E402, F401
+from storage.device_code import DeviceCode  # noqa: E402, F401
+from storage.feedback import Feedback  # noqa: E402, F401
+from storage.github_app_installation import GithubAppInstallation  # noqa: E402
+from storage.org import Org  # noqa: E402
+from storage.org_invitation import OrgInvitation  # noqa: E402, F401
+from storage.org_member import OrgMember  # noqa: E402
+from storage.role import Role  # noqa: E402
+from storage.stored_conversation_metadata import (  # noqa: E402
+    StoredConversationMetadata,  # noqa: F401
+)
+from storage.stored_conversation_metadata_saas import (  # noqa: E402
+    StoredConversationMetadataSaas,  # noqa: F401
+)
+from storage.stored_offline_token import StoredOfflineToken  # noqa: E402
+from storage.stripe_customer import StripeCustomer  # noqa: E402, F401
+from storage.user import User  # noqa: E402
+
+# Import OpenHands models for app conversation tables
+from openhands.app_server.app_conversation.sql_app_conversation_info_service import (  # noqa: E402
+    StoredConversationMetadata as OpenHandsConversationMetadata,  # noqa: F401
+)
+from openhands.app_server.app_conversation.sql_app_conversation_start_task_service import (  # noqa: E402
+    StoredAppConversationStartTask,  # noqa: F401
+)
+from openhands.app_server.utils.sql_utils import Base as OpenHandsBase  # noqa: E402
 
 # Test constants
 TEST_USER_UUID = UUID('11111111-1111-1111-1111-111111111111')
@@ -84,9 +95,18 @@ def test_env():
 
 @pytest.fixture
 def engine():
-    """Create an in-memory SQLite database engine."""
+    """Create an in-memory SQLite database engine for enterprise tables."""
     engine = create_engine('sqlite:///:memory:')
     Base.metadata.create_all(engine)
+    return engine
+
+
+@pytest.fixture
+def openhands_engine():
+    """Create an in-memory SQLite database engine for OpenHands tables."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    engine = create_async_engine('sqlite+aiosqlite:///:memory:')
     return engine
 
 
@@ -97,6 +117,28 @@ def session_maker(engine):
 
 
 TEST_INSTALLATION_ID = 123456
+
+
+@pytest_asyncio.fixture
+async def openhands_db(openhands_engine):
+    """Create OpenHands tables and return async session maker."""
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+    # Create tables
+    async with openhands_engine.begin() as conn:
+        await conn.run_sync(OpenHandsBase.metadata.create_all)
+
+    # Create async session maker
+    async_session_maker = async_sessionmaker(
+        openhands_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    yield async_session_maker
+
+    # Cleanup
+    await openhands_engine.dispose()
 
 
 @pytest.fixture
@@ -217,9 +259,7 @@ def mock_keycloak():
     mock_admin = MagicMock()
     mock_admin.a_get_users = AsyncMock(side_effect=mock_get_users)
 
-    with patch(
-        'server.auth.token_manager.get_keycloak_admin', return_value=mock_admin
-    ):
+    with patch('server.auth.token_manager.get_keycloak_admin', return_value=mock_admin):
         yield mock_admin
 
 
