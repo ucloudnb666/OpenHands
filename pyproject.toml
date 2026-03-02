@@ -33,8 +33,8 @@ dependencies = [
   "dirhash",
   "docker",
   "fastapi",
-  "fastmcp>=2.12.4,<3.0.0",
-  "mcp>=1.25.0,<2.0.0",
+  "fastmcp>=2.12.4,<2.13.0",
+  "mcp>=1.25.0,<1.26.0",
   "google-api-python-client>=2.164",
   "google-auth-httplib2",
   "google-auth-oauthlib",
@@ -208,8 +208,8 @@ prompt-toolkit = "^3.0.50"
 poetry = "^2.1.2"
 anyio = "4.9.0"
 pythonnet = "*"
-fastmcp = "^2.12.4"           # Note: 2.12.0+ has breaking auth API changes
-mcp = "^1.25.0"               # CVE-2025-66416 fix
+fastmcp = "~2.12.4"           # Note: 2.12.0+ has breaking auth API changes; pin to 2.12.x
+mcp = "~1.25.0"               # CVE-2025-66416 fix; pin to 1.25.x
 python-frontmatter = "^1.1.0"
 shellingham = "^1.5.4"
 # TODO: Should these go into the runtime group?
