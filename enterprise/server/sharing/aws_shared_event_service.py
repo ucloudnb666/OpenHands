@@ -151,6 +151,10 @@ class AwsSharedEventServiceInjector(SharedEventServiceInjector):
             )
 
             bucket_name = self.bucket_name
+            if bucket_name is None:
+                raise ValueError(
+                    'bucket_name is required. Set FILE_STORE_PATH environment variable.'
+                )
 
             # Use role-based authentication - boto3 will automatically
             # use IAM role credentials when running in AWS
