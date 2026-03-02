@@ -56,6 +56,26 @@ jwt_dependency = depends_jwt_service()
 _logger = logging.getLogger(__name__)
 
 
+def _classify_error_type(error_message: str | None) -> str:
+    """Classify conversation error into broad categories for dashboard filtering.
+
+    Categories: budget_exceeded, model_error, runtime_error, timeout, user_cancelled, unknown.
+    Uses best-effort string matching per CONTEXT.md decision.
+    """
+    if not error_message:
+        return 'unknown'
+    msg_lower = error_message.lower()
+    if 'budget' in msg_lower or 'budgetexceeded' in msg_lower:
+        return 'budget_exceeded'
+    if 'timeout' in msg_lower or 'timed out' in msg_lower:
+        return 'timeout'
+    if 'cancel' in msg_lower:
+        return 'user_cancelled'
+    if any(kw in msg_lower for kw in ('model', 'llm', 'api key', 'rate limit', 'authentication')):
+        return 'model_error'
+    return 'runtime_error'
+
+
 async def valid_sandbox(
     user_context: UserContext = Depends(as_admin),
     session_api_key: str = Depends(
@@ -195,6 +215,87 @@ async def on_event(
                 await app_conversation_info_service.process_stats_event(
                     event, conversation_id
                 )
+
+        # Analytics: conversation terminal state detection
+        for event in events:
+            if isinstance(event, ConversationStateUpdateEvent) and event.key == 'execution_status':
+                try:
+                    exec_status = ConversationExecutionStatus(event.value)
+                    if exec_status.is_terminal():
+                        analytics = get_analytics_service()
+                        if analytics and sandbox_info.created_by_user_id:
+                            from enterprise.storage.user_store import UserStore
+                            user_obj = await UserStore.get_user_by_id_async(sandbox_info.created_by_user_id)
+                            if user_obj:
+                                consented = user_obj.user_consents_to_analytics is True
+                                org_id = str(user_obj.current_org_id) if user_obj.current_org_id else None
+
+                                # Extract metrics from stored conversation info (updated by process_stats_event above)
+                                metrics = app_conversation_info.metrics
+                                accumulated_cost = metrics.accumulated_cost if metrics else None
+                                prompt_tokens = metrics.accumulated_token_usage.prompt_tokens if metrics and metrics.accumulated_token_usage else None
+                                completion_tokens = metrics.accumulated_token_usage.completion_tokens if metrics and metrics.accumulated_token_usage else None
+
+                                is_error = exec_status in (ConversationExecutionStatus.ERROR, ConversationExecutionStatus.STUCK)
+
+                                if is_error:
+                                    # Look for the last error info in events batch
+                                    error_message = None
+                                    for ev in events:
+                                        if isinstance(ev, ConversationStateUpdateEvent) and ev.key == 'last_error':
+                                            error_message = str(ev.value)[:500] if ev.value else None
+
+                                    error_type = _classify_error_type(error_message)
+
+                                    # BIZZ-06: conversation errored
+                                    analytics.capture(
+                                        distinct_id=sandbox_info.created_by_user_id,
+                                        event=analytics_constants.CONVERSATION_ERRORED,
+                                        properties={
+                                            'conversation_id': str(conversation_id),
+                                            'error_type': error_type,
+                                            'error_message': error_message,
+                                            'llm_model': app_conversation_info.llm_model,
+                                            'turn_count': None,  # Not derivable from MetricsSnapshot alone
+                                            'terminal_state': exec_status.value,
+                                        },
+                                        org_id=org_id,
+                                        consented=consented,
+                                    )
+
+                                    # BIZZ-03: credit limit reached (fires alongside conversation errored)
+                                    if error_type == 'budget_exceeded':
+                                        analytics.capture(
+                                            distinct_id=sandbox_info.created_by_user_id,
+                                            event=analytics_constants.CREDIT_LIMIT_REACHED,
+                                            properties={
+                                                'conversation_id': str(conversation_id),
+                                                'credit_balance': None,  # Not available in webhook context
+                                                'llm_model': app_conversation_info.llm_model,
+                                            },
+                                            org_id=org_id,
+                                            consented=consented,
+                                        )
+                                else:
+                                    # BIZZ-05: conversation finished (includes FINISHED, STOPPED, etc.)
+                                    analytics.capture(
+                                        distinct_id=sandbox_info.created_by_user_id,
+                                        event=analytics_constants.CONVERSATION_FINISHED,
+                                        properties={
+                                            'conversation_id': str(conversation_id),
+                                            'terminal_state': exec_status.value,
+                                            'turn_count': None,  # Not derivable from MetricsSnapshot alone
+                                            'accumulated_cost_usd': accumulated_cost,
+                                            'prompt_tokens': prompt_tokens,
+                                            'completion_tokens': completion_tokens,
+                                            'llm_model': app_conversation_info.llm_model,
+                                            'trigger': app_conversation_info.trigger.value if app_conversation_info.trigger else None,
+                                        },
+                                        org_id=org_id,
+                                        consented=consented,
+                                    )
+                except Exception:
+                    _logger.exception('analytics:conversation_terminal:failed')
 
         asyncio.create_task(
             _run_callbacks_in_bg_and_close(
