@@ -13,6 +13,7 @@ from pydantic import SecretStr
 
 from openhands import tools  # type: ignore[attr-defined]
 from openhands.agent_server.models import ConversationInfo, Success
+from openhands.analytics import analytics_constants, get_analytics_service
 from openhands.app_server.app_conversation.app_conversation_info_service import (
     AppConversationInfoService,
 )
@@ -26,7 +27,6 @@ from openhands.app_server.config import (
     depends_sandbox_service,
     get_event_callback_service,
 )
-from openhands.analytics import analytics_constants, get_analytics_service
 from openhands.app_server.errors import AuthError
 from openhands.app_server.event.event_service import EventService
 from openhands.app_server.sandbox.sandbox_models import SandboxInfo
@@ -71,7 +71,10 @@ def _classify_error_type(error_message: str | None) -> str:
         return 'timeout'
     if 'cancel' in msg_lower:
         return 'user_cancelled'
-    if any(kw in msg_lower for kw in ('model', 'llm', 'api key', 'rate limit', 'authentication')):
+    if any(
+        kw in msg_lower
+        for kw in ('model', 'llm', 'api key', 'rate limit', 'authentication')
+    ):
         return 'model_error'
     return 'runtime_error'
 
@@ -218,32 +221,62 @@ async def on_event(
 
         # Analytics: conversation terminal state detection
         for event in events:
-            if isinstance(event, ConversationStateUpdateEvent) and event.key == 'execution_status':
+            if (
+                isinstance(event, ConversationStateUpdateEvent)
+                and event.key == 'execution_status'
+            ):
                 try:
                     exec_status = ConversationExecutionStatus(event.value)
                     if exec_status.is_terminal():
                         analytics = get_analytics_service()
                         if analytics and sandbox_info.created_by_user_id:
                             from enterprise.storage.user_store import UserStore
-                            user_obj = await UserStore.get_user_by_id_async(sandbox_info.created_by_user_id)
+
+                            user_obj = await UserStore.get_user_by_id_async(
+                                sandbox_info.created_by_user_id
+                            )
                             if user_obj:
                                 consented = user_obj.user_consents_to_analytics is True
-                                org_id = str(user_obj.current_org_id) if user_obj.current_org_id else None
+                                org_id = (
+                                    str(user_obj.current_org_id)
+                                    if user_obj.current_org_id
+                                    else None
+                                )
 
                                 # Extract metrics from stored conversation info (updated by process_stats_event above)
                                 metrics = app_conversation_info.metrics
-                                accumulated_cost = metrics.accumulated_cost if metrics else None
-                                prompt_tokens = metrics.accumulated_token_usage.prompt_tokens if metrics and metrics.accumulated_token_usage else None
-                                completion_tokens = metrics.accumulated_token_usage.completion_tokens if metrics and metrics.accumulated_token_usage else None
+                                accumulated_cost = (
+                                    metrics.accumulated_cost if metrics else None
+                                )
+                                prompt_tokens = (
+                                    metrics.accumulated_token_usage.prompt_tokens
+                                    if metrics and metrics.accumulated_token_usage
+                                    else None
+                                )
+                                completion_tokens = (
+                                    metrics.accumulated_token_usage.completion_tokens
+                                    if metrics and metrics.accumulated_token_usage
+                                    else None
+                                )
 
-                                is_error = exec_status in (ConversationExecutionStatus.ERROR, ConversationExecutionStatus.STUCK)
+                                is_error = exec_status in (
+                                    ConversationExecutionStatus.ERROR,
+                                    ConversationExecutionStatus.STUCK,
+                                )
 
                                 if is_error:
                                     # Look for the last error info in events batch
                                     error_message = None
                                     for ev in events:
-                                        if isinstance(ev, ConversationStateUpdateEvent) and ev.key == 'last_error':
-                                            error_message = str(ev.value)[:500] if ev.value else None
+                                        if (
+                                            isinstance(ev, ConversationStateUpdateEvent)
+                                            and ev.key == 'last_error'
+                                        ):
+                                            error_message = (
+                                                str(ev.value)[:500]
+                                                if ev.value
+                                                else None
+                                            )
 
                                     error_type = _classify_error_type(error_message)
 
@@ -289,27 +322,43 @@ async def on_event(
                                             'prompt_tokens': prompt_tokens,
                                             'completion_tokens': completion_tokens,
                                             'llm_model': app_conversation_info.llm_model,
-                                            'trigger': app_conversation_info.trigger.value if app_conversation_info.trigger else None,
+                                            'trigger': app_conversation_info.trigger.value
+                                            if app_conversation_info.trigger
+                                            else None,
                                         },
                                         org_id=org_id,
                                         consented=consented,
                                     )
 
                                     # ACTV-01: user activated (first finished conversation only)
-                                    if exec_status == ConversationExecutionStatus.FINISHED:
+                                    if (
+                                        exec_status
+                                        == ConversationExecutionStatus.FINISHED
+                                    ):
                                         try:
-                                            from datetime import datetime, timezone
                                             import uuid as _uuid
-                                            from sqlalchemy import func, select as sa_select
-                                            from enterprise.storage.stored_conversation_metadata_saas import StoredConversationMetadataSaas
-                                            from enterprise.storage.database import a_session_maker
+                                            from datetime import datetime, timezone
 
-                                            user_uuid = _uuid.UUID(sandbox_info.created_by_user_id)
+                                            from sqlalchemy import func
+                                            from sqlalchemy import select as sa_select
+
+                                            from enterprise.storage.database import (
+                                                a_session_maker,
+                                            )
+                                            from enterprise.storage.stored_conversation_metadata_saas import (
+                                                StoredConversationMetadataSaas,
+                                            )
+
+                                            user_uuid = _uuid.UUID(
+                                                sandbox_info.created_by_user_id
+                                            )
                                             async with a_session_maker() as act_session:
                                                 count_result = await act_session.execute(
                                                     sa_select(func.count()).where(
-                                                        StoredConversationMetadataSaas.user_id == user_uuid,
-                                                        StoredConversationMetadataSaas.conversation_id != str(conversation_id),
+                                                        StoredConversationMetadataSaas.user_id
+                                                        == user_uuid,
+                                                        StoredConversationMetadataSaas.conversation_id
+                                                        != str(conversation_id),
                                                     )
                                                 )
                                                 prior_count = count_result.scalar()
@@ -318,8 +367,13 @@ async def on_event(
                                                 tos_ts = user_obj.accepted_tos
                                                 if tos_ts is not None:
                                                     if tos_ts.tzinfo is None:
-                                                        tos_ts = tos_ts.replace(tzinfo=timezone.utc)
-                                                    time_to_activate_seconds = (datetime.now(timezone.utc) - tos_ts).total_seconds()
+                                                        tos_ts = tos_ts.replace(
+                                                            tzinfo=timezone.utc
+                                                        )
+                                                    time_to_activate_seconds = (
+                                                        datetime.now(timezone.utc)
+                                                        - tos_ts
+                                                    ).total_seconds()
                                                 else:
                                                     time_to_activate_seconds = None
 
@@ -327,16 +381,22 @@ async def on_event(
                                                     distinct_id=sandbox_info.created_by_user_id,
                                                     event=analytics_constants.USER_ACTIVATED,
                                                     properties={
-                                                        'conversation_id': str(conversation_id),
+                                                        'conversation_id': str(
+                                                            conversation_id
+                                                        ),
                                                         'time_to_activate_seconds': time_to_activate_seconds,
                                                         'llm_model': app_conversation_info.llm_model,
-                                                        'trigger': app_conversation_info.trigger.value if app_conversation_info.trigger else None,
+                                                        'trigger': app_conversation_info.trigger.value
+                                                        if app_conversation_info.trigger
+                                                        else None,
                                                     },
                                                     org_id=org_id,
                                                     consented=consented,
                                                 )
                                         except Exception:
-                                            _logger.exception('analytics:user_activated:failed')
+                                            _logger.exception(
+                                                'analytics:user_activated:failed'
+                                            )
                 except Exception:
                     _logger.exception('analytics:conversation_terminal:failed')
 
