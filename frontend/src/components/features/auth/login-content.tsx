@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { FaUserShield } from "react-icons/fa";
 import { I18nKey } from "#/i18n/declaration";
 import OpenHandsLogoWhite from "#/assets/branding/openhands-logo-white.svg?react";
 import GitHubLogo from "#/assets/branding/github-logo.svg?react";
@@ -59,6 +60,12 @@ export function LoginContent({
     authUrl,
   });
 
+  const enterpriseSsoAuthUrl = useAuthUrl({
+    appMode: appMode || null,
+    identityProvider: "enterprise_sso",
+    authUrl,
+  });
+
   const handleAuthRedirect = async (
     redirectUrl: string,
     provider: Provider,
@@ -115,6 +122,12 @@ export function LoginContent({
     }
   };
 
+  const handleEnterpriseSsoAuth = () => {
+    if (enterpriseSsoAuthUrl) {
+      handleAuthRedirect(enterpriseSsoAuthUrl, "enterprise_sso");
+    }
+  };
+
   const showGithub =
     providersConfigured &&
     providersConfigured.length > 0 &&
@@ -127,6 +140,10 @@ export function LoginContent({
     providersConfigured &&
     providersConfigured.length > 0 &&
     providersConfigured.includes("bitbucket");
+  const showEnterpriseSso =
+    providersConfigured &&
+    providersConfigured.length > 0 &&
+    providersConfigured.includes("enterprise_sso");
 
   const noProvidersConfigured =
     !providersConfigured || providersConfigured.length === 0;
@@ -218,6 +235,19 @@ export function LoginContent({
                 <BitbucketLogo width={14} height={14} className="shrink-0" />
                 <span className={buttonLabelClasses}>
                   {t(I18nKey.BITBUCKET$CONNECT_TO_BITBUCKET)}
+                </span>
+              </button>
+            )}
+
+            {showEnterpriseSso && (
+              <button
+                type="button"
+                onClick={handleEnterpriseSsoAuth}
+                className={`${buttonBaseClasses} bg-[#374151] text-white`}
+              >
+                <FaUserShield size={14} className="shrink-0" />
+                <span className={buttonLabelClasses}>
+                  {t(I18nKey.ENTERPRISE_SSO$CONNECT_TO_ENTERPRISE_SSO)}
                 </span>
               </button>
             )}
