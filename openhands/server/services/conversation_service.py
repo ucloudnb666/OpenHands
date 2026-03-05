@@ -77,7 +77,7 @@ async def initialize_conversation(
         try:
             analytics = get_analytics_service()
             if analytics and user_id:
-                from enterprise.storage.user_store import UserStore
+                from storage.user_store import UserStore
 
                 user_obj = await UserStore.get_user_by_id(user_id)
                 if user_obj:

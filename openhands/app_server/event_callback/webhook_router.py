@@ -160,7 +160,7 @@ async def on_conversation_update(
     try:
         analytics = get_analytics_service()
         if analytics and sandbox_info.created_by_user_id:
-            from enterprise.storage.user_store import UserStore
+            from storage.user_store import UserStore
 
             user_obj = await UserStore.get_user_by_id(sandbox_info.created_by_user_id)
             if user_obj:
@@ -228,7 +228,7 @@ async def on_event(
                     if exec_status.is_terminal():
                         analytics = get_analytics_service()
                         if analytics and sandbox_info.created_by_user_id:
-                            from enterprise.storage.user_store import UserStore
+                            from storage.user_store import UserStore
 
                             user_obj = await UserStore.get_user_by_id(
                                 sandbox_info.created_by_user_id
@@ -340,10 +340,10 @@ async def on_event(
                                             from sqlalchemy import func
                                             from sqlalchemy import select as sa_select
 
-                                            from enterprise.storage.database import (
+                                            from storage.database import (
                                                 a_session_maker,
                                             )
-                                            from enterprise.storage.stored_conversation_metadata_saas import (
+                                            from storage.stored_conversation_metadata_saas import (
                                                 StoredConversationMetadataSaas,
                                             )
 
