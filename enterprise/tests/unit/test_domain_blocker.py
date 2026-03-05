@@ -162,13 +162,11 @@ async def test_is_domain_blocked_multiple_blocked_domains(domain_blocker, mock_s
     """Test that is_domain_blocked correctly checks multiple domains."""
     # Arrange
     mock_store.is_domain_blocked = AsyncMock(
-        side_effect=lambda domain: (
-            domain
-            in [
-                'other-domain.com',
-                'blocked.org',
-            ]
-        )
+        side_effect=lambda domain: domain
+        in [
+            'other-domain.com',
+            'blocked.org',
+        ]
     )
 
     # Act
@@ -352,8 +350,8 @@ async def test_is_domain_blocked_subdomain_pattern_blocks_exact_and_nested(
 ):
     """Test that blocking a subdomain also blocks its nested subdomains."""
     # Arrange
-    mock_store.is_domain_blocked.side_effect = lambda domain: (
-        'api.example.com' in domain
+    mock_store.is_domain_blocked.side_effect = (
+        lambda domain: 'api.example.com' in domain
     )
 
     # Act

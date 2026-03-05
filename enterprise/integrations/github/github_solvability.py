@@ -51,7 +51,7 @@ def fetch_github_issue_context(
         issue = repo.get_issue(github_view.issue_number)
         if issue.labels:
             labels = [label.name for label in issue.labels]
-            context_parts.append(f'Labels: {", ".join(labels)}')
+            context_parts.append(f"Labels: {', '.join(labels)}")
 
     for comment in github_view.previous_comments:
         context_parts.append(f'- {comment.author}: {comment.body}')
@@ -104,11 +104,6 @@ async def summarize_issue_solvability(
     if not getattr(user_settings, 'enable_solvability_analysis', False):
         raise ValueError(
             f'Solvability analysis disabled for user {github_view.user_info.user_id}'
-        )
-
-    if user_settings.llm_api_key is None:
-        raise ValueError(
-            f'[Solvability] No LLM API key found for user {github_view.user_info.user_id}'
         )
 
     try:

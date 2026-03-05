@@ -89,11 +89,10 @@ class SlackV1CallbackProcessor(EventCallbackProcessor):
     # -------------------------------------------------------------------------
 
     async def _get_bot_access_token(self) -> str | None:
-        team_id = self.slack_view_data.get('team_id')
-        if team_id is None:
-            return None
         slack_team_store = SlackTeamStore.get_instance()
-        bot_access_token = await slack_team_store.get_team_bot_token(team_id)
+        bot_access_token = await slack_team_store.get_team_bot_token(
+            self.slack_view_data['team_id']
+        )
 
         return bot_access_token
 
@@ -122,7 +121,7 @@ class SlackV1CallbackProcessor(EventCallbackProcessor):
 
             if not response['ok']:
                 raise RuntimeError(
-                    f'Slack API error: {response.get("error", "Unknown error")}'
+                    f"Slack API error: {response.get('error', 'Unknown error')}"
                 )
 
             _logger.info(

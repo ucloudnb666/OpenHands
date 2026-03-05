@@ -308,7 +308,7 @@ async def create_linear_workspace(
             'response_type': 'code',
         }
 
-        auth_url = f'{LINEAR_AUTH_URL}?{"&".join([f"{k}={v}" for k, v in auth_params.items()])}'
+        auth_url = f"{LINEAR_AUTH_URL}?{'&'.join([f'{k}={v}' for k, v in auth_params.items()])}"
 
         return JSONResponse(
             content={
@@ -366,7 +366,7 @@ async def create_workspace_link(request: Request, link_data: LinearLinkCreate):
             'response_type': 'code',
         }
 
-        auth_url = f'{LINEAR_AUTH_URL}?{"&".join([f"{k}={v}" for k, v in auth_params.items()])}'
+        auth_url = f"{LINEAR_AUTH_URL}?{'&'.join([f'{k}={v}' for k, v in auth_params.items()])}"
 
         return JSONResponse(
             content={
@@ -523,11 +523,6 @@ async def get_current_workspace_link(request: Request):
     try:
         user_auth = cast(SaasUserAuth, await get_user_auth(request))
         user_id = await user_auth.get_user_id()
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='User not authenticated',
-            )
 
         user = await linear_manager.integration_store.get_user_by_active_workspace(
             user_id
@@ -581,11 +576,6 @@ async def unlink_workspace(request: Request):
     try:
         user_auth = cast(SaasUserAuth, await get_user_auth(request))
         user_id = await user_auth.get_user_id()
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='User not authenticated',
-            )
 
         user = await linear_manager.integration_store.get_user_by_active_workspace(
             user_id

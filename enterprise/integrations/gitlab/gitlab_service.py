@@ -29,7 +29,7 @@ class SaaSGitLabService(GitLabService):
         base_domain: str | None = None,
     ):
         logger.info(
-            f'SaaSGitLabService created with user_id {user_id}, external_auth_id {external_auth_id}, external_auth_token {"set" if external_auth_token else "None"}, gitlab_token {"set" if token else "None"}, external_token_manager {external_token_manager}'
+            f'SaaSGitLabService created with user_id {user_id}, external_auth_id {external_auth_id}, external_auth_token {'set' if external_auth_token else 'None'}, gitlab_token {'set' if token else 'None'}, external_token_manager {external_token_manager}'
         )
         super().__init__(
             user_id=user_id,
@@ -191,11 +191,12 @@ class SaaSGitLabService(GitLabService):
                 user_info = await self.token_manager.get_user_info(
                     self.external_auth_token.get_secret_value()
                 )
-                keycloak_user_id = user_info.sub
-                self.external_auth_id = keycloak_user_id
-                logger.info(
-                    f'Determined external_auth_id from Keycloak token: {self.external_auth_id}'
-                )
+                keycloak_user_id = user_info.get('sub')
+                if keycloak_user_id:
+                    self.external_auth_id = keycloak_user_id
+                    logger.info(
+                        f'Determined external_auth_id from Keycloak token: {self.external_auth_id}'
+                    )
             except Exception:
                 logger.warning(
                     'Cannot store repository data: external_auth_id is not set and could not be determined from token',

@@ -240,8 +240,8 @@ class TestCreateInvitationBatchEndpoint:
         app.include_router(invitation_router)
 
         # Override the get_user_id dependency
-        app.dependency_overrides[get_user_id] = lambda: (
-            '87654321-4321-8765-4321-876543218765'
+        app.dependency_overrides[get_user_id] = (
+            lambda: '87654321-4321-8765-4321-876543218765'
         )
 
         return app
