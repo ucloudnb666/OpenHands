@@ -1,0 +1,10 @@
+version: "3"
+tunnels:
+  openhands:
+    proto: http
+    addr: 3030
+    domain: your-name.ngrok.io
+  keycloak:
+    proto: http
+    addr: 8180
+    domain: auth.your-name.ngrok.io
