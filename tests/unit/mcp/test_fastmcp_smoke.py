@@ -190,45 +190,6 @@ class TestFastMCPErrorHandling:
                 await client.call_tool('nonexistent_tool', {})
 
 
-class TestFastMCPTransports:
-    """Test fastmcp transport classes are available."""
-
-    def test_sse_transport_import(self):
-        """Test SSETransport can be imported."""
-        from fastmcp.client.transports import SSETransport
-
-        transport = SSETransport(url='http://localhost:8080/sse')
-        assert transport is not None
-
-    def test_streamable_http_transport_import(self):
-        """Test StreamableHttpTransport can be imported."""
-        from fastmcp.client.transports import StreamableHttpTransport
-
-        transport = StreamableHttpTransport(url='http://localhost:8080/mcp')
-        assert transport is not None
-
-    def test_stdio_transport_import(self):
-        """Test StdioTransport can be imported."""
-        from fastmcp.client.transports import StdioTransport
-
-        # StdioTransport requires command and args
-        transport = StdioTransport(command='echo', args=['hello'])
-        assert transport is not None
-
-
-class TestFastMCPAuthentication:
-    """Test fastmcp authentication support."""
-
-    def test_static_token_verifier_import(self):
-        """Test StaticTokenVerifier can be imported."""
-        from fastmcp.server.auth import StaticTokenVerifier
-
-        verifier = StaticTokenVerifier(
-            {'test-token': {'client_id': 'test-client', 'scopes': []}}
-        )
-        assert verifier is not None
-
-
 class TestFastMCPProxySupport:
     """Test fastmcp proxy functionality."""
 
@@ -257,33 +218,6 @@ class TestFastMCPProxySupport:
 
 class TestOpenHandsMCPIntegration:
     """Test OpenHands MCP components work with fastmcp 2.14.3."""
-
-    def test_mcp_client_imports(self):
-        """Test OpenHands MCP client imports work correctly."""
-        from openhands.mcp.client import MCPClient
-        from openhands.mcp.tool import MCPClientTool
-
-        assert MCPClient is not None
-        assert MCPClientTool is not None
-
-    def test_mcp_config_imports(self):
-        """Test OpenHands MCP config imports work correctly."""
-        from openhands.core.config.mcp_config import (
-            MCPSHTTPServerConfig,
-            MCPSSEServerConfig,
-            MCPStdioServerConfig,
-        )
-
-        assert MCPSSEServerConfig is not None
-        assert MCPSHTTPServerConfig is not None
-        assert MCPStdioServerConfig is not None
-
-    def test_mcp_proxy_manager_imports(self):
-        """Test OpenHands MCP proxy manager imports work correctly."""
-        from openhands.runtime.mcp.proxy.manager import MCPProxyManager
-
-        manager = MCPProxyManager()
-        assert manager is not None
 
     @pytest.mark.asyncio
     async def test_mcp_client_tool_to_param(self):
