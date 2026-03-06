@@ -7,7 +7,6 @@ from integrations.utils import infer_repo_from_message
 from storage.slack_user import SlackUser
 
 from openhands.integrations.service_types import ProviderTimeoutError, Repository
-# Note: ProviderTimeoutError is used in TestRepoQueryTimeoutHandling tests
 from openhands.server.user_auth.user_auth import UserAuth
 
 
@@ -292,6 +291,41 @@ class TestRepoSearchBehavior:
         message = call_args[0][0]
         assert isinstance(message, dict)
         assert message.get('text') == 'Choose a Repository:'
+
+        # Check it was sent as ephemeral
+        assert call_args[1]['ephemeral'] is True
+
+    @patch.object(SlackManager, 'send_message', new_callable=AsyncMock)
+    @patch.object(SlackManager, '_verify_repository', new_callable=AsyncMock)
+    async def test_repo_verify_timeout_sends_error_message(
+        self,
+        mock_verify_repository,
+        mock_send_message,
+        slack_manager,
+        slack_new_conversation_view_with_repo,
+    ):
+        """Test that when repo verification times out, user is notified."""
+        # Setup: _verify_repository raises ProviderTimeoutError
+        mock_verify_repository.side_effect = ProviderTimeoutError(
+            'github API request timed out'
+        )
+
+        # Execute
+        result = await slack_manager.is_job_requested(
+            MagicMock(), slack_new_conversation_view_with_repo
+        )
+
+        # Verify: should return False
+        assert result is False
+
+        # Verify: send_message was called with timeout message
+        mock_send_message.assert_called_once()
+        call_args = mock_send_message.call_args
+
+        # Check the message content
+        message = call_args[0][0]
+        assert 'timed out' in message.lower()
+        assert 'OpenHands/OpenHands' in message
 
         # Check it was sent as ephemeral
         assert call_args[1]['ephemeral'] is True

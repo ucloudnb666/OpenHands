@@ -97,6 +97,9 @@ class SlackManager(Manager[SlackViewInterface]):
 
         Returns:
             Repository object if found, None otherwise
+
+        Raises:
+            ProviderTimeoutError: If the verification request times out
         """
         provider_tokens = await user_auth.get_provider_tokens()
         if provider_tokens is None:
@@ -110,6 +113,9 @@ class SlackManager(Manager[SlackViewInterface]):
         )
         try:
             return await client.verify_repo_provider(repo_name)
+        except ProviderTimeoutError:
+            # Re-raise timeout errors so caller can handle them
+            raise
         except Exception:
             return None
 
@@ -301,9 +307,25 @@ class SlackManager(Manager[SlackViewInterface]):
                     },
                 )
 
-                repository = await self._verify_repository(
-                    slack_view.saas_user_auth, inferred_repo
-                )
+                try:
+                    repository = await self._verify_repository(
+                        slack_view.saas_user_auth, inferred_repo
+                    )
+                except ProviderTimeoutError:
+                    logger.warning(
+                        'repo_verify_timeout',
+                        extra={
+                            'slack_user_id': user.slack_user_id,
+                            'keycloak_user_id': user.keycloak_user_id,
+                            'inferred_repo': inferred_repo,
+                        },
+                    )
+                    timeout_msg = (
+                        f'The verification of repository "{inferred_repo}" timed out. '
+                        'Please try again.'
+                    )
+                    await self.send_message(timeout_msg, slack_view, ephemeral=True)
+                    return False
 
                 if repository:
                     # Repository found - proceed with job
