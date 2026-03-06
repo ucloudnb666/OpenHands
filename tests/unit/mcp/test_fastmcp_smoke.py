@@ -216,8 +216,8 @@ class TestFastMCPProxySupport:
         assert proxy is not None
 
 
-class TestOpenHandsMCPIntegration:
-    """Test OpenHands MCP components work with fastmcp 2.14.3."""
+class TestMCPClientTool:
+    """Test MCPClientTool functionality."""
 
     @pytest.mark.asyncio
     async def test_mcp_client_tool_to_param(self):
@@ -234,6 +234,225 @@ class TestOpenHandsMCPIntegration:
         assert param['type'] == 'function'
         assert param['function']['name'] == 'test_tool'
         assert param['function']['description'] == 'A test tool'
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_tool_to_param_with_complex_schema(self):
+        """Test MCPClientTool to_param with a complex input schema."""
+        from openhands.mcp.tool import MCPClientTool
+
+        complex_schema = {
+            'type': 'object',
+            'properties': {
+                'name': {'type': 'string', 'description': 'The name'},
+                'count': {'type': 'integer', 'default': 10},
+                'options': {
+                    'type': 'object',
+                    'properties': {'verbose': {'type': 'boolean'}},
+                },
+            },
+            'required': ['name'],
+        }
+
+        tool = MCPClientTool(
+            name='complex_tool',
+            description='A tool with complex schema',
+            inputSchema=complex_schema,
+        )
+
+        param = tool.to_param()
+        assert param['type'] == 'function'
+        assert param['function']['name'] == 'complex_tool'
+        assert param['function']['parameters'] == complex_schema
+        assert 'required' in param['function']['parameters']
+
+
+class TestOpenHandsMCPClientIntegration:
+    """Test OpenHands MCPClient integration with fastmcp server.
+
+    These tests verify that OpenHands MCPClient can properly connect to
+    a fastmcp server, list tools, and call tools through the OpenHands API.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_connects_to_fastmcp_server(self):
+        """Test that OpenHands MCPClient can connect to a fastmcp server."""
+        from openhands.mcp.client import MCPClient
+
+        # Create a fastmcp server with test tools
+        server = FastMCP('openhands-integration-test')
+
+        @server.tool()
+        def add_numbers(a: int, b: int) -> int:
+            """Add two numbers together."""
+            return a + b
+
+        @server.tool()
+        def reverse_string(text: str) -> str:
+            """Reverse a string."""
+            return text[::-1]
+
+        # Create OpenHands MCPClient
+        mcp_client = MCPClient()
+        mcp_client.client = Client(server)
+
+        # Initialize and list tools through OpenHands MCPClient
+        await mcp_client._initialize_and_list_tools()
+
+        # Verify tools were discovered
+        assert len(mcp_client.tools) == 2
+        tool_names = [t.name for t in mcp_client.tools]
+        assert 'add_numbers' in tool_names
+        assert 'reverse_string' in tool_names
+
+        # Verify tool_map is populated
+        assert 'add_numbers' in mcp_client.tool_map
+        assert 'reverse_string' in mcp_client.tool_map
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_lists_tools_with_metadata(self):
+        """Test that MCPClient correctly captures tool metadata."""
+        from openhands.mcp.client import MCPClient
+
+        server = FastMCP('metadata-integration-test')
+
+        @server.tool()
+        def documented_tool(value: int, name: str) -> dict:
+            """A well-documented tool that processes data."""
+            return {'value': value, 'name': name}
+
+        mcp_client = MCPClient()
+        mcp_client.client = Client(server)
+        await mcp_client._initialize_and_list_tools()
+
+        # Verify tool metadata
+        tool = mcp_client.tool_map['documented_tool']
+        assert tool.name == 'documented_tool'
+        assert tool.description == 'A well-documented tool that processes data.'
+        assert 'value' in tool.inputSchema.get('properties', {})
+        assert 'name' in tool.inputSchema.get('properties', {})
+
+        # Verify to_param works correctly
+        param = tool.to_param()
+        assert param['type'] == 'function'
+        assert param['function']['name'] == 'documented_tool'
+        assert param['function']['description'] == tool.description
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_calls_tool_through_openhands(self):
+        """Test calling a tool through OpenHands MCPClient."""
+        from openhands.mcp.client import MCPClient
+
+        server = FastMCP('call-tool-integration-test')
+
+        @server.tool()
+        def multiply(x: int, y: int) -> int:
+            """Multiply two numbers."""
+            return x * y
+
+        @server.tool()
+        def greet(name: str) -> str:
+            """Generate a greeting."""
+            return f'Hello, {name}!'
+
+        mcp_client = MCPClient()
+        mcp_client.client = Client(server)
+        await mcp_client._initialize_and_list_tools()
+
+        # Call multiply tool through OpenHands MCPClient
+        result = await mcp_client.call_tool('multiply', {'x': 7, 'y': 8})
+        assert result.content[0].text == '56'
+
+        # Call greet tool
+        result = await mcp_client.call_tool('greet', {'name': 'OpenHands'})
+        assert result.content[0].text == 'Hello, OpenHands!'
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_handles_async_tools(self):
+        """Test MCPClient can call async tools on fastmcp server."""
+        from openhands.mcp.client import MCPClient
+
+        server = FastMCP('async-tool-integration-test')
+
+        @server.tool()
+        async def async_process(data: str) -> str:
+            """Process data asynchronously."""
+            await asyncio.sleep(0.001)  # Simulate async work
+            return f'processed: {data}'
+
+        mcp_client = MCPClient()
+        mcp_client.client = Client(server)
+        await mcp_client._initialize_and_list_tools()
+
+        result = await mcp_client.call_tool('async_process', {'data': 'test_input'})
+        assert result.content[0].text == 'processed: test_input'
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_tool_not_found_error(self):
+        """Test MCPClient raises error for non-existent tool."""
+        from openhands.mcp.client import MCPClient
+
+        server = FastMCP('error-integration-test')
+
+        @server.tool()
+        def existing_tool() -> str:
+            """An existing tool."""
+            return 'exists'
+
+        mcp_client = MCPClient()
+        mcp_client.client = Client(server)
+        await mcp_client._initialize_and_list_tools()
+
+        # Attempt to call non-existent tool should raise ValueError
+        with pytest.raises(ValueError, match='Tool nonexistent_tool not found'):
+            await mcp_client.call_tool('nonexistent_tool', {})
+
+    @pytest.mark.asyncio
+    async def test_mcp_client_full_workflow(self):
+        """Test complete workflow: create server, connect client, list tools, call tool."""
+        from openhands.mcp.client import MCPClient
+        from openhands.mcp.tool import MCPClientTool
+
+        # Step 1: Create fastmcp server with tools
+        server = FastMCP('full-workflow-test')
+
+        @server.tool()
+        def calculate(operation: str, a: int, b: int) -> int:
+            """Perform a calculation."""
+            if operation == 'add':
+                return a + b
+            elif operation == 'subtract':
+                return a - b
+            elif operation == 'multiply':
+                return a * b
+            else:
+                raise ValueError(f'Unknown operation: {operation}')
+
+        # Step 2: Connect OpenHands MCPClient
+        mcp_client = MCPClient()
+        mcp_client.client = Client(server)
+        await mcp_client._initialize_and_list_tools()
+
+        # Step 3: List tools through OpenHands
+        assert len(mcp_client.tools) == 1
+        assert mcp_client.tools[0].name == 'calculate'
+        assert isinstance(mcp_client.tools[0], MCPClientTool)
+
+        # Step 4: Convert tool to param format (as used by LLM)
+        param = mcp_client.tools[0].to_param()
+        assert param['type'] == 'function'
+        assert param['function']['name'] == 'calculate'
+        assert 'operation' in param['function']['parameters'].get('properties', {})
+
+        # Step 5: Call tool through OpenHands MCPClient
+        result = await mcp_client.call_tool(
+            'calculate', {'operation': 'add', 'a': 10, 'b': 5}
+        )
+        assert result.content[0].text == '15'
+
+        result = await mcp_client.call_tool(
+            'calculate', {'operation': 'multiply', 'a': 3, 'b': 4}
+        )
+        assert result.content[0].text == '12'
 
 
 class TestFastMCPConcurrency:
