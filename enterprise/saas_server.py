@@ -139,6 +139,10 @@ if BITBUCKET_DATA_CENTER_HOST:
     base_app.include_router(bitbucket_dc_proxy_router)
 base_app.include_router(email_router)  # Add routes for email management
 base_app.include_router(feedback_router)  # Add routes for conversation feedback
+
+from server.routes.automations import automation_router  # noqa: E402
+
+base_app.include_router(automation_router)  # Add routes for automation CRUD
 base_app.include_router(
     event_webhook_router
 )  # Add routes for Events in nested runtimes
