@@ -89,8 +89,9 @@ export class HomePage extends BasePage {
 
   /**
    * Start a new conversation
+   * @param buttonId - Optional test ID of the button to click (default: 'launch-new-conversation-button')
    */
-  async startNewConversation(buttonId: string): Promise<void> {
+  async startNewConversation(buttonId: string = 'launch-new-conversation-button'): Promise<void> {
     const startButton = this.page.getByTestId(buttonId)
     if (await startButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await startButton.click();
@@ -102,9 +103,11 @@ export class HomePage extends BasePage {
 
   /**
    * Open user settings menu
+   * Note: The menu appears on hover in non-mobile mode, not on click
    */
   async openUserMenu(): Promise<void> {
-    await this.userAvatar.click({ force: true });
+    // The user menu is triggered by hover, not click, in non-mobile mode
+    await this.userAvatar.hover();
     await expect(this.accountSettingsMenu).toBeVisible({ timeout: 5_000 });
   }
 

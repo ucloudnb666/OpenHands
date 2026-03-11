@@ -109,13 +109,16 @@ test.describe("Smoke Tests @smoke", () => {
     await homePage.goto();
 
     // Start a new conversation
-    try {
-      await homePage.selectRepository(TEST_REPO_URL);
-    } catch {
-      // Repository selection might not be required
+    if (TEST_REPO_URL) {
+      try {
+        await homePage.selectRepository(TEST_REPO_URL);
+      } catch {
+        // Repository selection might not be required
+      }
+      await homePage.startNewConversation('repo-launch-button');
+    } else {
+      await homePage.startNewConversation();
     }
-
-    await homePage.startNewConversation();
     await page.waitForTimeout(2000);
 
     conversationPage = new ConversationPage(page);
@@ -144,13 +147,16 @@ test.describe("Smoke Tests @smoke", () => {
     expect(homeError).toBe(false);
 
     // Start conversation
-    try {
-      await homePage.selectRepository(TEST_REPO_URL);
-    } catch {
-      // Repository selection might not be required
+    if (TEST_REPO_URL) {
+      try {
+        await homePage.selectRepository(TEST_REPO_URL);
+      } catch {
+        // Repository selection might not be required
+      }
+      await homePage.startNewConversation('repo-launch-button');
+    } else {
+      await homePage.startNewConversation();
     }
-
-    await homePage.startNewConversation();
     await page.waitForTimeout(2000);
 
     conversationPage = new ConversationPage(page);
