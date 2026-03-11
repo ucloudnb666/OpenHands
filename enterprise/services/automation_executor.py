@@ -75,10 +75,8 @@ async def find_matching_automations(
     source_type = event.source_type
     payload = event.payload
     if payload is None:
-        logger.warning(
-            'Event %s has None payload — defaulting to empty dict', event.id
-        )
-        payload = {}
+        logger.error('Event %s has None payload — possible data corruption', event.id)
+        return []
 
     if source_type in ('cron', 'manual'):
         automation_id = payload.get('automation_id')
@@ -137,10 +135,10 @@ async def process_new_events(session: AsyncSession) -> int:
                 event.status = 'PROCESSED'
                 event.processed_at = utc_now()
             processed += 1
-        except Exception:
+        except Exception as e:
             logger.exception('Error processing event %s', event.id)
             event.status = 'ERROR'
-            event.error_detail = 'Failed during event matching'
+            event.error_detail = f'Failed during event matching: {type(e).__name__}: {e}'
             event.processed_at = utc_now()
 
     if processed:
@@ -215,6 +213,45 @@ async def _prepare_run(
     return api_key, automation_file
 
 
+async def _monitor_conversation(
+    run: AutomationRun,
+    conversation_id: str,
+    api_client: OpenHandsAPIClient,
+    api_key: str,
+    session_factory: object,
+) -> bool:
+    """Monitor a conversation until completion or timeout.
+
+    Returns True if completed successfully, False if shutdown requested.
+
+    Raises:
+        TimeoutError: If the run exceeds RUN_TIMEOUT_SECONDS.
+    """
+    start_time = utc_now()
+    while should_continue():
+        elapsed = (utc_now() - start_time).total_seconds()
+        if elapsed > RUN_TIMEOUT_SECONDS:
+            raise TimeoutError(f'Run exceeded {RUN_TIMEOUT_SECONDS}s timeout')
+
+        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+
+        # Update heartbeat
+        async with session_factory() as session:
+            run_obj = await session.get(AutomationRun, run.id)
+            if run_obj:
+                run_obj.heartbeat_at = utc_now()
+                await session.commit()
+
+        # Check conversation status
+        conversation = (
+            await api_client.get_conversation(api_key, conversation_id) or {}
+        )
+        if is_terminal(conversation):
+            return True
+
+    return False  # shutdown requested
+
+
 async def _submit_and_monitor(
     run: AutomationRun,
     api_key: str,
@@ -247,37 +284,15 @@ async def _submit_and_monitor(
             await update_session.commit()
 
     # Monitor with heartbeats
-    start_time = utc_now()
-    shutdown_interrupted = False
-    while not is_terminal(conversation):
-        if not should_continue():
-            logger.info('Shutdown requested, stopping run %s monitoring', run.id)
-            shutdown_interrupted = True
-            break
-
-        elapsed = (utc_now() - start_time).total_seconds()
-        if elapsed > RUN_TIMEOUT_SECONDS:
-            raise TimeoutError(
-                f'Run {run.id} exceeded timeout of {RUN_TIMEOUT_SECONDS}s'
-            )
-
-        await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
-
-        async with session_factory() as hb_session:
-            run_obj = await hb_session.get(AutomationRun, run.id)
-            if run_obj:
-                run_obj.heartbeat_at = utc_now()
-                await hb_session.commit()
-
-        conversation = (
-            await api_client.get_conversation(api_key, conversation_id) or {}
-        )
+    completed = await _monitor_conversation(
+        run, conversation_id, api_client, api_key, session_factory
+    )
 
     # Update final status
     async with session_factory() as final_session:
         run_obj = await final_session.get(AutomationRun, run.id)
         if run_obj:
-            if shutdown_interrupted:
+            if not completed:
                 # Leave as RUNNING — stale recovery will handle it if needed.
                 # The conversation may still be running on the API side.
                 logger.info(

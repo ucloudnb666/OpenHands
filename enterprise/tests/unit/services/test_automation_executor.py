@@ -539,3 +539,86 @@ def test_is_terminal_empty():
 def test_is_terminal_case_insensitive():
     assert is_terminal({'status': 'stopped'}) is True
     assert is_terminal({'status': 'Completed'}) is True
+
+
+# ---------------------------------------------------------------------------
+# find_matching_automations — None payload
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_find_matching_automations_none_payload(async_session):
+    """Events with None payload return empty list (data corruption guard)."""
+    event = make_event(source_type='cron')
+    event.payload = None
+    async_session.add(event)
+    await async_session.commit()
+
+    result = await find_matching_automations(async_session, event)
+
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Integration: event → run creation → claim
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_integration_event_to_run_to_claim(
+    async_session_factory,
+):
+    """Full flow: create event + automation → process_new_events → claim_and_execute_runs.
+
+    Uses a real SQLite database; only the external API client is mocked.
+    """
+    # 1. Seed an automation and a NEW event
+    async with async_session_factory() as session:
+        automation = make_automation(automation_id='integ-auto')
+        event = make_event(
+            source_type='cron',
+            payload={'automation_id': 'integ-auto'},
+            dedup_key='integ-dedup',
+        )
+        session.add_all([automation, event])
+        await session.commit()
+        event_id = event.id
+
+    # 2. Process inbox — should match and create a PENDING run
+    async with async_session_factory() as session:
+        processed = await process_new_events(session)
+
+    assert processed == 1
+
+    # Verify event is PROCESSED and run was created
+    async with async_session_factory() as session:
+        evt = await session.get(AutomationEvent, event_id)
+        assert evt.status == 'PROCESSED'
+
+        runs = (await session.execute(select(AutomationRun))).scalars().all()
+        assert len(runs) == 1
+        run = runs[0]
+        assert run.automation_id == 'integ-auto'
+        assert run.status == 'PENDING'
+        assert run.event_payload == {'automation_id': 'integ-auto'}
+
+    # 3. Claim the run — mock execute_run to avoid real API calls
+    api_client = AsyncMock()
+
+    with patch('services.automation_executor.execute_run', new_callable=AsyncMock):
+        async with async_session_factory() as session:
+            claimed = await claim_and_execute_runs(
+                session, 'executor-integ', api_client, async_session_factory
+            )
+
+    assert claimed is True
+
+    # 4. Verify the run moved to RUNNING with correct executor
+    async with async_session_factory() as session:
+        runs = (await session.execute(select(AutomationRun))).scalars().all()
+        assert len(runs) == 1
+        run = runs[0]
+        assert run.status == 'RUNNING'
+        assert run.claimed_by == 'executor-integ'
+        assert run.started_at is not None
+        assert run.heartbeat_at is not None
