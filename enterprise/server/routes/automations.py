@@ -49,8 +49,8 @@ def _automation_to_response(automation: Automation) -> AutomationResponse:
             if automation.last_triggered_at
             else None
         ),
-        created_at=automation.created_at.isoformat(),
-        updated_at=automation.updated_at.isoformat(),
+        created_at=automation.created_at.isoformat() if automation.created_at else '',
+        updated_at=automation.updated_at.isoformat() if automation.updated_at else '',
     )
 
 
@@ -63,7 +63,7 @@ def _run_to_response(run: AutomationRun) -> AutomationRunResponse:
         error_detail=run.error_detail,
         started_at=run.started_at.isoformat() if run.started_at else None,
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
-        created_at=run.created_at.isoformat(),
+        created_at=run.created_at.isoformat() if run.created_at else '',
     )
 
 
@@ -188,7 +188,7 @@ async def search_automations(
 
     next_page_id: str | None = None
     if len(rows) > limit:
-        next_page_id = rows[limit - 1].id
+        next_page_id = rows[limit].id
         rows = rows[:limit]
 
     return PaginatedAutomationsResponse(
@@ -227,7 +227,7 @@ async def update_automation(
     request: UpdateAutomationRequest,
     user_id: str = Depends(get_user_id),
 ) -> AutomationResponse:
-    """Update an automation. Re-generates file if prompt/schedule/timezone changed."""
+    """Update an automation. Re-generates file if prompt/schedule/timezone/name changed."""
     async with a_session_maker() as session:
         result = await session.execute(
             select(Automation).where(
@@ -242,36 +242,34 @@ async def update_automation(
                 detail='Automation not found',
             )
 
-        # Determine if we need to regenerate the file
-        current_config = automation.config or {}
-        current_triggers = current_config.get('triggers', {}).get('cron', {})
-        current_schedule = current_triggers.get('schedule', '')
-        current_timezone = current_triggers.get('timezone', 'UTC')
+        # Collect non-None updates
+        updates = {
+            k: v
+            for k, v in request.model_dump(exclude_unset=True).items()
+            if v is not None
+        }
 
-        new_name = request.name if request.name is not None else automation.name
-        new_schedule = (
-            request.schedule if request.schedule is not None else current_schedule
-        )
-        new_timezone = (
-            request.timezone if request.timezone is not None else current_timezone
-        )
-
-        needs_regen = (
-            request.prompt is not None
-            or request.schedule is not None
-            or request.timezone is not None
-            or request.name is not None
-        )
+        file_regen_fields = {'schedule', 'timezone', 'prompt', 'name'}
+        needs_regen = bool(updates.keys() & file_regen_fields)
 
         if needs_regen:
-            # We need the prompt — if not supplied in this request, read from file
-            if request.prompt is not None:
-                prompt = request.prompt
+            current_config = automation.config or {}
+            current_triggers = current_config.get('triggers', {}).get('cron', {})
+
+            new_name = updates.get('name', automation.name)
+            new_schedule = updates.get(
+                'schedule', current_triggers.get('schedule', '')
+            )
+            new_timezone = updates.get(
+                'timezone', current_triggers.get('timezone', 'UTC')
+            )
+
+            if 'prompt' in updates:
+                prompt = updates['prompt']
             else:
                 try:
-                    file_content = file_store.read(automation.file_store_key)
-                    # Extract prompt from the stored file by looking for send_message call
-                    prompt = _extract_prompt_from_file(file_content)
+                    existing_content = file_store.read(automation.file_store_key)
+                    prompt = _extract_prompt_from_file(existing_content)
                 except Exception:
                     logger.warning(
                         'Could not read existing automation file for prompt extraction',
@@ -284,8 +282,8 @@ async def update_automation(
                 schedule=new_schedule,
                 timezone=new_timezone,
                 prompt=prompt,
-                repository=request.repository,
-                branch=request.branch,
+                repository=updates.get('repository'),
+                branch=updates.get('branch'),
             )
             try:
                 file_store.write(automation.file_store_key, file_content)
@@ -298,11 +296,11 @@ async def update_automation(
             automation.config = config
             automation.name = new_name
 
-        elif request.name is not None:
-            automation.name = request.name
-
-        if request.enabled is not None:
-            automation.enabled = request.enabled
+        # Apply simple field updates
+        if 'name' in updates and not needs_regen:
+            automation.name = updates['name']
+        if 'enabled' in updates:
+            automation.enabled = updates['enabled']
 
         await session.commit()
         await session.refresh(automation)
@@ -358,6 +356,8 @@ async def delete_automation(
                 detail='Automation not found',
             )
 
+        file_key = automation.file_store_key
+
         # Delete runs first
         await session.execute(
             delete(AutomationRun).where(AutomationRun.automation_id == automation_id)
@@ -365,9 +365,9 @@ async def delete_automation(
         await session.delete(automation)
         await session.commit()
 
-    # Best-effort cleanup of file store
+    # Best-effort cleanup of file store (DB is source of truth)
     try:
-        file_store.delete(automation.file_store_key)
+        file_store.delete(file_key)
     except Exception:
         logger.warning(
             'Failed to delete automation file from object store',
@@ -458,7 +458,7 @@ async def list_automation_runs(
 
     next_page_id: str | None = None
     if len(rows) > limit:
-        next_page_id = rows[limit - 1].id
+        next_page_id = rows[limit].id
         rows = rows[:limit]
 
     return PaginatedRunsResponse(

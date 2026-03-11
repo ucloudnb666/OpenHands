@@ -567,3 +567,87 @@ class TestGetRun:
             response = client.get('/api/v1/automations/nope/runs/run-1')
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# --- Test: User Isolation (security) ---
+
+
+class TestUserIsolation:
+    """Verify that user A cannot access, update, or delete user B's automations.
+
+    The routes filter by user_id from the auth dependency, so automations owned by
+    another user should never be returned (the DB query uses WHERE user_id = <caller>).
+    We simulate this by having the mock session return None for cross-user lookups.
+    """
+
+    @pytest.fixture
+    def other_user_app(self):
+        """App configured to authenticate as OTHER_USER_ID."""
+        app = FastAPI()
+        app.include_router(automation_router)
+
+        def mock_get_other_user_id():
+            return OTHER_USER_ID
+
+        app.dependency_overrides[get_user_id] = mock_get_other_user_id
+        return app
+
+    @pytest.fixture
+    def other_client(self, other_user_app):
+        return TestClient(other_user_app)
+
+    def test_cannot_get_other_users_automation(self, other_client):
+        """User B cannot GET user A's automation → 404."""
+        # The query filters by user_id=OTHER_USER_ID, so it won't find user A's row
+        mock_session = _mock_session_with_results([None])
+
+        with patch(
+            'server.routes.automations.a_session_maker',
+            return_value=_session_ctx(mock_session),
+        ):
+            response = other_client.get('/api/v1/automations/auto-owned-by-a')
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cannot_update_other_users_automation(self, other_client):
+        """User B cannot PATCH user A's automation → 404."""
+        mock_session = _mock_session_with_results([None])
+
+        with patch(
+            'server.routes.automations.a_session_maker',
+            return_value=_session_ctx(mock_session),
+        ):
+            response = other_client.patch(
+                '/api/v1/automations/auto-owned-by-a',
+                json={'name': 'Hijacked'},
+            )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_cannot_delete_other_users_automation(self, other_client):
+        """User B cannot DELETE user A's automation → 404."""
+        mock_session = _mock_session_with_results([None])
+
+        with patch(
+            'server.routes.automations.a_session_maker',
+            return_value=_session_ctx(mock_session),
+        ):
+            response = other_client.delete('/api/v1/automations/auto-owned-by-a')
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_search_returns_empty_for_other_user(self, other_client):
+        """User B's search returns empty even if user A has automations."""
+        # count=0, rows=[]
+        mock_session = _mock_session_with_results([0, []])
+
+        with patch(
+            'server.routes.automations.a_session_maker',
+            return_value=_session_ctx(mock_session),
+        ):
+            response = other_client.get('/api/v1/automations/search')
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data['total'] == 0
+        assert data['items'] == []
