@@ -27,10 +27,12 @@ def add_test_org_and_user(session_maker):
     from storage.user import User
 
     with session_maker() as session:
-        # Create role first
-        role = Role(name='test-role', rank=1)
-        session.add(role)
-        session.flush()
+        # Use existing role from minimal fixtures (id=1, 'admin')
+        role = session.query(Role).filter(Role.id == 1).first()
+        if not role:
+            role = Role(name='test-role', rank=1)
+            session.add(role)
+            session.flush()
 
         # Create org
         org = Org(id=test_org_id, name='test-org', contact_email='testy@tester.com')

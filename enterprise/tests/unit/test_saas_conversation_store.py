@@ -34,11 +34,11 @@ def mock_user_store():
 
 
 @pytest.mark.asyncio
-async def test_save_and_get(session_maker):
+async def test_save_and_get(session_maker_with_minimal_fixtures):
     store = SaasConversationStore(
         '5594c7b6-f959-4b81-92e9-b09c206f5081',
         UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-        session_maker,
+        session_maker_with_minimal_fixtures,
     )
     metadata = ConversationMetadata(
         conversation_id='my-conversation-id',
@@ -63,11 +63,11 @@ async def test_save_and_get(session_maker):
 
 
 @pytest.mark.asyncio
-async def test_search(session_maker):
+async def test_search(session_maker_with_minimal_fixtures):
     store = SaasConversationStore(
         '5594c7b6-f959-4b81-92e9-b09c206f5081',
         UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-        session_maker,
+        session_maker_with_minimal_fixtures,
     )
 
     # Create test conversations with different timestamps
@@ -88,9 +88,12 @@ async def test_search(session_maker):
         await store.save_metadata(conv)
 
     # Test basic search - should return all valid conversations sorted by created_at
+    # Note: session_maker_with_minimal_fixtures pre-populates a 'mock-conversation-id'
+    # record, so we expect 6 results (1 fixture + 5 test conversations)
     result = await store.search(limit=10)
-    assert len(result.results) == 5
+    assert len(result.results) == 6
     assert [c.conversation_id for c in result.results] == [
+        'mock-conversation-id',
         'conv-4',
         'conv-3',
         'conv-2',
@@ -102,21 +105,24 @@ async def test_search(session_maker):
     # Test pagination
     result = await store.search(limit=2)
     assert len(result.results) == 2
-    assert [c.conversation_id for c in result.results] == ['conv-4', 'conv-3']
+    assert [c.conversation_id for c in result.results] == [
+        'mock-conversation-id',
+        'conv-4',
+    ]
     assert result.next_page_id is not None
 
     # Test next page
     result = await store.search(page_id=result.next_page_id, limit=2)
     assert len(result.results) == 2
-    assert [c.conversation_id for c in result.results] == ['conv-2', 'conv-1']
+    assert [c.conversation_id for c in result.results] == ['conv-3', 'conv-2']
 
 
 @pytest.mark.asyncio
-async def test_delete_metadata(session_maker):
+async def test_delete_metadata(session_maker_with_minimal_fixtures):
     store = SaasConversationStore(
         '5594c7b6-f959-4b81-92e9-b09c206f5081',
         UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-        session_maker,
+        session_maker_with_minimal_fixtures,
     )
     metadata = ConversationMetadata(
         conversation_id='to-delete',
@@ -136,22 +142,22 @@ async def test_delete_metadata(session_maker):
 
 
 @pytest.mark.asyncio
-async def test_get_nonexistent_metadata(session_maker):
+async def test_get_nonexistent_metadata(session_maker_with_minimal_fixtures):
     store = SaasConversationStore(
         '5594c7b6-f959-4b81-92e9-b09c206f5081',
         UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-        session_maker,
+        session_maker_with_minimal_fixtures,
     )
     with pytest.raises(FileNotFoundError):
         await store.get_metadata('nonexistent-id')
 
 
 @pytest.mark.asyncio
-async def test_exists(session_maker):
+async def test_exists(session_maker_with_minimal_fixtures):
     store = SaasConversationStore(
         '5594c7b6-f959-4b81-92e9-b09c206f5081',
         UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-        session_maker,
+        session_maker_with_minimal_fixtures,
     )
     metadata = ConversationMetadata(
         conversation_id='exists-test',

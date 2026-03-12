@@ -1236,10 +1236,11 @@ async def test_migrate_user_sql_multiple_conversations(async_session_maker):
         assert len(saas_rows) == 3, 'All 3 conversations should be migrated'
 
         # Verify the user_id and org_id values
+        # PostgreSQL returns UUID types from UUID columns, so compare with str()
         for row in saas_rows:
             assert (
-                row.user_id == user_uuid_str
+                str(row.user_id) == user_uuid_str
             ), f'user_id should match: {row.user_id} vs {user_uuid_str}'
             assert (
-                row.org_id == user_uuid_str
+                str(row.org_id) == user_uuid_str
             ), f'org_id should match: {row.org_id} vs {user_uuid_str}'

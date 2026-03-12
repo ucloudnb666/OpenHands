@@ -83,6 +83,17 @@ class TestConversationCallback:
     def conversation_metadata(self, session_maker):
         """Create a test conversation metadata record."""
         with session_maker() as session:
+            # Create FK parents first
+            from storage.org import Org
+            from storage.user import User
+
+            org = Org(id=UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'), name='test-org')
+            session.add(org)
+            session.flush()
+            user = User(id=UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'), current_org_id=org.id)
+            session.add(user)
+            session.flush()
+
             metadata = StoredConversationMetadata(
                 conversation_id='test_conversation_123'
             )

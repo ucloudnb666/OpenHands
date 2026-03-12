@@ -229,7 +229,10 @@ async def test_persist_org_with_owner_success(async_session_maker, mock_litellm_
 
     # Create user and role first
     async with async_session_maker() as session:
-        user = User(id=user_id, current_org_id=org_id)
+        placeholder_org = Org(name='placeholder')
+        session.add(placeholder_org)
+        await session.flush()
+        user = User(id=user_id, current_org_id=placeholder_org.id)
         role = Role(id=1, name='owner', rank=1)
         session.add(user)
         session.add(role)
@@ -288,7 +291,10 @@ async def test_persist_org_with_owner_returns_refreshed_org(
     user_id = uuid.uuid4()
 
     async with async_session_maker() as session:
-        user = User(id=user_id, current_org_id=org_id)
+        placeholder_org = Org(name='placeholder')
+        session.add(placeholder_org)
+        await session.flush()
+        user = User(id=user_id, current_org_id=placeholder_org.id)
         role = Role(id=1, name='owner', rank=1)
         session.add(user)
         session.add(role)
@@ -336,7 +342,10 @@ async def test_persist_org_with_owner_transaction_atomicity(
     user_id = uuid.uuid4()
 
     async with async_session_maker() as session:
-        user = User(id=user_id, current_org_id=org_id)
+        placeholder_org = Org(name='placeholder')
+        session.add(placeholder_org)
+        await session.flush()
+        user = User(id=user_id, current_org_id=placeholder_org.id)
         role = Role(id=1, name='owner', rank=1)
         session.add(user)
         session.add(role)
@@ -389,7 +398,10 @@ async def test_persist_org_with_owner_with_multiple_fields(
     user_id = uuid.uuid4()
 
     async with async_session_maker() as session:
-        user = User(id=user_id, current_org_id=org_id)
+        placeholder_org = Org(name='placeholder')
+        session.add(placeholder_org)
+        await session.flush()
+        user = User(id=user_id, current_org_id=placeholder_org.id)
         role = Role(id=1, name='owner', rank=1)
         session.add(user)
         session.add(role)
@@ -511,14 +523,19 @@ async def test_delete_org_cascade_litellm_failure_causes_rollback(
     user_id = uuid.uuid4()
 
     async with async_session_maker() as session:
-        role = Role(id=1, name='owner', rank=1)
-        user = User(id=user_id, current_org_id=org_id)
         org = Org(
             id=org_id,
             name='Test Organization',
             contact_name='John Doe',
             contact_email='john@example.com',
         )
+        role = Role(id=1, name='owner', rank=1)
+        session.add(org)
+        session.add(role)
+        await session.flush()
+        user = User(id=user_id, current_org_id=org_id)
+        session.add(user)
+        await session.flush()
         org_member = OrgMember(
             org_id=org_id,
             user_id=user_id,
@@ -526,7 +543,7 @@ async def test_delete_org_cascade_litellm_failure_causes_rollback(
             status='active',
             llm_api_key='test-key',
         )
-        session.add_all([role, user, org, org_member])
+        session.add(org_member)
         await session.commit()
 
     # Mock delete_org_cascade to simulate LiteLLM failure

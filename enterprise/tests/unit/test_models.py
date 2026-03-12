@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from storage.org import Org
 from storage.org_member import OrgMember
+from storage.role import Role
 from storage.user import User
 
 
@@ -22,6 +23,11 @@ def test_user_model(session_maker):
         test_user_id = uuid4()
         user = User(id=test_user_id, current_org_id=org.id, language='en')
         session.add(user)
+        session.flush()
+
+        # Create role (FK parent for OrgMember)
+        role = Role(id=1, name='admin', rank=1)
+        session.add(role)
         session.flush()
 
         # Create org_member relationship

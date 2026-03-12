@@ -124,6 +124,9 @@ async def test_create_org_with_owner_success(
 
     # Create user in database first
     with session_maker() as session:
+        org = Org(id=temp_org_id, name='temp-org')
+        session.add(org)
+        session.flush()
         user = User(id=user_id, current_org_id=temp_org_id)
         session.add(user)
         session.commit()

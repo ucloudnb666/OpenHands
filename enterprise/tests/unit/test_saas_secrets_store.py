@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 from pydantic import SecretStr
+from storage.org import Org
 from storage.saas_secrets_store import SaasSecretsStore
 from storage.stored_custom_secrets import StoredCustomSecrets
 
@@ -29,7 +30,12 @@ def mock_user():
 
 
 @pytest.fixture
-def secrets_store(async_session_maker, mock_config):
+def secrets_store(async_session_maker, session_maker, mock_config, mock_user):
+    # Create Org for mock_user's org_id to satisfy FK constraints
+    with session_maker() as session:
+        session.add(Org(id=mock_user.current_org_id, name='test-org'))
+        session.commit()
+
     # Inject the test session maker into the store module
     import storage.saas_secrets_store as store_module
 

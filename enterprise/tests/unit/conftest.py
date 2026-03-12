@@ -178,6 +178,62 @@ async def async_session_maker(async_engine):
 
 def add_minimal_fixtures(session_maker):
     with session_maker() as session:
+        # Insert FK parent rows first: Org, Role, User
+        session.add(
+            Org(
+                id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+                name='mock-org',
+                org_version=ORG_SETTINGS_VERSION,
+                enable_default_condenser=True,
+                enable_proactive_conversation_starters=True,
+            )
+        )
+        session.add(
+            Role(
+                id=1,
+                name='admin',
+                rank=1,
+            )
+        )
+        session.flush()
+        session.add(
+            User(
+                id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+                current_org_id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+                user_consents_to_analytics=True,
+            )
+        )
+        session.flush()
+
+        # Now insert rows that depend on Org/Role/User
+        session.add(
+            OrgMember(
+                org_id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+                user_id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+                role_id=1,
+                llm_api_key='mock-api-key',
+                status='active',
+            )
+        )
+        session.add(
+            StoredConversationMetadata(
+                conversation_id='mock-conversation-id',
+                created_at=datetime.fromisoformat('2025-03-07'),
+                last_updated_at=datetime.fromisoformat('2025-03-08'),
+                accumulated_cost=5.25,
+                prompt_tokens=500,
+                completion_tokens=250,
+                total_tokens=750,
+            )
+        )
+        session.flush()
+        session.add(
+            StoredConversationMetadataSaas(
+                conversation_id='mock-conversation-id',
+                user_id=UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+                org_id=UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+            )
+        )
         session.add(
             BillingSession(
                 id='mock-billing-session-id',
@@ -208,61 +264,11 @@ def add_minimal_fixtures(session_maker):
             )
         )
         session.add(
-            StoredConversationMetadata(
-                conversation_id='mock-conversation-id',
-                created_at=datetime.fromisoformat('2025-03-07'),
-                last_updated_at=datetime.fromisoformat('2025-03-08'),
-                accumulated_cost=5.25,
-                prompt_tokens=500,
-                completion_tokens=250,
-                total_tokens=750,
-            )
-        )
-        session.add(
-            StoredConversationMetadataSaas(
-                conversation_id='mock-conversation-id',
-                user_id=UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-                org_id=UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-            )
-        )
-        session.add(
             StoredOfflineToken(
                 user_id='mock-user-id',
                 offline_token='mock-offline-token',
                 created_at=datetime.fromisoformat('2025-03-07'),
                 updated_at=datetime.fromisoformat('2025-03-08'),
-            )
-        )
-        session.add(
-            Org(
-                id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-                name='mock-org',
-                org_version=ORG_SETTINGS_VERSION,
-                enable_default_condenser=True,
-                enable_proactive_conversation_starters=True,
-            )
-        )
-        session.add(
-            Role(
-                id=1,
-                name='admin',
-                rank=1,
-            )
-        )
-        session.add(
-            User(
-                id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-                current_org_id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-                user_consents_to_analytics=True,
-            )
-        )
-        session.add(
-            OrgMember(
-                org_id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-                user_id=uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
-                role_id=1,
-                llm_api_key='mock-api-key',
-                status='active',
             )
         )
         session.add(
