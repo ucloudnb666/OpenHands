@@ -967,9 +967,68 @@ Handle edge cases and improve user experience.
 - [ ] Ensure keyboard navigation for retry buttons
 - [ ] Screen reader announcements for status changes (queued, sent, failed)
 
-#### 5.6.4 E2E Tests
-- [ ] Add E2E test: Type message, refresh page, draft restored
-- [ ] Add E2E test: Switch conversations, drafts saved/restored correctly
-- [ ] Add E2E test: Submit while disconnected, reconnect, message sent
-- [ ] Add E2E test: Submit during runtime startup, message sent when ready
-- [ ] Add E2E test: Message fails, retry succeeds
+#### 5.6.4 Integration Tests (React Testing Library + MSW)
+
+Integration tests can be written using the existing test infrastructure without Playwright:
+
+- **React Testing Library** - Render components and simulate user interactions
+- **MSW (Mock Service Worker)** - Mock WebSocket connections (already set up in `frontend/__tests__/helpers/msw-websocket-setup.ts`)
+- **JSDOM localStorage** - Vitest/Jest provides localStorage mock automatically
+- **Zustand store testing** - Direct store manipulation and assertions
+
+**Test Files:**
+- [ ] `frontend/__tests__/integration/draft-persistence.test.tsx`
+  - Render chat input, type message, verify localStorage updated
+  - Unmount/remount component, verify draft restored from localStorage
+  - Switch conversation IDs, verify drafts saved/restored per conversation
+  
+- [ ] `frontend/__tests__/integration/message-queue.test.tsx`
+  - Render with disconnected WebSocket, submit message, verify queued in store
+  - Simulate WebSocket connect, verify queued message sent
+  - Verify queue keyed by conversation ID (multiple conversations)
+  - Test retry logic with simulated failures
+  
+- [ ] `frontend/__tests__/integration/submit-during-startup.test.tsx`
+  - Render with runtime starting state, verify submit button enabled
+  - Submit message during startup, verify queued
+  - Simulate runtime ready, verify message sent
+
+**Example Test Pattern (using existing infrastructure):**
+```typescript
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { conversationWebSocketTestSetup } from "./helpers/msw-websocket-setup";
+
+describe("Draft Persistence", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("saves draft to localStorage on input", async () => {
+    const user = userEvent.setup();
+    render(<ChatInputWithProviders conversationId="conv-123" />);
+    
+    const input = screen.getByRole("textbox");
+    await user.type(input, "my draft message");
+    
+    // Wait for debounced save
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem("conversation-state-conv-123") || "{}");
+      expect(stored.draftMessage).toBe("my draft message");
+    });
+  });
+
+  it("restores draft on remount", async () => {
+    // Pre-populate localStorage
+    localStorage.setItem("conversation-state-conv-123", JSON.stringify({
+      draftMessage: "restored draft",
+      draftTimestamp: Date.now(),
+    }));
+    
+    render(<ChatInputWithProviders conversationId="conv-123" />);
+    
+    const input = screen.getByRole("textbox");
+    expect(input).toHaveTextContent("restored draft");
+  });
+});
+```
