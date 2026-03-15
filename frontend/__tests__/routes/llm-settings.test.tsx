@@ -9,16 +9,31 @@ import {
   resetTestHandlersMockSettings,
 } from "#/mocks/handlers";
 import LlmSettingsScreen from "#/routes/llm-settings";
+import { useSelectedOrganizationStore } from "#/stores/selected-organization-store";
+import { OrganizationMember } from "#/types/org";
 import { Settings } from "#/types/settings";
 
 const mockUseSearchParams = vi.fn();
-vi.mock("react-router", () => ({
-  useSearchParams: () => mockUseSearchParams(),
-}));
+vi.mock("react-router", async () => {
+  const actual =
+    await vi.importActual<typeof import("react-router")>("react-router");
+  return {
+    ...actual,
+    useSearchParams: () => mockUseSearchParams(),
+    useRevalidator: () => ({
+      revalidate: vi.fn(),
+    }),
+  };
+});
 
 const mockUseIsAuthed = vi.fn();
 vi.mock("#/hooks/query/use-is-authed", () => ({
   useIsAuthed: () => mockUseIsAuthed(),
+}));
+
+const mockUseConfig = vi.fn();
+vi.mock("#/hooks/query/use-config", () => ({
+  useConfig: () => mockUseConfig(),
 }));
 
 function buildSettings(overrides: Partial<Settings> = {}): Settings {
@@ -32,12 +47,57 @@ function buildSettings(overrides: Partial<Settings> = {}): Settings {
   };
 }
 
-function renderLlmSettingsScreen() {
+function buildOrganizationMember(
+  overrides: Partial<OrganizationMember> = {},
+): OrganizationMember {
+  return {
+    org_id: "1",
+    user_id: "99",
+    email: "owner@example.com",
+    role: "owner",
+    status: "active",
+    llm_api_key: "",
+    max_iterations: 20,
+    llm_model: "",
+    llm_api_key_for_byor: null,
+    llm_base_url: "",
+    ...overrides,
+  };
+}
+
+function renderLlmSettingsScreen(
+  options: {
+    appMode?: "oss" | "saas";
+    organizationId?: string;
+    meData?: OrganizationMember;
+  } = {},
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  const organizationId = options.organizationId ?? "1";
+  const appMode = options.appMode ?? "oss";
+
+  useSelectedOrganizationStore.setState({ organizationId });
+  mockUseConfig.mockReturnValue({
+    data: { app_mode: appMode },
+    isLoading: false,
+  });
+
+  if (appMode === "saas") {
+    queryClient.setQueryData(
+      ["organizations", organizationId, "me"],
+      options.meData ?? buildOrganizationMember({ org_id: organizationId }),
+    );
+  }
+
   return render(<LlmSettingsScreen />, {
     wrapper: ({ children }) => (
-      <QueryClientProvider client={new QueryClient()}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
   });
 }
@@ -53,6 +113,11 @@ beforeEach(() => {
     vi.fn(),
   ]);
   mockUseIsAuthed.mockReturnValue({ data: true, isLoading: false });
+  mockUseConfig.mockReturnValue({
+    data: { app_mode: "oss" },
+    isLoading: false,
+  });
+  useSelectedOrganizationStore.setState({ organizationId: "1" });
 });
 
 describe("LlmSettingsScreen", () => {
@@ -64,6 +129,7 @@ describe("LlmSettingsScreen", () => {
     await screen.findByTestId("llm-settings-screen");
     expect(screen.getByTestId("sdk-settings-llm.model")).toBeInTheDocument();
     expect(screen.getByTestId("sdk-settings-llm.api_key")).toBeInTheDocument();
+    expect(screen.getByTestId("sdk-settings-critic.enabled")).toBeInTheDocument();
     expect(
       screen.queryByTestId("sdk-settings-critic.mode"),
     ).not.toBeInTheDocument();
@@ -125,6 +191,20 @@ describe("LlmSettingsScreen", () => {
         }),
       );
     });
+  });
+
+  it("hides the save button for read-only SaaS members", async () => {
+    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(buildSettings());
+
+    renderLlmSettingsScreen({
+      appMode: "saas",
+      organizationId: "2",
+      meData: buildOrganizationMember({ org_id: "2", role: "member" }),
+    });
+
+    await screen.findByTestId("llm-settings-screen");
+    expect(screen.queryByTestId("save-button")).not.toBeInTheDocument();
+    expect(screen.getByTestId("sdk-settings-llm.model")).toBeDisabled();
   });
 
   it("shows a fallback message when sdk settings schema is unavailable", async () => {

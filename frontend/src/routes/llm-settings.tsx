@@ -1,6 +1,7 @@
 import React from "react";
 import { AxiosError } from "axios";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router";
 
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { OptionalTag } from "#/components/features/settings/optional-tag";
@@ -8,13 +9,19 @@ import { SettingsDropdownInput } from "#/components/features/settings/settings-d
 import { SettingsInput } from "#/components/features/settings/settings-input";
 import { SettingsSwitch } from "#/components/features/settings/settings-switch";
 import { LlmSettingsInputsSkeleton } from "#/components/features/settings/llm-settings/llm-settings-inputs-skeleton";
-import { I18nKey } from "#/i18n/declaration";
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
+import { usePermission } from "#/hooks/organizations/use-permissions";
+import { useConfig } from "#/hooks/query/use-config";
+import { useMe } from "#/hooks/query/use-me";
 import { useSettings } from "#/hooks/query/use-settings";
+import { I18nKey } from "#/i18n/declaration";
+import { SettingsFieldSchema } from "#/types/settings";
+import { Typography } from "#/ui/typography";
 import {
   displayErrorToast,
   displaySuccessToast,
 } from "#/utils/custom-toast-handlers";
+import { createPermissionGuard } from "#/utils/org/permission-guard";
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message";
 import {
   buildInitialSettingsFormValues,
@@ -25,8 +32,6 @@ import {
   SettingsDirtyState,
   SettingsFormValues,
 } from "#/utils/sdk-settings-schema";
-import { SettingsFieldSchema } from "#/types/settings";
-import { Typography } from "#/ui/typography";
 import { cn } from "#/utils/utils";
 
 function FieldHelp({ field }: { field: SettingsFieldSchema }) {
@@ -68,10 +73,12 @@ function getInputType(
 function SchemaField({
   field,
   value,
+  isDisabled,
   onChange,
 }: {
   field: SettingsFieldSchema;
   value: string | boolean;
+  isDisabled: boolean;
   onChange: (value: string | boolean) => void;
 }) {
   if (isBooleanField(field)) {
@@ -80,6 +87,7 @@ function SchemaField({
         <SettingsSwitch
           testId={`sdk-settings-${field.key}`}
           isToggled={Boolean(value)}
+          isDisabled={isDisabled}
           onToggle={onChange}
         >
           {field.label}
@@ -104,6 +112,7 @@ function SchemaField({
           isClearable={!field.required}
           required={field.required}
           showOptionalTag={!field.required}
+          isDisabled={isDisabled}
           onSelectionChange={(selectedKey) =>
             onChange(String(selectedKey ?? ""))
           }
@@ -125,10 +134,12 @@ function SchemaField({
           name={field.key}
           value={String(value ?? "")}
           required={field.required}
+          disabled={isDisabled}
           onChange={(event) => onChange(event.target.value)}
           className={cn(
             "bg-tertiary border border-[#717888] min-h-32 w-full rounded-sm p-2 font-mono text-sm",
             "placeholder:italic placeholder:text-tertiary-alt",
+            "disabled:bg-[#2D2F36] disabled:border-[#2D2F36] disabled:cursor-not-allowed",
           )}
         />
         <FieldHelp field={field} />
@@ -146,6 +157,7 @@ function SchemaField({
         value={String(value ?? "")}
         required={field.required}
         showOptionalTag={!field.required}
+        isDisabled={isDisabled}
         onChange={onChange}
         className="w-full"
       />
@@ -156,8 +168,15 @@ function SchemaField({
 
 function LlmSettingsScreen() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { mutate: saveSettings, isPending } = useSaveSettings();
   const { data: settings, isLoading, isFetching } = useSettings();
+  const { data: config } = useConfig();
+  const { data: me } = useMe();
+  const { hasPermission } = usePermission(me?.role ?? "member");
+
+  const isOssMode = config?.app_mode === "oss";
+  const isReadOnly = isOssMode ? false : !hasPermission("edit_llm_settings");
 
   const [view, setView] = React.useState<"basic" | "advanced">("basic");
   const [values, setValues] = React.useState<SettingsFormValues>({});
@@ -165,6 +184,18 @@ function LlmSettingsScreen() {
 
   const schema = settings?.sdk_settings_schema ?? null;
   const showAdvancedToggle = hasMinorSettings(schema);
+
+  React.useEffect(() => {
+    const checkout = searchParams.get("checkout");
+
+    if (checkout === "success") {
+      displaySuccessToast(t(I18nKey.SUBSCRIPTION$SUCCESS));
+      setSearchParams({});
+    } else if (checkout === "cancel") {
+      displayErrorToast(t(I18nKey.SUBSCRIPTION$FAILURE));
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams, t]);
 
   React.useEffect(() => {
     if (!settings?.sdk_settings_schema) {
@@ -198,13 +229,16 @@ function LlmSettingsScreen() {
     [],
   );
 
-  const handleError = (error: AxiosError) => {
-    const errorMessage = retrieveAxiosErrorMessage(error);
-    displayErrorToast(errorMessage || t(I18nKey.ERROR$GENERIC));
-  };
+  const handleError = React.useCallback(
+    (error: AxiosError) => {
+      const errorMessage = retrieveAxiosErrorMessage(error);
+      displayErrorToast(errorMessage || t(I18nKey.ERROR$GENERIC));
+    },
+    [t],
+  );
 
   const handleSave = () => {
-    if (!schema) {
+    if (!schema || isReadOnly) {
       return;
     }
 
@@ -280,6 +314,7 @@ function LlmSettingsScreen() {
                   key={field.key}
                   field={field}
                   value={values[field.key]}
+                  isDisabled={isReadOnly}
                   onChange={(nextValue) =>
                     handleFieldChange(field.key, nextValue)
                   }
@@ -290,19 +325,25 @@ function LlmSettingsScreen() {
         ))}
       </div>
 
-      <div className="sticky bottom-0 bg-base py-4">
-        <BrandButton
-          testId="save-button"
-          type="button"
-          variant="primary"
-          isDisabled={isPending || Object.keys(dirty).length === 0}
-          onClick={handleSave}
-        >
-          {isPending ? "Loading..." : t(I18nKey.SETTINGS$SAVE_CHANGES)}
-        </BrandButton>
-      </div>
+      {!isReadOnly ? (
+        <div className="sticky bottom-0 bg-base py-4">
+          <BrandButton
+            testId="save-button"
+            type="button"
+            variant="primary"
+            isDisabled={isPending || Object.keys(dirty).length === 0}
+            onClick={handleSave}
+          >
+            {isPending
+              ? t(I18nKey.SETTINGS$SAVING)
+              : t(I18nKey.SETTINGS$SAVE_CHANGES)}
+          </BrandButton>
+        </div>
+      ) : null}
     </div>
   );
 }
+
+export const clientLoader = createPermissionGuard("view_llm_settings");
 
 export default LlmSettingsScreen;
