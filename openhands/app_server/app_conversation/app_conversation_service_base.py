@@ -21,18 +21,16 @@ from openhands.app_server.app_conversation.app_conversation_service import (
     AppConversationService,
 )
 from openhands.app_server.app_conversation.skill_loader import (
-    load_global_skills,
-    load_org_skills,
-    load_repo_skills,
-    load_sandbox_skills,
-    merge_skills,
+    build_org_config,
+    build_sandbox_config,
+    load_skills_from_agent_server,
 )
 from openhands.app_server.sandbox.sandbox_models import SandboxInfo
 from openhands.app_server.user.user_context import UserContext
 from openhands.sdk import Agent
 from openhands.sdk.context.agent_context import AgentContext
 from openhands.sdk.context.condenser import LLMSummarizingCondenser
-from openhands.sdk.context.skills import load_user_skills
+from openhands.sdk.context.skills import Skill
 from openhands.sdk.llm import LLM
 from openhands.sdk.security.analyzer import SecurityAnalyzerBase
 from openhands.sdk.security.confirmation_policy import (
@@ -49,11 +47,46 @@ PRE_COMMIT_HOOK = '.git/hooks/pre-commit'
 PRE_COMMIT_LOCAL = '.git/hooks/pre-commit.local'
 
 
+def get_project_dir(
+    working_dir: str,
+    selected_repository: str | None = None,
+) -> str:
+    """Get the project root directory for a conversation.
+
+    When a repository is selected, the project root is the cloned repo directory
+    at {working_dir}/{repo_name}.  This is the directory that contains the
+    `.openhands/` configuration (setup.sh, pre-commit.sh, skills/, etc.).
+
+    Without a repository, the project root is the working_dir itself.
+
+    This must be used consistently for ALL features that depend on the project root:
+    - workspace.working_dir (terminal CWD, file editor root, etc.)
+    - .openhands/setup.sh execution
+    - .openhands/pre-commit.sh (git hooks setup)
+    - .openhands/skills/ (project skills)
+    - PLAN.md path
+
+    Args:
+        working_dir: Base working directory path in the sandbox
+            (e.g., '/workspace/project' from sandbox_spec)
+        selected_repository: Repository name (e.g., 'OpenHands/software-agent-sdk')
+            If provided, the repo name is appended to working_dir.
+
+    Returns:
+        The project root directory path.
+    """
+    if selected_repository:
+        repo_name = selected_repository.split('/')[-1]
+        return f'{working_dir}/{repo_name}'
+    return working_dir
+
+
 @dataclass
 class AppConversationServiceBase(AppConversationService, ABC):
     """App Conversation service which adds git specific functionality.
 
-    Sets up repositories and installs hooks"""
+    Sets up repositories and installs hooks
+    """
 
     init_git_in_empty_workspace: bool
     user_context: UserContext
@@ -61,67 +94,68 @@ class AppConversationServiceBase(AppConversationService, ABC):
     async def load_and_merge_all_skills(
         self,
         sandbox: SandboxInfo,
-        remote_workspace: AsyncRemoteWorkspace,
         selected_repository: str | None,
-        working_dir: str,
-    ) -> list:
-        """Load skills from all sources and merge them.
+        project_dir: str,
+        agent_server_url: str,
+    ) -> list[Skill]:
+        """Load skills from all sources via the agent-server.
 
-        This method handles all errors gracefully and will return an empty list
-        if skill loading fails completely.
+        This method calls the agent-server's /api/skills endpoint to load and
+        merge skills from all sources. The agent-server handles:
+        - Public skills (from OpenHands/skills GitHub repo)
+        - User skills (from ~/.openhands/skills/)
+        - Organization skills (from {org}/.openhands repo)
+        - Project/repo skills (from repo .agents/skills/, .openhands/microagents/, and legacy .openhands/skills/)
+        - Sandbox skills (from exposed URLs)
 
         Args:
-            remote_workspace: AsyncRemoteWorkspace for loading repo skills
+            sandbox: SandboxInfo containing exposed URLs and agent-server URL
             selected_repository: Repository name or None
-            working_dir: Working directory path
+            project_dir: Project root directory (resolved via get_project_dir).
+            agent_server_url: Agent-server URL (required)
 
         Returns:
             List of merged Skill objects from all sources, or empty list on failure
         """
         try:
-            _logger.debug('Loading skills for V1 conversation')
+            _logger.debug('Loading skills for V1 conversation via agent-server')
 
-            # Load skills from all sources
-            sandbox_skills = load_sandbox_skills(sandbox)
-            global_skills = load_global_skills()
-            # Load user skills from ~/.openhands/skills/ directory
-            # Uses the SDK's load_user_skills() function which handles loading from
-            # ~/.openhands/skills/ and ~/.openhands/microagents/ (for backward compatibility)
-            try:
-                user_skills = load_user_skills()
-                _logger.info(
-                    f'Loaded {len(user_skills)} user skills: {[s.name for s in user_skills]}'
-                )
-            except Exception as e:
-                _logger.warning(f'Failed to load user skills: {str(e)}')
-                user_skills = []
+            if not agent_server_url:
+                _logger.warning('No agent-server URL available, cannot load skills')
+                return []
 
-            # Load organization-level skills
-            org_skills = await load_org_skills(
-                remote_workspace, selected_repository, working_dir, self.user_context
-            )
+            # Build org config (authentication handled by app-server)
+            org_config = await build_org_config(selected_repository, self.user_context)
 
-            repo_skills = await load_repo_skills(
-                remote_workspace, selected_repository, working_dir
-            )
+            # Build sandbox config (exposed URLs)
+            sandbox_config = build_sandbox_config(sandbox)
 
-            # Merge all skills (later lists override earlier ones)
-            # Precedence: sandbox < global < user < org < repo
-            all_skills = merge_skills(
-                [sandbox_skills, global_skills, user_skills, org_skills, repo_skills]
+            # Single API call to agent-server for ALL skills
+            all_skills = await load_skills_from_agent_server(
+                agent_server_url=agent_server_url,
+                session_api_key=sandbox.session_api_key,
+                project_dir=project_dir,
+                org_config=org_config,
+                sandbox_config=sandbox_config,
+                load_public=True,
+                load_user=True,
+                load_project=True,
+                load_org=True,
             )
 
             _logger.info(
-                f'Loaded {len(all_skills)} total skills: {[s.name for s in all_skills]}'
+                f'Loaded {len(all_skills)} total skills from agent-server: '
+                f'{[s.name for s in all_skills]}'
             )
 
             return all_skills
+
         except Exception as e:
             _logger.warning(f'Failed to load skills: {e}', exc_info=True)
             # Return empty list on failure - skills will be loaded again later if needed
             return []
 
-    def _create_agent_with_skills(self, agent, skills: list):
+    def _create_agent_with_skills(self, agent, skills: list[Skill]):
         """Create or update agent with skills in its context.
 
         Args:
@@ -132,9 +166,9 @@ class AppConversationServiceBase(AppConversationService, ABC):
             Updated agent with skills in context
         """
         if agent.agent_context:
-            # Merge with existing context
+            # Merge with existing context (new skills override existing ones)
             existing_skills = agent.agent_context.skills
-            all_skills = merge_skills([skills, existing_skills])
+            all_skills = self._merge_skills([existing_skills, skills])
             agent = agent.model_copy(
                 update={
                     'agent_context': agent.agent_context.model_copy(
@@ -149,28 +183,50 @@ class AppConversationServiceBase(AppConversationService, ABC):
 
         return agent
 
+    def _merge_skills(self, skill_lists: list[list[Skill]]) -> list[Skill]:
+        """Merge multiple skill lists, avoiding duplicates by name.
+
+        Later lists take precedence over earlier lists for duplicate names.
+
+        Args:
+            skill_lists: List of skill lists to merge
+
+        Returns:
+            Deduplicated list of skills with later lists overriding earlier ones
+        """
+        skills_by_name: dict[str, Skill] = {}
+
+        for skill_list in skill_lists:
+            for skill in skill_list:
+                skills_by_name[skill.name] = skill
+
+        return list(skills_by_name.values())
+
     async def _load_skills_and_update_agent(
         self,
         sandbox: SandboxInfo,
         agent: Agent,
         remote_workspace: AsyncRemoteWorkspace,
         selected_repository: str | None,
-        working_dir: str,
+        project_dir: str,
     ):
         """Load all skills and update agent with them.
 
         Args:
             agent: The agent to update
             remote_workspace: AsyncRemoteWorkspace for loading repo skills
-            selected_repository: Repository name or None
-            working_dir: Working directory path
+            selected_repository: Repository name or None (used for org config)
+            project_dir: Project root directory (already resolved via get_project_dir).
 
         Returns:
             Updated agent with skills loaded into context
         """
-        # Load and merge all skills
+        agent_server_url = remote_workspace.host
         all_skills = await self.load_and_merge_all_skills(
-            sandbox, remote_workspace, selected_repository, working_dir
+            sandbox,
+            selected_repository,
+            project_dir,
+            agent_server_url,
         )
 
         # Update agent with skills
@@ -183,26 +239,34 @@ class AppConversationServiceBase(AppConversationService, ABC):
         task: AppConversationStartTask,
         sandbox: SandboxInfo,
         workspace: AsyncRemoteWorkspace,
+        agent_server_url: str,
     ) -> AsyncGenerator[AppConversationStartTask, None]:
         task.status = AppConversationStartTaskStatus.PREPARING_REPOSITORY
         yield task
         await self.clone_or_init_git_repo(task, workspace)
 
+        # Compute the project root — the cloned repo directory when a repo is
+        # selected, or the sandbox working_dir otherwise.  This must be used
+        # for all .openhands/ features (setup.sh, pre-commit.sh, skills).
+        project_dir = get_project_dir(
+            workspace.working_dir, task.request.selected_repository
+        )
+
         task.status = AppConversationStartTaskStatus.RUNNING_SETUP_SCRIPT
         yield task
-        await self.maybe_run_setup_script(workspace)
+        await self.maybe_run_setup_script(workspace, project_dir)
 
         task.status = AppConversationStartTaskStatus.SETTING_UP_GIT_HOOKS
         yield task
-        await self.maybe_setup_git_hooks(workspace)
+        await self.maybe_setup_git_hooks(workspace, project_dir)
 
         task.status = AppConversationStartTaskStatus.SETTING_UP_SKILLS
         yield task
         await self.load_and_merge_all_skills(
             sandbox,
-            workspace,
             task.request.selected_repository,
-            workspace.working_dir,
+            project_dir,
+            agent_server_url,
         )
 
     async def _configure_git_user_settings(
@@ -306,33 +370,42 @@ class AppConversationServiceBase(AppConversationService, ABC):
     async def maybe_run_setup_script(
         self,
         workspace: AsyncRemoteWorkspace,
+        project_dir: str,
     ):
-        """Run .openhands/setup.sh if it exists in the workspace or repository."""
-        setup_script = workspace.working_dir + '/.openhands/setup.sh'
+        """Run .openhands/setup.sh if it exists in the project root.
+
+        Args:
+            workspace: Remote workspace for command execution.
+            project_dir: Project root directory (repo root when a repo is selected).
+        """
+        setup_script = project_dir + '/.openhands/setup.sh'
 
         await workspace.execute_command(
-            f'chmod +x {setup_script} && source {setup_script}', timeout=600
+            f'chmod +x {setup_script} && source {setup_script}',
+            cwd=project_dir,
+            timeout=600,
         )
-
-        # TODO: Does this need to be done?
-        # Add the action to the event stream as an ENVIRONMENT event
-        # source = EventSource.ENVIRONMENT
-        # self.event_stream.add_event(action, source)
 
     async def maybe_setup_git_hooks(
         self,
         workspace: AsyncRemoteWorkspace,
+        project_dir: str,
     ):
-        """Set up git hooks if .openhands/pre-commit.sh exists in the workspace or repository."""
+        """Set up git hooks if .openhands/pre-commit.sh exists in the project root.
+
+        Args:
+            workspace: Remote workspace for command execution.
+            project_dir: Project root directory (repo root when a repo is selected).
+        """
         command = 'mkdir -p .git/hooks && chmod +x .openhands/pre-commit.sh'
-        result = await workspace.execute_command(command, workspace.working_dir)
+        result = await workspace.execute_command(command, project_dir)
         if result.exit_code:
             return
 
         # Check if there's an existing pre-commit hook
         with tempfile.TemporaryFile(mode='w+t') as temp_file:
-            result = workspace.file_download(PRE_COMMIT_HOOK, str(temp_file))
-            if result.get('success'):
+            result = await workspace.file_download(PRE_COMMIT_HOOK, str(temp_file))
+            if result.success:
                 _logger.info('Preserving existing pre-commit hook')
                 # an existing pre-commit hook exists
                 if 'This hook was installed by OpenHands' not in temp_file.read():
@@ -341,9 +414,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
                         f'mv {PRE_COMMIT_HOOK} {PRE_COMMIT_LOCAL} &&'
                         f'chmod +x {PRE_COMMIT_LOCAL}'
                     )
-                    result = await workspace.execute_command(
-                        command, workspace.working_dir
-                    )
+                    result = await workspace.execute_command(command, project_dir)
                     if result.exit_code != 0:
                         _logger.error(
                             f'Failed to preserve existing pre-commit hook: {result.stderr}',
@@ -380,7 +451,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
         Returns:
             Configured LLMSummarizingCondenser instance
         """
-        # LLMSummarizingCondenser has defaults: max_size=120, keep_first=4
+        # LLMSummarizingCondenser SDK defaults: max_size=240, keep_first=2
         condenser_kwargs = {
             'llm': llm.model_copy(
                 update={
@@ -457,7 +528,6 @@ class AppConversationServiceBase(AppConversationService, ABC):
             security_analyzer_str: String value from settings
             httpx_client: HTTP client for making API requests
         """
-
         if session_api_key is None:
             return
 

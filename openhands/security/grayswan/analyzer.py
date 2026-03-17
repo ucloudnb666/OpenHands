@@ -1,3 +1,10 @@
+# IMPORTANT: LEGACY V0 CODE - Deprecated since version 1.0.0, scheduled for removal April 1, 2026
+# This file is part of the legacy (V0) implementation of OpenHands and will be removed soon as we complete the migration to V1.
+# OpenHands V1 uses the Software Agent SDK for the agentic core and runs a new application server. Please refer to:
+#   - V1 agentic core (SDK): https://github.com/OpenHands/software-agent-sdk
+#   - V1 application server (in this repo): openhands/app_server/
+# Unless you are working on deprecation, please avoid extending this legacy file and consult the V1 codepaths above.
+# Tag: Legacy-V0
 """GraySwan security analyzer for OpenHands."""
 
 import asyncio
@@ -134,9 +141,7 @@ class GraySwanAnalyzer(SecurityAnalyzer):
             async with response as resp:
                 if resp.status == 200:
                     result = await resp.json()
-                    violation_score = (
-                        result.get('output', {}).get('data', {}).get('violation', 0.0)
-                    )
+                    violation_score = result.get('violation', 0.0)
                     risk_level = self._map_violation_to_risk(violation_score)
                     if 'ipi' in result and result['ipi']:
                         risk_level = (

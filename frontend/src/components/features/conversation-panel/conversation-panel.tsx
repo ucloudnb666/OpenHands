@@ -17,6 +17,7 @@ import { useUpdateConversation } from "#/hooks/mutation/use-update-conversation"
 import { displaySuccessToast } from "#/utils/custom-toast-handlers";
 import { ConversationCard } from "./conversation-card/conversation-card";
 import { StartTaskCard } from "./start-task-card/start-task-card";
+import { ConversationCardSkeleton } from "./conversation-card/conversation-card-skeleton";
 
 interface ConversationPanelProps {
   onClose: () => void;
@@ -39,8 +40,13 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
   const [selectedConversationId, setSelectedConversationId] = React.useState<
     string | null
   >(null);
+  const [selectedConversationTitle, setSelectedConversationTitle] =
+    React.useState<string | null>(null);
   const [selectedConversationVersion, setSelectedConversationVersion] =
     React.useState<"V0" | "V1" | undefined>(undefined);
+  const [selectedSandboxId, setSelectedSandboxId] = React.useState<
+    string | null
+  >(null);
   const [openContextMenuId, setOpenContextMenuId] = React.useState<
     string | null
   >(null);
@@ -73,18 +79,21 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
     threshold: 200, // Load more when 200px from bottom
   });
 
-  const handleDeleteProject = (conversationId: string) => {
+  const handleDeleteProject = (conversationId: string, title: string) => {
     setConfirmDeleteModalVisible(true);
     setSelectedConversationId(conversationId);
+    setSelectedConversationTitle(title);
   };
 
   const handleStopConversation = (
     conversationId: string,
     version?: "V0" | "V1",
+    sandboxId?: string | null,
   ) => {
     setConfirmStopModalVisible(true);
     setSelectedConversationId(conversationId);
     setSelectedConversationVersion(version);
+    setSelectedSandboxId(sandboxId ?? null);
   };
 
   const handleConversationTitleChange = async (
@@ -137,10 +146,13 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
       className="w-full md:w-[400px] h-full border border-[#525252] bg-[#25272D] rounded-lg overflow-y-auto absolute custom-scrollbar-always"
     >
       {isFetching && conversations.length === 0 && (
-        <div className="w-full h-full absolute flex justify-center items-center">
-          <LoadingSpinner size="small" />
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <ConversationCardSkeleton key={index} />
+          ))}
         </div>
       )}
+
       {error && (
         <div className="flex flex-col items-center justify-center h-full">
           <p className="text-danger">{error.message}</p>
@@ -171,11 +183,14 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
           onClick={onClose}
         >
           <ConversationCard
-            onDelete={() => handleDeleteProject(project.conversation_id)}
+            onDelete={() =>
+              handleDeleteProject(project.conversation_id, project.title)
+            }
             onStop={() =>
               handleStopConversation(
                 project.conversation_id,
                 project.conversation_version,
+                project.sandbox_id,
               )
             }
             onChangeTitle={(title) =>
@@ -212,8 +227,13 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
           onConfirm={() => {
             handleConfirmDelete();
             setConfirmDeleteModalVisible(false);
+            setSelectedConversationTitle(null);
           }}
-          onCancel={() => setConfirmDeleteModalVisible(false)}
+          onCancel={() => {
+            setConfirmDeleteModalVisible(false);
+            setSelectedConversationTitle(null);
+          }}
+          conversationTitle={selectedConversationTitle ?? undefined}
         />
       )}
 
@@ -224,6 +244,7 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
             setConfirmStopModalVisible(false);
           }}
           onCancel={() => setConfirmStopModalVisible(false)}
+          sandboxId={selectedSandboxId}
         />
       )}
 
@@ -233,6 +254,7 @@ export function ConversationPanel({ onClose }: ConversationPanelProps) {
             onClose();
           }}
           onClose={() => setConfirmExitConversationModalVisible(false)}
+          onCancel={() => setConfirmExitConversationModalVisible(false)}
         />
       )}
     </div>

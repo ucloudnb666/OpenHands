@@ -10,6 +10,7 @@ import { EllipsisButton } from "../conversation-panel/ellipsis-button";
 import { ConversationNameContextMenu } from "./conversation-name-context-menu";
 import { SystemMessageModal } from "../conversation-panel/system-message-modal";
 import { SkillsModal } from "../conversation-panel/skills-modal";
+import { HooksModal } from "../conversation-panel/hooks-modal";
 import { ConfirmDeleteModal } from "../conversation-panel/confirm-delete-modal";
 import { ConfirmStopModal } from "../conversation-panel/confirm-stop-modal";
 import { MetricsModal } from "./metrics-modal/metrics-modal";
@@ -34,7 +35,11 @@ export function ConversationName() {
     handleDisplayCost,
     handleShowAgentTools,
     handleShowSkills,
+    handleShowHooks,
     handleExportConversation,
+    handleTogglePublic,
+    handleCopyShareLink,
+    shareUrl,
     handleConfirmDelete,
     handleConfirmStop,
     metricsModalVisible,
@@ -43,6 +48,8 @@ export function ConversationName() {
     setSystemModalVisible,
     skillsModalVisible,
     setSkillsModalVisible,
+    hooksModalVisible,
+    setHooksModalVisible,
     confirmDeleteModalVisible,
     setConfirmDeleteModalVisible,
     confirmStopModalVisible,
@@ -55,6 +62,7 @@ export function ConversationName() {
     shouldShowDisplayCost,
     shouldShowAgentTools,
     shouldShowSkills,
+    shouldShowHooks,
   } = useConversationNameContextMenu({
     conversationId,
     conversationStatus: conversation?.status,
@@ -88,6 +96,10 @@ export function ConversationName() {
   };
 
   const handleKeyUp = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // Ignore Enter key during IME composition (e.g., Chinese, Japanese, Korean input)
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
     if (event.key === "Enter") {
       event.currentTarget.blur();
     }
@@ -173,12 +185,16 @@ export function ConversationName() {
                   shouldShowAgentTools ? handleShowAgentTools : undefined
                 }
                 onShowSkills={shouldShowSkills ? handleShowSkills : undefined}
+                onShowHooks={shouldShowHooks ? handleShowHooks : undefined}
                 onExportConversation={
                   shouldShowExport ? handleExportConversation : undefined
                 }
                 onDownloadViaVSCode={
                   shouldShowDownload ? handleDownloadViaVSCode : undefined
                 }
+                onTogglePublic={handleTogglePublic}
+                shareUrl={shareUrl}
+                onCopyShareLink={handleCopyShareLink}
                 onDownloadConversation={
                   shouldShowDownloadConversation
                     ? handleDownloadConversation
@@ -201,7 +217,7 @@ export function ConversationName() {
       <SystemMessageModal
         isOpen={systemModalVisible}
         onClose={() => setSystemModalVisible(false)}
-        systemMessage={systemMessage ? systemMessage.args : null}
+        systemMessage={systemMessage || null}
       />
 
       {/* Skills Modal */}
@@ -209,11 +225,17 @@ export function ConversationName() {
         <SkillsModal onClose={() => setSkillsModalVisible(false)} />
       )}
 
+      {/* Hooks Modal */}
+      {hooksModalVisible && (
+        <HooksModal onClose={() => setHooksModalVisible(false)} />
+      )}
+
       {/* Confirm Delete Modal */}
       {confirmDeleteModalVisible && (
         <ConfirmDeleteModal
           onConfirm={handleConfirmDelete}
           onCancel={() => setConfirmDeleteModalVisible(false)}
+          conversationTitle={conversation?.title}
         />
       )}
 
@@ -222,6 +244,7 @@ export function ConversationName() {
         <ConfirmStopModal
           onConfirm={handleConfirmStop}
           onCancel={() => setConfirmStopModalVisible(false)}
+          sandboxId={conversation?.sandbox_id ?? null}
         />
       )}
     </>

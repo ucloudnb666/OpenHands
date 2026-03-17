@@ -27,6 +27,8 @@ from openhands.sdk.llm import MetricsSnapshot
 from openhands.sdk.llm.utils.metrics import TokenUsage
 from openhands.storage.data_models.conversation_metadata import ConversationTrigger
 
+# Note: org_id column exists but foreign key constraint is not enforced in tests
+
 # Note: MetricsSnapshot from SDK is not available in test environment
 # We'll use None for metrics field in tests since it's optional
 
@@ -106,7 +108,7 @@ def multiple_conversation_infos() -> list[AppConversationInfo]:
     return [
         AppConversationInfo(
             id=uuid4(),
-            created_by_user_id='test_user_123',
+            created_by_user_id=None,
             sandbox_id=f'sandbox_{i}',
             selected_repository=f'https://github.com/test/repo{i}',
             selected_branch='main',
@@ -151,10 +153,6 @@ class TestSQLAppConversationInfoService:
         # Verify the retrieved info matches the original
         assert retrieved_info is not None
         assert retrieved_info.id == sample_conversation_info.id
-        assert (
-            retrieved_info.created_by_user_id
-            == sample_conversation_info.created_by_user_id
-        )
         assert retrieved_info.sandbox_id == sample_conversation_info.sandbox_id
         assert (
             retrieved_info.selected_repository
@@ -206,7 +204,6 @@ class TestSQLAppConversationInfoService:
         # Verify all fields
         assert retrieved_info is not None
         assert retrieved_info.id == original_info.id
-        assert retrieved_info.created_by_user_id == original_info.created_by_user_id
         assert retrieved_info.sandbox_id == original_info.sandbox_id
         assert retrieved_info.selected_repository == original_info.selected_repository
         assert retrieved_info.selected_branch == original_info.selected_branch
@@ -235,7 +232,6 @@ class TestSQLAppConversationInfoService:
         # Verify required fields
         assert retrieved_info is not None
         assert retrieved_info.id == minimal_info.id
-        assert retrieved_info.created_by_user_id == minimal_info.created_by_user_id
         assert retrieved_info.sandbox_id == minimal_info.sandbox_id
 
         # Verify optional fields are None or default values
@@ -487,58 +483,6 @@ class TestSQLAppConversationInfoService:
         assert count == 0
 
     @pytest.mark.asyncio
-    async def test_user_isolation(
-        self,
-        async_session: AsyncSession,
-        multiple_conversation_infos: list[AppConversationInfo],
-    ):
-        """Test that user isolation works correctly."""
-        # Create services for different users
-        user1_service = SQLAppConversationInfoService(
-            db_session=async_session, user_context=SpecifyUserContext(user_id='user1')
-        )
-        user2_service = SQLAppConversationInfoService(
-            db_session=async_session, user_context=SpecifyUserContext(user_id='user2')
-        )
-
-        # Create conversations for different users
-        user1_info = AppConversationInfo(
-            id=uuid4(),
-            created_by_user_id='user1',
-            sandbox_id='sandbox_user1',
-            title='User 1 Conversation',
-        )
-
-        user2_info = AppConversationInfo(
-            id=uuid4(),
-            created_by_user_id='user2',
-            sandbox_id='sandbox_user2',
-            title='User 2 Conversation',
-        )
-
-        # Save conversations
-        await user1_service.save_app_conversation_info(user1_info)
-        await user2_service.save_app_conversation_info(user2_info)
-
-        # User 1 should only see their conversation
-        user1_page = await user1_service.search_app_conversation_info()
-        assert len(user1_page.items) == 1
-        assert user1_page.items[0].created_by_user_id == 'user1'
-
-        # User 2 should only see their conversation
-        user2_page = await user2_service.search_app_conversation_info()
-        assert len(user2_page.items) == 1
-        assert user2_page.items[0].created_by_user_id == 'user2'
-
-        # User 1 should not be able to get user 2's conversation
-        user2_from_user1 = await user1_service.get_app_conversation_info(user2_info.id)
-        assert user2_from_user1 is None
-
-        # User 2 should not be able to get user 1's conversation
-        user1_from_user2 = await user2_service.get_app_conversation_info(user1_info.id)
-        assert user1_from_user2 is None
-
-    @pytest.mark.asyncio
     async def test_update_conversation_info(
         self,
         service: SQLAppConversationInfoService,
@@ -567,10 +511,6 @@ class TestSQLAppConversationInfoService:
         assert retrieved_info.pr_number == [789]
 
         # Verify other fields remain unchanged
-        assert (
-            retrieved_info.created_by_user_id
-            == sample_conversation_info.created_by_user_id
-        )
         assert retrieved_info.sandbox_id == sample_conversation_info.sandbox_id
 
     @pytest.mark.asyncio
@@ -1003,3 +943,254 @@ class TestSQLAppConversationInfoService:
         assert parent_id in all_ids
         for sub_info in sub_conversations:
             assert sub_info.id in all_ids
+
+
+class TestSandboxIdFilter:
+    """Test suite for sandbox_id__eq filter parameter."""
+
+    @pytest.mark.asyncio
+    async def test_search_by_sandbox_id(
+        self,
+        service: SQLAppConversationInfoService,
+    ):
+        """Test searching conversations by exact sandbox_id match."""
+        # Create conversations with different sandbox IDs
+        conv1 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_alpha',
+            title='Conversation Alpha',
+            created_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 12, 30, 0, tzinfo=timezone.utc),
+        )
+        conv2 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_beta',
+            title='Conversation Beta',
+            created_at=datetime(2024, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 13, 30, 0, tzinfo=timezone.utc),
+        )
+        conv3 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_alpha',
+            title='Conversation Gamma',
+            created_at=datetime(2024, 1, 1, 14, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 14, 30, 0, tzinfo=timezone.utc),
+        )
+
+        # Save all conversations
+        await service.save_app_conversation_info(conv1)
+        await service.save_app_conversation_info(conv2)
+        await service.save_app_conversation_info(conv3)
+
+        # Search for sandbox_alpha - should return 2 conversations
+        page = await service.search_app_conversation_info(
+            sandbox_id__eq='sandbox_alpha'
+        )
+        assert len(page.items) == 2
+        sandbox_ids = {item.sandbox_id for item in page.items}
+        assert sandbox_ids == {'sandbox_alpha'}
+        conversation_ids = {item.id for item in page.items}
+        assert conv1.id in conversation_ids
+        assert conv3.id in conversation_ids
+
+        # Search for sandbox_beta - should return 1 conversation
+        page = await service.search_app_conversation_info(sandbox_id__eq='sandbox_beta')
+        assert len(page.items) == 1
+        assert page.items[0].id == conv2.id
+        assert page.items[0].sandbox_id == 'sandbox_beta'
+
+        # Search for non-existent sandbox - should return 0 conversations
+        page = await service.search_app_conversation_info(
+            sandbox_id__eq='sandbox_nonexistent'
+        )
+        assert len(page.items) == 0
+
+    @pytest.mark.asyncio
+    async def test_count_by_sandbox_id(
+        self,
+        service: SQLAppConversationInfoService,
+    ):
+        """Test counting conversations by exact sandbox_id match."""
+        # Create conversations with different sandbox IDs
+        conv1 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_x',
+            title='Conversation X1',
+            created_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 12, 30, 0, tzinfo=timezone.utc),
+        )
+        conv2 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_y',
+            title='Conversation Y1',
+            created_at=datetime(2024, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 13, 30, 0, tzinfo=timezone.utc),
+        )
+        conv3 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_x',
+            title='Conversation X2',
+            created_at=datetime(2024, 1, 1, 14, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 14, 30, 0, tzinfo=timezone.utc),
+        )
+        conv4 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_x',
+            title='Conversation X3',
+            created_at=datetime(2024, 1, 1, 15, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 15, 30, 0, tzinfo=timezone.utc),
+        )
+
+        # Save all conversations
+        await service.save_app_conversation_info(conv1)
+        await service.save_app_conversation_info(conv2)
+        await service.save_app_conversation_info(conv3)
+        await service.save_app_conversation_info(conv4)
+
+        # Count for sandbox_x - should be 3
+        count = await service.count_app_conversation_info(sandbox_id__eq='sandbox_x')
+        assert count == 3
+
+        # Count for sandbox_y - should be 1
+        count = await service.count_app_conversation_info(sandbox_id__eq='sandbox_y')
+        assert count == 1
+
+        # Count for non-existent sandbox - should be 0
+        count = await service.count_app_conversation_info(
+            sandbox_id__eq='sandbox_nonexistent'
+        )
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_sandbox_id_filter_combined_with_title_filter(
+        self,
+        service: SQLAppConversationInfoService,
+    ):
+        """Test sandbox_id filter combined with title filter."""
+        # Create conversations with different sandbox IDs and titles
+        conv1 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_project',
+            title='Feature: User Authentication',
+            created_at=datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 12, 30, 0, tzinfo=timezone.utc),
+        )
+        conv2 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_project',
+            title='Bug Fix: Login Issue',
+            created_at=datetime(2024, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 13, 30, 0, tzinfo=timezone.utc),
+        )
+        conv3 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_other',
+            title='Feature: Payment System',
+            created_at=datetime(2024, 1, 1, 14, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2024, 1, 1, 14, 30, 0, tzinfo=timezone.utc),
+        )
+
+        # Save all conversations
+        await service.save_app_conversation_info(conv1)
+        await service.save_app_conversation_info(conv2)
+        await service.save_app_conversation_info(conv3)
+
+        # Search for Feature in sandbox_project - should return 1
+        page = await service.search_app_conversation_info(
+            sandbox_id__eq='sandbox_project', title__contains='Feature'
+        )
+        assert len(page.items) == 1
+        assert page.items[0].id == conv1.id
+
+        # Search for Feature in sandbox_other - should return 1
+        page = await service.search_app_conversation_info(
+            sandbox_id__eq='sandbox_other', title__contains='Feature'
+        )
+        assert len(page.items) == 1
+        assert page.items[0].id == conv3.id
+
+        # Count for Bug in sandbox_project - should be 1
+        count = await service.count_app_conversation_info(
+            sandbox_id__eq='sandbox_project', title__contains='Bug'
+        )
+        assert count == 1
+
+        # Count for Bug in sandbox_other - should be 0
+        count = await service.count_app_conversation_info(
+            sandbox_id__eq='sandbox_other', title__contains='Bug'
+        )
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_sandbox_id_filter_with_date_filters(
+        self,
+        service: SQLAppConversationInfoService,
+    ):
+        """Test sandbox_id filter combined with date range filters."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        # Create conversations in the same sandbox but at different times
+        conv1 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_time_test',
+            title='Conversation Early',
+            created_at=base_time,
+            updated_at=base_time,
+        )
+        conv2 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_time_test',
+            title='Conversation Middle',
+            created_at=base_time.replace(hour=15),
+            updated_at=base_time.replace(hour=15),
+        )
+        conv3 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_time_test',
+            title='Conversation Late',
+            created_at=base_time.replace(hour=18),
+            updated_at=base_time.replace(hour=18),
+        )
+        conv4 = AppConversationInfo(
+            id=uuid4(),
+            created_by_user_id=None,
+            sandbox_id='sandbox_other_time',
+            title='Conversation Other',
+            created_at=base_time.replace(hour=15),
+            updated_at=base_time.replace(hour=15),
+        )
+
+        # Save all conversations
+        await service.save_app_conversation_info(conv1)
+        await service.save_app_conversation_info(conv2)
+        await service.save_app_conversation_info(conv3)
+        await service.save_app_conversation_info(conv4)
+
+        # Search for sandbox_time_test with date filter - should return 2
+        cutoff = base_time.replace(hour=14)
+        page = await service.search_app_conversation_info(
+            sandbox_id__eq='sandbox_time_test', created_at__gte=cutoff
+        )
+        assert len(page.items) == 2
+        conversation_ids = {item.id for item in page.items}
+        assert conv2.id in conversation_ids
+        assert conv3.id in conversation_ids
+
+        # Count for sandbox_time_test with date filter
+        count = await service.count_app_conversation_info(
+            sandbox_id__eq='sandbox_time_test', created_at__gte=cutoff
+        )
+        assert count == 2

@@ -21,7 +21,7 @@ from server.utils.conversation_callback_utils import (
     update_conversation_stats,
 )
 from storage.database import session_maker
-from storage.stored_conversation_metadata import StoredConversationMetadata
+from storage.stored_conversation_metadata_saas import StoredConversationMetadataSaas
 
 from openhands.server.shared import conversation_manager
 
@@ -93,6 +93,16 @@ async def _process_batch_operations_background(
                     )
                     continue  # Skip this operation but continue with others
 
+            if user_id is None:
+                logger.error(
+                    'user_id_not_set_in_batch_webhook',
+                    extra={
+                        'conversation_id': conversation_id,
+                        'path': batch_op.path,
+                    },
+                )
+                continue
+
             if subpath == 'agent_state.pkl':
                 update_agent_state(user_id, conversation_id, batch_op.get_content())
                 continue
@@ -119,10 +129,6 @@ async def _process_batch_operations_background(
                 # No action required
                 continue
 
-            if subpath == 'exp_config.json':
-                # No action required
-                continue
-
             # Log unhandled paths for future implementation
             logger.warning(
                 'unknown_path_in_batch_webhook',
@@ -134,12 +140,12 @@ async def _process_batch_operations_background(
             )
         except Exception as e:
             logger.error(
-                'error_processing_batch_operation',
+                f'error_processing_batch_operation: {type(e).__name__}: {e}',
                 extra={
                     'path': batch_op.path,
                     'method': str(batch_op.method),
-                    'error': str(e),
                 },
+                exc_info=True,
             )
 
 
@@ -226,12 +232,12 @@ def _parse_conversation_id_and_subpath(path: str) -> Tuple[str, str]:
 
 def _get_user_id(conversation_id: str) -> str:
     with session_maker() as session:
-        conversation_metadata = (
-            session.query(StoredConversationMetadata)
-            .filter(StoredConversationMetadata.conversation_id == conversation_id)
+        conversation_metadata_saas = (
+            session.query(StoredConversationMetadataSaas)
+            .filter(StoredConversationMetadataSaas.conversation_id == conversation_id)
             .first()
         )
-        return conversation_metadata.user_id
+        return str(conversation_metadata_saas.user_id)
 
 
 async def _get_session_api_key(user_id: str, conversation_id: str) -> str | None:

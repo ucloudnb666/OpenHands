@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import os
+from enum import Enum
+from typing import Annotated
 
 from pydantic import (
     BaseModel,
@@ -19,6 +20,20 @@ from openhands.core.config.utils import load_openhands_config
 from openhands.storage.data_models.secrets import Secrets
 
 
+class SandboxGroupingStrategy(str, Enum):
+    """Strategy for grouping conversations within sandboxes."""
+
+    NO_GROUPING = 'NO_GROUPING'  # Default - each conversation gets its own sandbox
+    GROUP_BY_NEWEST = 'GROUP_BY_NEWEST'  # Add to the most recently created sandbox
+    LEAST_RECENTLY_USED = (
+        'LEAST_RECENTLY_USED'  # Add to the least recently used sandbox
+    )
+    FEWEST_CONVERSATIONS = (
+        'FEWEST_CONVERSATIONS'  # Add to sandbox with fewest conversations
+    )
+    ADD_TO_ANY = 'ADD_TO_ANY'  # Add to any available sandbox (first found)
+
+
 class Settings(BaseModel):
     """Persisted settings for OpenHands sessions"""
 
@@ -30,9 +45,12 @@ class Settings(BaseModel):
     llm_model: str | None = None
     llm_api_key: SecretStr | None = None
     llm_base_url: str | None = None
+    user_version: int | None = None
     remote_runtime_resource_factor: int | None = None
     # Planned to be removed from settings
-    secrets_store: Secrets = Field(default_factory=Secrets, frozen=True)
+    secrets_store: Annotated[Secrets, Field(frozen=True)] = Field(
+        default_factory=Secrets
+    )
     enable_default_condenser: bool = True
     enable_sound_notifications: bool = False
     enable_proactive_conversation_starters: bool = True
@@ -50,7 +68,10 @@ class Settings(BaseModel):
     email_verified: bool | None = None
     git_user_name: str | None = None
     git_user_email: str | None = None
-    v1_enabled: bool | None = Field(default=bool(os.getenv('V1_ENABLED') == '1'))
+    v1_enabled: bool = True
+    sandbox_grouping_strategy: SandboxGroupingStrategy = (
+        SandboxGroupingStrategy.NO_GROUPING
+    )
 
     model_config = ConfigDict(
         validate_assignment=True,

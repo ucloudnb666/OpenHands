@@ -1,75 +1,20 @@
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
-from server.constants import (
-    CURRENT_USER_SETTINGS_VERSION,
-    LITE_LLM_API_URL,
-    LITE_LLM_TEAM_ID,
-)
-from storage.saas_settings_store import SaasSettingsStore
-from storage.user_settings import UserSettings
 
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.server.settings import Settings
+from openhands.storage.data_models.settings import Settings as DataSettings
 
-
-@pytest.fixture
-def mock_litellm_get_response():
-    mock_response = AsyncMock()
-    mock_response.is_success = True
-    mock_response.json = MagicMock(return_value={'user_info': {}})
-    return mock_response
-
-
-@pytest.fixture
-def mock_litellm_post_response():
-    mock_response = AsyncMock()
-    mock_response.is_success = True
-    mock_response.json = MagicMock(return_value={'key': 'test_api_key'})
-    return mock_response
-
-
-@pytest.fixture
-def mock_litellm_api(mock_litellm_get_response, mock_litellm_post_response):
-    api_key_patch = patch('storage.saas_settings_store.LITE_LLM_API_KEY', 'test_key')
-    api_url_patch = patch(
-        'storage.saas_settings_store.LITE_LLM_API_URL', 'http://test.url'
+# Mock the database module before importing
+with patch('storage.database.a_session_maker'):
+    from server.constants import (
+        LITE_LLM_API_URL,
     )
-    team_id_patch = patch('storage.saas_settings_store.LITE_LLM_TEAM_ID', 'test_team')
-    client_patch = patch('httpx.AsyncClient')
-
-    with api_key_patch, api_url_patch, team_id_patch, client_patch as mock_client:
-        mock_client.return_value.__aenter__.return_value.get.return_value = (
-            mock_litellm_get_response
-        )
-        mock_client.return_value.__aenter__.return_value.post.return_value = (
-            mock_litellm_post_response
-        )
-        yield mock_client
-
-
-@pytest.fixture
-def mock_stripe():
-    search_patch = patch(
-        'stripe.Customer.search_async',
-        AsyncMock(return_value=MagicMock(id='mock-customer-id')),
-    )
-    payment_patch = patch(
-        'stripe.Customer.list_payment_methods_async',
-        AsyncMock(return_value=MagicMock(data=[{}])),
-    )
-    with search_patch, payment_patch:
-        yield
-
-
-@pytest.fixture
-def mock_github_user():
-    with patch(
-        'server.auth.token_manager.TokenManager.get_user_info_from_user_id',
-        AsyncMock(return_value={'attributes': {'github_id': ['12345']}}),
-    ) as mock_github:
-        yield mock_github
+    from storage.saas_settings_store import SaasSettingsStore
+    from storage.user_settings import UserSettings
 
 
 @pytest.fixture
@@ -82,42 +27,45 @@ def mock_config():
 
 
 @pytest.fixture
-def settings_store(session_maker, mock_config):
-    store = SaasSettingsStore('user-id', session_maker, mock_config)
+def settings_store(async_session_maker, mock_config):
+    store = SaasSettingsStore('5594c7b6-f959-4b81-92e9-b09c206f5081', mock_config)
+    store.a_session_maker = async_session_maker
 
-    # Patch the store method directly to filter out email and email_verified
-    original_load = store.load
-    original_create_default = store.create_default_settings
-    original_update_litellm = store.update_settings_with_litellm_default
-
-    # Patch the load method to add email and email_verified
+    # Patch the load method to read from UserSettings table directly (for testing)
     async def patched_load():
-        settings = await original_load()
-        if settings:
-            # Add email and email_verified fields to mimic SaasUserAuth behavior
+        async with store.a_session_maker() as session:
+            from sqlalchemy import select
+
+            result = await session.execute(
+                select(UserSettings).filter(
+                    UserSettings.keycloak_user_id == store.user_id
+                )
+            )
+            user_settings = result.scalars().first()
+            if not user_settings:
+                # Return default settings
+                return Settings(
+                    llm_api_key=SecretStr('test_api_key'),
+                    llm_base_url='http://test.url',
+                    agent='CodeActAgent',
+                    language='en',
+                )
+
+            # Decrypt and convert to Settings
+            kwargs = {}
+            for column in UserSettings.__table__.columns:
+                if column.name != 'keycloak_user_id':
+                    value = getattr(user_settings, column.name, None)
+                    if value is not None:
+                        kwargs[column.name] = value
+
+            store._decrypt_kwargs(kwargs)
+            settings = Settings(**kwargs)
             settings.email = 'test@example.com'
             settings.email_verified = True
-        return settings
+            return settings
 
-    # Patch the create_default_settings method to add email and email_verified
-    async def patched_create_default(settings):
-        settings = await original_create_default(settings)
-        if settings:
-            # Add email and email_verified fields to mimic SaasUserAuth behavior
-            settings.email = 'test@example.com'
-            settings.email_verified = True
-        return settings
-
-    # Patch the update_settings_with_litellm_default method
-    async def patched_update_litellm(settings):
-        updated_settings = await original_update_litellm(settings)
-        if updated_settings:
-            # Add email and email_verified fields to mimic SaasUserAuth behavior
-            updated_settings.email = 'test@example.com'
-            updated_settings.email_verified = True
-        return updated_settings
-
-    # Patch the store method to filter out email and email_verified
+    # Patch the store method to write to UserSettings table directly (for testing)
     async def patched_store(item):
         if item:
             # Make a copy of the item without email and email_verified
@@ -129,37 +77,35 @@ def settings_store(session_maker, mock_config):
             if 'secrets_store' in item_dict:
                 del item_dict['secrets_store']
 
+            # Encrypt the data before storing
+            store._encrypt_kwargs(item_dict)
+
             # Continue with the original implementation
-            with store.session_maker() as session:
-                existing = None
-                if item_dict:
-                    store._encrypt_kwargs(item_dict)
-                    query = session.query(UserSettings).filter(
+            from sqlalchemy import select
+
+            async with store.a_session_maker() as session:
+                result = await session.execute(
+                    select(UserSettings).filter(
                         UserSettings.keycloak_user_id == store.user_id
                     )
-
-                    # First check if we have an existing entry in the new table
-                    existing = query.first()
+                )
+                existing = result.scalars().first()
 
                 if existing:
                     # Update existing entry
                     for key, value in item_dict.items():
                         if key in existing.__class__.__table__.columns:
                             setattr(existing, key, value)
-                    existing.user_version = CURRENT_USER_SETTINGS_VERSION
-                    session.merge(existing)
+                    await session.merge(existing)
                 else:
                     item_dict['keycloak_user_id'] = store.user_id
-                    item_dict['user_version'] = CURRENT_USER_SETTINGS_VERSION
                     settings = UserSettings(**item_dict)
                     session.add(settings)
-                session.commit()
+                await session.commit()
 
     # Replace the methods with our patched versions
     store.store = patched_store
     store.load = patched_load
-    store.create_default_settings = patched_create_default
-    store.update_settings_with_litellm_default = patched_update_litellm
     return store
 
 
@@ -184,31 +130,26 @@ async def test_store_and_load_keycloak_user(settings_store):
     assert loaded_settings.agent == 'smith'
 
     # Verify it was stored in user_settings table with keycloak_user_id
-    with settings_store.session_maker() as session:
-        stored = (
-            session.query(UserSettings)
-            .filter(
+    from sqlalchemy import select
+
+    async with settings_store.a_session_maker() as session:
+        result = await session.execute(
+            select(UserSettings).filter(
                 UserSettings.keycloak_user_id == '550e8400-e29b-41d4-a716-446655440000'
             )
-            .first()
         )
+        stored = result.scalars().first()
         assert stored is not None
         assert stored.agent == 'smith'
 
 
 @pytest.mark.asyncio
-async def test_load_returns_default_when_not_found(
-    settings_store, mock_litellm_api, mock_stripe, mock_github_user, session_maker
-):
+async def test_load_returns_default_when_not_found(settings_store, async_session_maker):
     file_store = MagicMock()
     file_store.read.side_effect = FileNotFoundError()
 
     with (
-        patch(
-            'storage.saas_settings_store.get_file_store',
-            MagicMock(return_value=file_store),
-        ),
-        patch('storage.saas_settings_store.session_maker', session_maker),
+        patch('storage.saas_settings_store.a_session_maker', async_session_maker),
     ):
         loaded_settings = await settings_store.load()
         assert loaded_settings is not None
@@ -219,232 +160,8 @@ async def test_load_returns_default_when_not_found(
 
 
 @pytest.mark.asyncio
-async def test_update_settings_with_litellm_default(
-    settings_store, mock_litellm_api, session_maker
-):
-    settings = Settings()
-    with (
-        patch(
-            'server.auth.token_manager.TokenManager.get_user_info_from_user_id',
-            AsyncMock(return_value={'email': 'testy@tester.com'}),
-        ),
-        patch('storage.saas_settings_store.session_maker', session_maker),
-    ):
-        settings = await settings_store.update_settings_with_litellm_default(settings)
-
-    assert settings.agent == 'CodeActAgent'
-    assert settings.llm_api_key
-    assert settings.llm_api_key.get_secret_value() == 'test_api_key'
-    assert settings.llm_base_url == 'http://test.url'
-
-    # Get the actual call arguments
-    call_args = mock_litellm_api.return_value.__aenter__.return_value.post.call_args[1]
-
-    # Check that the URL and most of the JSON payload match what we expect
-    assert call_args['json']['user_email'] == 'testy@tester.com'
-    assert call_args['json']['models'] == []
-    assert call_args['json']['max_budget'] == 10.0
-    assert call_args['json']['user_id'] == 'user-id'
-    assert call_args['json']['teams'] == ['test_team']
-    assert call_args['json']['auto_create_key'] is True
-    assert call_args['json']['send_invite_email'] is False
-    assert call_args['json']['metadata']['version'] == CURRENT_USER_SETTINGS_VERSION
-    assert 'model' in call_args['json']['metadata']
-
-
-@pytest.mark.asyncio
-async def test_create_default_settings_no_user_id():
-    store = SaasSettingsStore('', MagicMock(), MagicMock())
-    settings = await store.create_default_settings(None)
-    assert settings is None
-
-
-@pytest.mark.asyncio
-async def test_create_default_settings_require_payment_enabled(
-    settings_store, mock_stripe
-):
-    # Mock stripe_service.has_payment_method to return False
-    with (
-        patch('storage.saas_settings_store.REQUIRE_PAYMENT', True),
-        patch(
-            'stripe.Customer.list_payment_methods_async',
-            AsyncMock(return_value=MagicMock(data=[])),
-        ),
-        patch(
-            'integrations.stripe_service.session_maker', settings_store.session_maker
-        ),
-    ):
-        settings = await settings_store.create_default_settings(None)
-        assert settings is None
-
-
-@pytest.mark.asyncio
-async def test_create_default_settings_require_payment_disabled(
-    settings_store, mock_stripe, mock_github_user, mock_litellm_api, session_maker
-):
-    # Even without payment method, should get default settings when REQUIRE_PAYMENT is False
-    file_store = MagicMock()
-    file_store.read.side_effect = FileNotFoundError()
-    with (
-        patch('storage.saas_settings_store.REQUIRE_PAYMENT', False),
-        patch(
-            'stripe.Customer.list_payment_methods_async',
-            AsyncMock(return_value=MagicMock(data=[])),
-        ),
-        patch(
-            'storage.saas_settings_store.get_file_store',
-            MagicMock(return_value=file_store),
-        ),
-        patch('storage.saas_settings_store.session_maker', session_maker),
-    ):
-        settings = await settings_store.create_default_settings(None)
-        assert settings is not None
-        assert settings.language == 'en'
-
-
-@pytest.mark.asyncio
-async def test_create_default_lite_llm_settings_no_api_config(settings_store):
-    with (
-        patch('storage.saas_settings_store.LITE_LLM_API_KEY', None),
-        patch('storage.saas_settings_store.LITE_LLM_API_URL', None),
-    ):
-        settings = Settings()
-        settings = await settings_store.update_settings_with_litellm_default(settings)
-
-
-@pytest.mark.asyncio
-async def test_update_settings_with_litellm_default_error(settings_store):
-    with patch(
-        'server.auth.token_manager.TokenManager.get_user_info_from_user_id',
-        AsyncMock(return_value={'email': 'duplicate@example.com'}),
-    ):
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.get.return_value = (
-                AsyncMock(
-                    json=MagicMock(
-                        return_value={'user_info': {'max_budget': 10, 'spend': 5}}
-                    )
-                )
-            )
-            mock_client.return_value.__aenter__.return_value.post.return_value.is_success = False
-            settings = Settings()
-            settings = await settings_store.update_settings_with_litellm_default(
-                settings
-            )
-            assert settings is None
-
-
-@pytest.mark.asyncio
-async def test_update_settings_with_litellm_retry_on_duplicate_email(
-    settings_store, mock_litellm_api, session_maker
-):
-    # First response is a delete and succeeds
-    mock_delete_response = MagicMock()
-    mock_delete_response.is_success = True
-    mock_delete_response.status_code = 200
-
-    # Second response fails with duplicate email error
-    mock_error_response = MagicMock()
-    mock_error_response.is_success = False
-    mock_error_response.status_code = 400
-    mock_error_response.text = 'User with this email already exists'
-
-    # Thire response succeeds with no email
-    mock_success_response = MagicMock()
-    mock_success_response.is_success = True
-    mock_success_response.json = MagicMock(return_value={'key': 'new_test_api_key'})
-
-    # Set up mocks
-    post_mock = AsyncMock()
-    post_mock.side_effect = [
-        mock_delete_response,
-        mock_error_response,
-        mock_success_response,
-    ]
-    mock_litellm_api.return_value.__aenter__.return_value.post = post_mock
-
-    with (
-        patch(
-            'server.auth.token_manager.TokenManager.get_user_info_from_user_id',
-            AsyncMock(return_value={'email': 'duplicate@example.com'}),
-        ),
-        patch('storage.saas_settings_store.session_maker', session_maker),
-    ):
-        settings = Settings()
-        settings = await settings_store.update_settings_with_litellm_default(settings)
-
-    assert settings is not None
-    assert settings.llm_api_key
-    assert settings.llm_api_key.get_secret_value() == 'new_test_api_key'
-
-    # Verify second call was with email
-    second_call_args = post_mock.call_args_list[1][1]
-    assert second_call_args['json']['user_email'] == 'duplicate@example.com'
-
-    # Verify third call was with None for email
-    third_call_args = post_mock.call_args_list[2][1]
-    assert third_call_args['json']['user_email'] is None
-
-
-@pytest.mark.asyncio
-async def test_create_user_in_lite_llm(settings_store):
-    # Test the _create_user_in_lite_llm method directly
-    mock_client = AsyncMock()
-    mock_response = AsyncMock()
-    mock_response.is_success = True
-    mock_client.post.return_value = mock_response
-
-    # Test with email
-    await settings_store._create_user_in_lite_llm(
-        mock_client, 'test@example.com', 50, 10
-    )
-
-    # Get the actual call arguments
-    call_args = mock_client.post.call_args[1]
-
-    # Check that the URL and most of the JSON payload match what we expect
-    assert call_args['json']['user_email'] == 'test@example.com'
-    assert call_args['json']['models'] == []
-    assert call_args['json']['max_budget'] == 50
-    assert call_args['json']['spend'] == 10
-    assert call_args['json']['user_id'] == 'user-id'
-    assert call_args['json']['teams'] == [LITE_LLM_TEAM_ID]
-    assert call_args['json']['auto_create_key'] is True
-    assert call_args['json']['send_invite_email'] is False
-    assert call_args['json']['metadata']['version'] == CURRENT_USER_SETTINGS_VERSION
-    assert 'model' in call_args['json']['metadata']
-
-    # Test with None email
-    mock_client.post.reset_mock()
-    await settings_store._create_user_in_lite_llm(mock_client, None, 25, 15)
-
-    # Get the actual call arguments
-    call_args = mock_client.post.call_args[1]
-
-    # Check that the URL and most of the JSON payload match what we expect
-    assert call_args['json']['user_email'] is None
-    assert call_args['json']['models'] == []
-    assert call_args['json']['max_budget'] == 25
-    assert call_args['json']['spend'] == 15
-    assert call_args['json']['user_id'] == str(settings_store.user_id)
-    assert call_args['json']['teams'] == [LITE_LLM_TEAM_ID]
-    assert call_args['json']['auto_create_key'] is True
-    assert call_args['json']['send_invite_email'] is False
-    assert call_args['json']['metadata']['version'] == CURRENT_USER_SETTINGS_VERSION
-    assert 'model' in call_args['json']['metadata']
-
-    # Verify response is returned correctly
-    assert (
-        await settings_store._create_user_in_lite_llm(
-            mock_client, 'email@test.com', 30, 7
-        )
-        == mock_response
-    )
-
-
-@pytest.mark.asyncio
 async def test_encryption(settings_store):
-    settings_store.user_id = 'mock-id'  # GitHub user ID
+    settings_store.user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'  # GitHub user ID
     settings = Settings(
         llm_api_key=SecretStr('secret_key'),
         agent='smith',
@@ -453,14 +170,270 @@ async def test_encryption(settings_store):
         email_verified=True,
     )
     await settings_store.store(settings)
-    with settings_store.session_maker() as session:
-        stored = (
-            session.query(UserSettings)
-            .filter(UserSettings.keycloak_user_id == 'mock-id')
-            .first()
+    from sqlalchemy import select
+
+    async with settings_store.a_session_maker() as session:
+        result = await session.execute(
+            select(UserSettings).filter(
+                UserSettings.keycloak_user_id == '5594c7b6-f959-4b81-92e9-b09c206f5081'
+            )
         )
+        stored = result.scalars().first()
         # The stored key should be encrypted
         assert stored.llm_api_key != 'secret_key'
         # But we should be able to decrypt it when loading
         loaded_settings = await settings_store.load()
         assert loaded_settings.llm_api_key.get_secret_value() == 'secret_key'
+
+
+@pytest.mark.asyncio
+async def test_ensure_api_key_keeps_valid_key(mock_config):
+    """When the existing key is valid, it should be kept unchanged."""
+    store = SaasSettingsStore('test-user-id-123', mock_config)
+    existing_key = 'sk-existing-key'
+    item = DataSettings(
+        llm_model='openhands/gpt-4', llm_api_key=SecretStr(existing_key)
+    )
+
+    with patch(
+        'storage.saas_settings_store.LiteLlmManager.verify_existing_key',
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        await store._ensure_api_key(item, 'org-123', openhands_type=True)
+
+        # Key should remain unchanged when it's valid
+        assert item.llm_api_key is not None
+        assert item.llm_api_key.get_secret_value() == existing_key
+
+
+@pytest.mark.asyncio
+async def test_ensure_api_key_generates_new_key_when_verification_fails(
+    mock_config,
+):
+    """When verification fails, a new key should be generated."""
+    store = SaasSettingsStore('test-user-id-123', mock_config)
+    new_key = 'sk-new-key'
+    item = DataSettings(
+        llm_model='openhands/gpt-4', llm_api_key=SecretStr('sk-invalid-key')
+    )
+
+    with (
+        patch(
+            'storage.saas_settings_store.LiteLlmManager.verify_existing_key',
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+        patch(
+            'storage.saas_settings_store.LiteLlmManager.generate_key',
+            new_callable=AsyncMock,
+            return_value=new_key,
+        ),
+    ):
+        await store._ensure_api_key(item, 'org-123', openhands_type=True)
+
+        assert item.llm_api_key is not None
+        assert item.llm_api_key.get_secret_value() == new_key
+
+
+@pytest.fixture
+def org_with_multiple_members_fixture(session_maker):
+    """Set up an organization with multiple members for testing LLM settings propagation.
+
+    Uses sync session to avoid UUID conversion issues with async SQLite.
+    """
+    from storage.encrypt_utils import decrypt_value
+    from storage.org import Org
+    from storage.org_member import OrgMember
+    from storage.role import Role
+    from storage.user import User
+
+    # Use realistic UUIDs that work well with SQLite
+    org_id = uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5081')
+    admin_user_id = uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5082')
+    member1_user_id = uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5083')
+    member2_user_id = uuid.UUID('5594c7b6-f959-4b81-92e9-b09c206f5084')
+
+    with session_maker() as session:
+        # Create role
+        role = Role(id=10, name='member', rank=3)
+        session.add(role)
+
+        # Create org
+        org = Org(
+            id=org_id,
+            name='test-org',
+            org_version=1,
+            enable_default_condenser=True,
+            enable_proactive_conversation_starters=True,
+        )
+        session.add(org)
+
+        # Create users
+        admin_user = User(
+            id=admin_user_id, current_org_id=org_id, user_consents_to_analytics=True
+        )
+        session.add(admin_user)
+
+        member1_user = User(
+            id=member1_user_id, current_org_id=org_id, user_consents_to_analytics=True
+        )
+        session.add(member1_user)
+
+        member2_user = User(
+            id=member2_user_id, current_org_id=org_id, user_consents_to_analytics=True
+        )
+        session.add(member2_user)
+
+        # Create org members with DIFFERENT initial LLM settings
+        admin_member = OrgMember(
+            org_id=org_id,
+            user_id=admin_user_id,
+            role_id=10,
+            llm_api_key='admin-initial-key',
+            llm_model='old-model-v1',
+            llm_base_url='http://old-url-1.com',
+            max_iterations=10,
+            status='active',
+        )
+        session.add(admin_member)
+
+        member1 = OrgMember(
+            org_id=org_id,
+            user_id=member1_user_id,
+            role_id=10,
+            llm_api_key='member1-initial-key',
+            llm_model='old-model-v2',
+            llm_base_url='http://old-url-2.com',
+            max_iterations=20,
+            status='active',
+        )
+        session.add(member1)
+
+        member2 = OrgMember(
+            org_id=org_id,
+            user_id=member2_user_id,
+            role_id=10,
+            llm_api_key='member2-initial-key',
+            llm_model='old-model-v3',
+            llm_base_url='http://old-url-3.com',
+            max_iterations=30,
+            status='active',
+        )
+        session.add(member2)
+
+        session.commit()
+
+    return {
+        'org_id': org_id,
+        'admin_user_id': admin_user_id,
+        'member1_user_id': member1_user_id,
+        'member2_user_id': member2_user_id,
+        'decrypt_value': decrypt_value,
+    }
+
+
+@pytest.mark.asyncio
+async def test_store_propagates_llm_settings_to_all_org_members(
+    session_maker, async_session_maker, mock_config, org_with_multiple_members_fixture
+):
+    """When admin saves LLM settings, all org members should receive the updated settings.
+
+    This test verifies using a real database that:
+    1. The bulk UPDATE targets the correct organization (WHERE clause is correct)
+    2. All LLM fields are correctly set (llm_model, llm_base_url, max_iterations, llm_api_key)
+    3. The llm_api_key is properly encrypted
+    4. All members in the org receive the same updated values
+    """
+    from sqlalchemy import select
+    from storage.org_member import OrgMember
+
+    # Arrange
+    fixture = org_with_multiple_members_fixture
+    org_id = fixture['org_id']
+    admin_user_id = str(fixture['admin_user_id'])
+    decrypt_value = fixture['decrypt_value']
+
+    store = SaasSettingsStore(admin_user_id, mock_config)
+
+    new_settings = DataSettings(
+        llm_model='new-shared-model/gpt-4',
+        llm_base_url='http://new-shared-url.com',
+        max_iterations=100,
+        llm_api_key=SecretStr('new-shared-api-key'),
+    )
+
+    # Act - call store() with async session
+    with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
+        await store.store(new_settings)
+
+    # Assert - verify ALL org members have the updated LLM settings using sync session
+    with session_maker() as session:
+        result = session.execute(select(OrgMember).where(OrgMember.org_id == org_id))
+        members = result.scalars().all()
+
+        # Verify we have all 3 members
+        assert len(members) == 3, f'Expected 3 org members, got {len(members)}'
+
+        for member in members:
+            # Verify LLM model is updated
+            assert (
+                member.llm_model == 'new-shared-model/gpt-4'
+            ), f'Expected llm_model to be updated for member {member.user_id}'
+
+            # Verify LLM base URL is updated
+            assert (
+                member.llm_base_url == 'http://new-shared-url.com'
+            ), f'Expected llm_base_url to be updated for member {member.user_id}'
+
+            # Verify max_iterations is updated
+            assert (
+                member.max_iterations == 100
+            ), f'Expected max_iterations to be 100 for member {member.user_id}'
+
+            # Verify the API key is encrypted and decrypts to the correct value
+            decrypted_key = decrypt_value(member._llm_api_key)
+            assert (
+                decrypted_key == 'new-shared-api-key'
+            ), f'Expected llm_api_key to decrypt to new-shared-api-key for member {member.user_id}'
+
+
+@pytest.mark.asyncio
+async def test_store_updates_org_default_llm_settings(
+    session_maker, async_session_maker, mock_config, org_with_multiple_members_fixture
+):
+    """When admin saves LLM settings, org's default_llm_model/base_url/max_iterations should be updated.
+
+    This test verifies that the Org table's default settings are updated so that
+    new members joining later will inherit the correct LLM configuration.
+    """
+    from sqlalchemy import select
+    from storage.org import Org
+
+    # Arrange
+    fixture = org_with_multiple_members_fixture
+    org_id = fixture['org_id']
+    admin_user_id = str(fixture['admin_user_id'])
+
+    store = SaasSettingsStore(admin_user_id, mock_config)
+
+    new_settings = DataSettings(
+        llm_model='anthropic/claude-sonnet-4',
+        llm_base_url='https://api.anthropic.com/v1',
+        max_iterations=75,
+        llm_api_key=SecretStr('test-api-key'),
+    )
+
+    # Act
+    with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
+        await store.store(new_settings)
+
+    # Assert - verify org's default fields were updated
+    with session_maker() as session:
+        result = session.execute(select(Org).where(Org.id == org_id))
+        org = result.scalars().first()
+
+        assert org is not None
+        assert org.default_llm_model == 'anthropic/claude-sonnet-4'
+        assert org.default_llm_base_url == 'https://api.anthropic.com/v1'
+        assert org.default_max_iterations == 75

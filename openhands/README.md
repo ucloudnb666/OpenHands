@@ -1,8 +1,14 @@
-# OpenHands Architecture
 
 This directory contains the core components of OpenHands.
 
-For an overview of the system architecture, see the [architecture documentation](https://docs.openhands.dev/usage/architecture/backend) (v0 backend architecture).
+## Documentation
+
+**[Architecture Documentation](./architecture/README.md)** with diagrams covering:
+  - System Architecture Overview
+  - Conversation Startup & WebSocket Flow
+  - Agent Execution & LLM Flow
+
+- **[External Architecture Docs](https://docs.openhands.dev/usage/architecture/backend)** - Official documentation (v0 backend architecture)
 
 ## Classes
 
@@ -51,4 +57,4 @@ flowchart LR
 
 ## Runtime
 
-Please refer to the [documentation](https://docs.all-hands.dev/usage/architecture/runtime) to learn more about `Runtime`.
+Please refer to the [documentation](https://docs.openhands.dev/usage/architecture/runtime) to learn more about `Runtime`.

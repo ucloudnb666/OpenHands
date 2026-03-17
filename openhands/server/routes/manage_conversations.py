@@ -1,3 +1,11 @@
+# IMPORTANT: LEGACY V0 CODE - Deprecated since version 1.0.0, scheduled for removal April 1, 2026
+# This file is part of the legacy (V0) implementation of OpenHands and will be removed soon as we complete the migration to V1.
+# OpenHands V1 uses the Software Agent SDK for the agentic core and runs a new application server. Please refer to:
+#   - V1 agentic core (SDK): https://github.com/OpenHands/software-agent-sdk
+#   - V1 application server (in this repo): openhands/app_server/
+# Unless you are working on deprecation, please avoid extending this legacy file and consult the V1 codepaths above.
+# Tag: Legacy-V0
+# This module belongs to the old V0 web server. The V1 application server lives under openhands/app_server/.
 import asyncio
 import base64
 import itertools
@@ -7,6 +15,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
+from urllib.parse import urlparse
 
 import base62
 import httpx
@@ -32,6 +41,7 @@ from openhands.app_server.config import (
     depends_httpx_client,
     depends_sandbox_service,
 )
+from openhands.app_server.sandbox.sandbox_models import AGENT_SERVER, SandboxStatus
 from openhands.app_server.sandbox.sandbox_service import SandboxService
 from openhands.app_server.services.db_session_injector import set_db_session_keep_open
 from openhands.app_server.services.httpx_client_injector import (
@@ -50,7 +60,6 @@ from openhands.events.observation import (
     AgentStateChangedObservation,
     NullObservation,
 )
-from openhands.experiments.experiment_manager import ExperimentConfig
 from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
     ProviderHandler,
@@ -99,7 +108,6 @@ from openhands.storage.data_models.conversation_metadata import (
 from openhands.storage.data_models.conversation_status import ConversationStatus
 from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.data_models.settings import Settings
-from openhands.storage.locations import get_experiment_config_filename
 from openhands.storage.settings.settings_store import SettingsStore
 from openhands.utils.async_utils import wait_all
 from openhands.utils.conversation_summary import get_default_conversation_title
@@ -111,6 +119,7 @@ app_conversation_info_service_dependency = depends_app_conversation_info_service
 sandbox_service_dependency = depends_sandbox_service()
 db_session_dependency = depends_db_session()
 httpx_client_dependency = depends_httpx_client()
+_RESUME_GRACE_PERIOD = 60
 
 
 def _filter_conversations_by_age(
@@ -221,7 +230,7 @@ class ProvidersSetModel(BaseModel):
     providers_set: list[ProviderType] | None = None
 
 
-@app.post('/conversations')
+@app.post('/conversations', deprecated=True)
 async def new_conversation(
     data: InitSessionRequest,
     user_id: str = Depends(get_user_id),
@@ -233,6 +242,9 @@ async def new_conversation(
 
     After successful initialization, the client should connect to the WebSocket
     using the returned conversation ID.
+
+        Use the V1 endpoint ``POST /api/v1/app-conversations`` instead, which provides
+        improved conversation management with sandbox lifecycle support.
     """
     logger.info(f'initializing_new_conversation:{data}')
     repository = data.repository
@@ -310,7 +322,7 @@ async def new_conversation(
         )
 
 
-@app.get('/conversations')
+@app.get('/conversations', deprecated=True)
 async def search_conversations(
     page_id: str | None = None,
     limit: int = 20,
@@ -325,6 +337,11 @@ async def search_conversations(
     conversation_store: ConversationStore = Depends(get_conversation_store),
     app_conversation_service: AppConversationService = app_conversation_service_dependency,
 ) -> ConversationInfoResultSet:
+    """Search and list conversations with pagination support.
+
+    Use the V1 endpoint ``GET /api/v1/app-conversations/search`` instead, which provides
+    enhanced filtering, sorting, and pagination capabilities.
+    """
     # Parse combined page_id to extract separate page_ids for each source
     v0_page_id = None
     v1_page_id = None
@@ -449,12 +466,18 @@ async def search_conversations(
     return ConversationInfoResultSet(results=final_results, next_page_id=next_page_id)
 
 
-@app.get('/conversations/{conversation_id}')
+@app.get('/conversations/{conversation_id}', deprecated=True)
 async def get_conversation(
     conversation_id: str = Depends(validate_conversation_id),
     conversation_store: ConversationStore = Depends(get_conversation_store),
     app_conversation_service: AppConversationService = app_conversation_service_dependency,
+    httpx_client: httpx.AsyncClient = httpx_client_dependency,
 ) -> ConversationInfo | None:
+    """Get a single conversation by ID.
+
+    Use the V1 endpoint ``GET /api/v1/app-conversations?ids={conversation_id}`` instead,
+    which supports batch retrieval of conversations by their IDs.
+    """
     try:
         # Shim to add V1 conversations
         try:
@@ -463,6 +486,44 @@ async def get_conversation(
                 conversation_uuid
             )
             if app_conversation:
+                if (
+                    app_conversation.sandbox_status == SandboxStatus.RUNNING
+                    and app_conversation.execution_status is None
+                ):
+                    # The sandbox is running, but we were unable to determine a status for
+                    # the conversation. It may be that it is still starting, or that the
+                    # conversation has been stopped / deleted.
+                    try:
+                        # Check the server info is available
+                        conversation_url = urlparse(app_conversation.conversation_url)
+                        sandbox_info_url = f'{str(conversation_url.scheme)}://{str(conversation_url.netloc)}/server_info'
+                        response = await httpx_client.get(sandbox_info_url)
+                        response.raise_for_status()
+                        server_info = response.json()
+
+                        # If the server has not been running long, we consider it still starting
+                        uptime = int(server_info.get('uptime'))
+                        if uptime < _RESUME_GRACE_PERIOD:
+                            app_conversation.sandbox_status = SandboxStatus.STARTING
+
+                    except Exception:
+                        # The sandbox is marked as RUNNING, but the server is not responding.
+                        # There is a bug in runtime API which means that the server is marked
+                        # as RUNNING before it is actually started. (Primarily affecting resumed
+                        # runtimes) As a temporary work around for this, we mark the server as
+                        # STARTING. If the sandbox is actually in an error state, the API will
+                        # discover this quite quickly and mark the sandbox as ERROR
+                        logger.warning(
+                            'get_sandbox_info_failed',
+                            extra={
+                                'conversation_id': app_conversation.id,
+                                'sandbox_id': app_conversation.sandbox_id,
+                            },
+                            exc_info=True,
+                            stack_info=True,
+                        )
+                        app_conversation.sandbox_status = SandboxStatus.STARTING
+
                 return _to_conversation_info(app_conversation)
         except (ValueError, TypeError, Exception):
             # Not a V1 conversation or service error
@@ -484,7 +545,7 @@ async def get_conversation(
         return None
 
 
-@app.delete('/conversations/{conversation_id}')
+@app.delete('/conversations/{conversation_id}', deprecated=True)
 async def delete_conversation(
     request: Request,
     conversation_id: str = Depends(validate_conversation_id),
@@ -495,6 +556,11 @@ async def delete_conversation(
     db_session: AsyncSession = db_session_dependency,
     httpx_client: httpx.AsyncClient = httpx_client_dependency,
 ) -> bool:
+    """Delete a conversation by ID.
+
+    For V1 conversations, use ``DELETE /api/v1/sandboxes/{sandbox_id}`` to delete the
+    associated sandbox, which will clean up the conversation resources.
+    """
     set_db_session_keep_open(request.state, True)
     set_httpx_client_keep_open(request.state, True)
 
@@ -548,7 +614,7 @@ async def _try_delete_v1_conversation(
 
             # Delete the sandbox in the background
             asyncio.create_task(
-                _delete_sandbox_and_close_connections(
+                _finalize_delete_and_close_connections(
                     sandbox_service,
                     app_conversation_info.sandbox_id,
                     db_session,
@@ -562,14 +628,18 @@ async def _try_delete_v1_conversation(
     return result
 
 
-async def _delete_sandbox_and_close_connections(
+async def _finalize_delete_and_close_connections(
     sandbox_service: SandboxService,
     sandbox_id: str,
     db_session: AsyncSession,
     httpx_client: httpx.AsyncClient,
 ):
     try:
-        await sandbox_service.delete_sandbox(sandbox_id)
+        num_conversations_in_sandbox = await _get_num_conversations_in_sandbox(
+            sandbox_service, sandbox_id, httpx_client
+        )
+        if num_conversations_in_sandbox == 0:
+            await sandbox_service.delete_sandbox(sandbox_id)
         await db_session.commit()
     finally:
         await asyncio.gather(
@@ -578,6 +648,28 @@ async def _delete_sandbox_and_close_connections(
                 httpx_client.aclose(),
             ]
         )
+
+
+async def _get_num_conversations_in_sandbox(
+    sandbox_service: SandboxService,
+    sandbox_id: str,
+    httpx_client: httpx.AsyncClient,
+) -> int:
+    try:
+        sandbox = await sandbox_service.get_sandbox(sandbox_id)
+        if not sandbox or not sandbox.exposed_urls:
+            return 0
+        agent_server_url = next(
+            u for u in sandbox.exposed_urls if u.name == AGENT_SERVER
+        )
+        response = await httpx_client.get(
+            f'{agent_server_url.url}/api/conversations/count',
+            headers={'X-Session-API-Key': sandbox.session_api_key},
+        )
+        result = int(response.content)
+        return result
+    except Exception:
+        return 0
 
 
 async def _delete_v0_conversation(conversation_id: str, user_id: str | None) -> bool:
@@ -698,6 +790,7 @@ async def _get_conversation_info(
             url=agent_loop_info.url if agent_loop_info else None,
             session_api_key=getattr(agent_loop_info, 'session_api_key', None),
             pr_number=conversation.pr_number,
+            sandbox_id=None,  # V0 conversations don't have sandbox_id
         )
     except Exception as e:
         logger.error(
@@ -707,7 +800,7 @@ async def _get_conversation_info(
         return None
 
 
-@app.post('/conversations/{conversation_id}/start')
+@app.post('/conversations/{conversation_id}/start', deprecated=True)
 async def start_conversation(
     providers_set: ProvidersSetModel,
     conversation_id: str = Depends(validate_conversation_id),
@@ -721,6 +814,10 @@ async def start_conversation(
     This endpoint calls the conversation_manager's maybe_start_agent_loop method
     to start a conversation. If the conversation is already running, it will
     return the existing agent loop info.
+
+        Use the V1 endpoint ``POST /api/v1/app-conversations`` instead, which combines
+        conversation creation and starting into a single operation with integrated
+        sandbox lifecycle management.
     """
     logger.info(
         f'Starting conversation: {conversation_id}',
@@ -784,7 +881,7 @@ async def start_conversation(
         )
 
 
-@app.post('/conversations/{conversation_id}/stop')
+@app.post('/conversations/{conversation_id}/stop', deprecated=True)
 async def stop_conversation(
     conversation_id: str = Depends(validate_conversation_id),
     user_id: str = Depends(get_user_id),
@@ -793,6 +890,10 @@ async def stop_conversation(
 
     This endpoint calls the conversation_manager's close_session method
     to stop a conversation.
+
+        Use the V1 endpoint ``POST /api/v1/sandboxes/{sandbox_id}/pause`` instead to pause
+        the sandbox execution, or ``DELETE /api/v1/sandboxes/{sandbox_id}`` to fully stop
+        and remove the sandbox.
     """
     logger.info(f'Stopping conversation: {conversation_id}')
 
@@ -1062,7 +1163,7 @@ async def _update_v0_conversation(
     return True
 
 
-@app.patch('/conversations/{conversation_id}')
+@app.patch('/conversations/{conversation_id}', deprecated=True)
 async def update_conversation(
     data: UpdateConversationRequest,
     conversation_id: str = Depends(validate_conversation_id),
@@ -1090,6 +1191,10 @@ async def update_conversation(
 
     Raises:
         HTTPException: If conversation is not found or user lacks permission
+
+        This endpoint is part of the legacy V0 API and will be removed in a future release.
+        Use the V1 endpoint ``PATCH /api/v1/app-conversations/{conversation_id}`` instead,
+        which provides the same functionality for updating conversation metadata.
     """
     logger.info(
         f'Updating conversation {conversation_id} with title: {data.title}',
@@ -1157,32 +1262,6 @@ async def update_conversation(
             },
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-
-
-@app.post('/conversations/{conversation_id}/exp-config')
-def add_experiment_config_for_conversation(
-    exp_config: ExperimentConfig,
-    conversation_id: str = Depends(validate_conversation_id),
-) -> bool:
-    exp_config_filepath = get_experiment_config_filename(conversation_id)
-    exists = False
-    try:
-        file_store.read(exp_config_filepath)
-        exists = True
-    except FileNotFoundError:
-        pass
-
-    # Don't modify again if it already exists
-    if exists:
-        return False
-
-    try:
-        file_store.write(exp_config_filepath, exp_config.model_dump_json())
-    except Exception as e:
-        logger.info(f'Failed to write experiment config for {conversation_id}: {e}')
-        return True
-
-    return False
 
 
 def _parse_combined_page_id(page_id: str | None) -> tuple[str | None, str | None]:
@@ -1502,4 +1581,5 @@ def _to_conversation_info(app_conversation: AppConversation) -> ConversationInfo
             sub_id.hex for sub_id in app_conversation.sub_conversation_ids
         ],
         public=app_conversation.public,
+        sandbox_id=app_conversation.sandbox_id,
     )

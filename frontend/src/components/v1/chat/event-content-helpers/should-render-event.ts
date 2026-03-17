@@ -5,6 +5,7 @@ import {
   isMessageEvent,
   isAgentErrorEvent,
   isConversationStateUpdateEvent,
+  isHookExecutionEvent,
 } from "#/types/v1/type-guards";
 
 export const shouldRenderEvent = (event: OpenHandsEvent) => {
@@ -27,6 +28,11 @@ export const shouldRenderEvent = (event: OpenHandsEvent) => {
       return false;
     }
 
+    // Hide PlanningFileEditorAction - handled separately with PlanPreview component
+    if (actionType === "PlanningFileEditorAction") {
+      return false;
+    }
+
     return true;
   }
 
@@ -42,6 +48,11 @@ export const shouldRenderEvent = (event: OpenHandsEvent) => {
 
   // Render agent error events
   if (isAgentErrorEvent(event)) {
+    return true;
+  }
+
+  // Render hook execution events
+  if (isHookExecutionEvent(event)) {
     return true;
   }
 

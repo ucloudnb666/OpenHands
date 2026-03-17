@@ -18,8 +18,10 @@ from server.auth.saas_user_auth import (
     saas_user_auth_from_cookie,
     saas_user_auth_from_signed_token,
 )
+from storage.user_authorization import UserAuthorizationType
 
 from openhands.integrations.provider import ProviderToken, ProviderType
+from openhands.storage.data_models.secrets import Secrets
 
 
 @pytest.fixture
@@ -30,15 +32,27 @@ def mock_request():
     return request
 
 
+def create_mock_jwt_tokens(user_id='test_user_id', exp_offset=3600):
+    """Helper to create valid JWT tokens for mocking."""
+    payload = {
+        'sub': user_id,
+        'exp': int(time.time()) + exp_offset,
+        'email': 'test@example.com',
+        'email_verified': True,
+    }
+    access_token = jwt.encode(payload, 'secret', algorithm='HS256')
+    refresh_token = jwt.encode(
+        {'sub': user_id, 'exp': int(time.time()) + exp_offset},
+        'secret',
+        algorithm='HS256',
+    )
+    return {'access_token': access_token, 'refresh_token': refresh_token}
+
+
 @pytest.fixture
 def mock_token_manager():
     with patch('server.auth.saas_user_auth.token_manager') as mock_tm:
-        mock_tm.refresh = AsyncMock(
-            return_value={
-                'access_token': 'new_access_token',
-                'refresh_token': 'new_refresh_token',
-            }
-        )
+        mock_tm.refresh = AsyncMock(return_value=create_mock_jwt_tokens())
         mock_tm.get_user_info_from_user_id = AsyncMock(
             return_value={
                 'federatedIdentities': [
@@ -108,8 +122,11 @@ async def test_refresh(mock_token_manager):
     await user_auth.refresh()
 
     mock_token_manager.refresh.assert_called_once_with(refresh_token)
-    assert user_auth.access_token.get_secret_value() == 'new_access_token'
-    assert user_auth.refresh_token.get_secret_value() == 'new_refresh_token'
+    # Access token should be a valid JWT
+    access_token = user_auth.access_token.get_secret_value()
+    decoded = jwt.decode(access_token, options={'verify_signature': False})
+    assert decoded['sub'] == 'test_user_id'
+    assert decoded['email'] == 'test@example.com'
     assert user_auth.refreshed is True
 
 
@@ -159,7 +176,9 @@ async def test_get_access_token_with_expired_token(mock_token_manager):
 
     result = await user_auth.get_access_token()
 
-    assert result.get_secret_value() == 'new_access_token'
+    # Verify the returned token is a valid JWT with correct user_id
+    decoded = jwt.decode(result.get_secret_value(), options={'verify_signature': False})
+    assert decoded['sub'] == 'test_user_id'
     mock_token_manager.refresh.assert_called_once_with(refresh_token)
 
 
@@ -182,7 +201,9 @@ async def test_get_access_token_with_no_token(mock_token_manager):
 
     result = await user_auth.get_access_token()
 
-    assert result.get_secret_value() == 'new_access_token'
+    # Verify the returned token is a valid JWT with correct user_id
+    decoded = jwt.decode(result.get_secret_value(), options={'verify_signature': False})
+    assert decoded['sub'] == 'test_user_id'
     mock_token_manager.refresh.assert_called_once_with(refresh_token)
 
 
@@ -216,6 +237,107 @@ async def test_get_provider_tokens(mock_token_manager):
     )
     """
     pass
+
+
+class TestGetProviderTokensBitbucketDCHost:
+    """Tests for Bitbucket DC host fallback from BITBUCKET_DATA_CENTER_HOST."""
+
+    def _make_auth_token(self):
+        mock_token = MagicMock()
+        mock_token.identity_provider = 'bitbucket_data_center'
+        mock_token.id = 'token-id-1'
+        return mock_token
+
+    def _make_user_auth(self, mock_session_maker):
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [self._make_auth_token()]
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session_maker.return_value = mock_session
+
+        access_payload = {'sub': 'test_user_id', 'exp': int(time.time()) + 3600}
+        access_token = jwt.encode(access_payload, 'secret', algorithm='HS256')
+
+        user_auth = SaasUserAuth(
+            user_id='test_user_id',
+            refresh_token=SecretStr('refresh_token'),
+            access_token=SecretStr(access_token),
+        )
+        return user_auth, mock_session
+
+    @pytest.mark.asyncio
+    async def test_host_derived_from_token_url(self):
+        """host is populated from BITBUCKET_DATA_CENTER_HOST when user secrets lack it."""
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_tm,
+            patch('server.auth.saas_user_auth.a_session_maker') as mock_session_maker,
+            patch(
+                'server.auth.saas_user_auth.BITBUCKET_DATA_CENTER_HOST',
+                'bitbucket.company.com',
+            ),
+        ):
+            mock_tm.get_idp_token = AsyncMock(return_value='bdc_access_token')
+            user_auth, mock_session = self._make_user_auth(mock_session_maker)
+            user_auth.get_secrets = AsyncMock(return_value=None)
+
+            result = await user_auth.get_provider_tokens()
+
+        assert ProviderType.BITBUCKET_DATA_CENTER in result
+        assert (
+            result[ProviderType.BITBUCKET_DATA_CENTER].host == 'bitbucket.company.com'
+        )
+        mock_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_host_from_user_secrets_takes_priority(self):
+        """User-configured host in secrets takes priority over the HOST fallback."""
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_tm,
+            patch('server.auth.saas_user_auth.a_session_maker') as mock_session_maker,
+            patch(
+                'server.auth.saas_user_auth.BITBUCKET_DATA_CENTER_HOST',
+                'bitbucket.company.com',
+            ),
+        ):
+            mock_tm.get_idp_token = AsyncMock(return_value='bdc_access_token')
+            user_auth, mock_session = self._make_user_auth(mock_session_maker)
+            user_secrets = Secrets(
+                provider_tokens={
+                    ProviderType.BITBUCKET_DATA_CENTER: ProviderToken(
+                        token=SecretStr('existing_token'),
+                        host='custom.bitbucket.host',
+                    )
+                }
+            )
+            user_auth.get_secrets = AsyncMock(return_value=user_secrets)
+
+            result = await user_auth.get_provider_tokens()
+
+        assert ProviderType.BITBUCKET_DATA_CENTER in result
+        assert (
+            result[ProviderType.BITBUCKET_DATA_CENTER].host == 'custom.bitbucket.host'
+        )
+        mock_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_host_remains_none_when_host_empty(self):
+        """host stays None when BITBUCKET_DATA_CENTER_HOST is empty."""
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_tm,
+            patch('server.auth.saas_user_auth.a_session_maker') as mock_session_maker,
+            patch('server.auth.saas_user_auth.BITBUCKET_DATA_CENTER_HOST', ''),
+        ):
+            mock_tm.get_idp_token = AsyncMock(return_value='bdc_access_token')
+            user_auth, mock_session = self._make_user_auth(mock_session_maker)
+            user_auth.get_secrets = AsyncMock(return_value=None)
+
+            result = await user_auth.get_provider_tokens()
+
+        assert ProviderType.BITBUCKET_DATA_CENTER in result
+        assert result[ProviderType.BITBUCKET_DATA_CENTER].host is None
+        mock_session.execute.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -339,23 +461,33 @@ async def test_saas_user_auth_from_bearer_success():
     mock_request = MagicMock()
     mock_request.headers = {'Authorization': 'Bearer test_api_key'}
 
+    # Create a valid offline token (refresh token)
+    offline_token = jwt.encode(
+        {'sub': 'test_user_id', 'exp': int(time.time()) + 3600},
+        'secret',
+        algorithm='HS256',
+    )
+
     with (
         patch('server.auth.saas_user_auth.ApiKeyStore') as mock_api_key_store_cls,
         patch('server.auth.saas_user_auth.token_manager') as mock_token_manager,
     ):
         mock_api_key_store = MagicMock()
-        mock_api_key_store.validate_api_key.return_value = 'test_user_id'
+        mock_api_key_store.validate_api_key = AsyncMock(return_value='test_user_id')
         mock_api_key_store_cls.get_instance.return_value = mock_api_key_store
 
-        mock_token_manager.load_offline_token = AsyncMock(return_value='offline_token')
+        mock_token_manager.load_offline_token = AsyncMock(return_value=offline_token)
+        mock_token_manager.refresh = AsyncMock(
+            return_value=create_mock_jwt_tokens('test_user_id')
+        )
 
         result = await saas_user_auth_from_bearer(mock_request)
 
         assert isinstance(result, SaasUserAuth)
         assert result.user_id == 'test_user_id'
-        assert result.refresh_token.get_secret_value() == 'offline_token'
         mock_api_key_store.validate_api_key.assert_called_once_with('test_api_key')
         mock_token_manager.load_offline_token.assert_called_once_with('test_user_id')
+        mock_token_manager.refresh.assert_called_once_with(offline_token)
 
 
 @pytest.mark.asyncio
@@ -377,7 +509,7 @@ async def test_saas_user_auth_from_bearer_invalid_api_key():
 
     with patch('server.auth.saas_user_auth.ApiKeyStore') as mock_api_key_store_cls:
         mock_api_key_store = MagicMock()
-        mock_api_key_store.validate_api_key.return_value = None
+        mock_api_key_store.validate_api_key = AsyncMock(return_value=None)
         mock_api_key_store_cls.get_instance.return_value = mock_api_key_store
 
         result = await saas_user_auth_from_bearer(mock_request)
@@ -464,14 +596,20 @@ async def test_saas_user_auth_from_signed_token(mock_config):
     }
     signed_token = jwt.encode(token_payload, 'test_secret', algorithm='HS256')
 
-    result = await saas_user_auth_from_signed_token(signed_token)
+    # Mock UserAuthorizationStore to avoid database access
+    with patch(
+        'server.auth.saas_user_auth.UserAuthorizationStore'
+    ) as mock_user_auth_store:
+        mock_user_auth_store.get_authorization_type = AsyncMock(return_value=None)
 
-    assert isinstance(result, SaasUserAuth)
-    assert result.user_id == 'test_user_id'
-    assert result.access_token.get_secret_value() == access_token
-    assert result.refresh_token.get_secret_value() == 'test_refresh_token'
-    assert result.email == 'test@example.com'
-    assert result.email_verified is True
+        result = await saas_user_auth_from_signed_token(signed_token)
+
+        assert isinstance(result, SaasUserAuth)
+        assert result.user_id == 'test_user_id'
+        assert result.access_token.get_secret_value() == access_token
+        assert result.refresh_token.get_secret_value() == 'test_refresh_token'
+        assert result.email == 'test@example.com'
+        assert result.email_verified is True
 
 
 def test_get_api_key_from_header_with_authorization_header():
@@ -672,16 +810,21 @@ async def test_saas_user_auth_from_signed_token_blocked_domain(mock_config):
     }
     signed_token = jwt.encode(token_payload, 'test_secret', algorithm='HS256')
 
-    with patch('server.auth.saas_user_auth.domain_blocker') as mock_domain_blocker:
-        mock_domain_blocker.is_active.return_value = True
-        mock_domain_blocker.is_domain_blocked.return_value = True
+    with patch(
+        'server.auth.saas_user_auth.UserAuthorizationStore'
+    ) as mock_user_auth_store:
+        mock_user_auth_store.get_authorization_type = AsyncMock(
+            return_value=UserAuthorizationType.BLACKLIST
+        )
 
         # Act & Assert
         with pytest.raises(AuthError) as exc_info:
             await saas_user_auth_from_signed_token(signed_token)
 
         assert 'email domain is not allowed' in str(exc_info.value)
-        mock_domain_blocker.is_domain_blocked.assert_called_once_with('user@colsch.us')
+        mock_user_auth_store.get_authorization_type.assert_called_once_with(
+            'user@colsch.us', None
+        )
 
 
 @pytest.mark.asyncio
@@ -702,9 +845,10 @@ async def test_saas_user_auth_from_signed_token_allowed_domain(mock_config):
     }
     signed_token = jwt.encode(token_payload, 'test_secret', algorithm='HS256')
 
-    with patch('server.auth.saas_user_auth.domain_blocker') as mock_domain_blocker:
-        mock_domain_blocker.is_active.return_value = True
-        mock_domain_blocker.is_domain_blocked.return_value = False
+    with patch(
+        'server.auth.saas_user_auth.UserAuthorizationStore'
+    ) as mock_user_auth_store:
+        mock_user_auth_store.get_authorization_type = AsyncMock(return_value=None)
 
         # Act
         result = await saas_user_auth_from_signed_token(signed_token)
@@ -713,14 +857,14 @@ async def test_saas_user_auth_from_signed_token_allowed_domain(mock_config):
         assert isinstance(result, SaasUserAuth)
         assert result.user_id == 'test_user_id'
         assert result.email == 'user@example.com'
-        mock_domain_blocker.is_domain_blocked.assert_called_once_with(
-            'user@example.com'
+        mock_user_auth_store.get_authorization_type.assert_called_once_with(
+            'user@example.com', None
         )
 
 
 @pytest.mark.asyncio
 async def test_saas_user_auth_from_signed_token_domain_blocking_inactive(mock_config):
-    """Test that saas_user_auth_from_signed_token succeeds when domain blocking is not active."""
+    """Test that saas_user_auth_from_signed_token succeeds when email domain is not blocked."""
     # Arrange
     access_payload = {
         'sub': 'test_user_id',
@@ -736,8 +880,10 @@ async def test_saas_user_auth_from_signed_token_domain_blocking_inactive(mock_co
     }
     signed_token = jwt.encode(token_payload, 'test_secret', algorithm='HS256')
 
-    with patch('server.auth.saas_user_auth.domain_blocker') as mock_domain_blocker:
-        mock_domain_blocker.is_active.return_value = False
+    with patch(
+        'server.auth.saas_user_auth.UserAuthorizationStore'
+    ) as mock_user_auth_store:
+        mock_user_auth_store.get_authorization_type = AsyncMock(return_value=None)
 
         # Act
         result = await saas_user_auth_from_signed_token(signed_token)
@@ -745,4 +891,6 @@ async def test_saas_user_auth_from_signed_token_domain_blocking_inactive(mock_co
         # Assert
         assert isinstance(result, SaasUserAuth)
         assert result.user_id == 'test_user_id'
-        mock_domain_blocker.is_domain_blocked.assert_not_called()
+        mock_user_auth_store.get_authorization_type.assert_called_once_with(
+            'user@colsch.us', None
+        )

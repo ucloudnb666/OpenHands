@@ -23,12 +23,28 @@ class UserContext(ABC):
         """Get the user info."""
 
     @abstractmethod
-    async def get_authenticated_git_url(self, repository: str) -> str:
-        """Get the provider tokens for the user"""
+    async def get_authenticated_git_url(
+        self, repository: str, is_optional: bool = False
+    ) -> str:
+        """Get an authenticated git URL for a repository.
+
+        Args:
+            repository: Repository name (owner/repo)
+            is_optional: If True, logs at debug level instead of error level
+                when repository is not found. Use for optional repositories.
+        """
 
     @abstractmethod
-    async def get_provider_tokens(self) -> PROVIDER_TOKEN_TYPE | None:
-        """Get the latest tokens for all provider types"""
+    async def get_provider_tokens(
+        self, as_env_vars: bool = False
+    ) -> PROVIDER_TOKEN_TYPE | dict[str, str] | None:
+        """Get the latest tokens for all provider types.
+
+        Args:
+            as_env_vars: When True, return a ``dict[str, str]`` mapping env
+                var names (e.g. ``github_token``) to plain-text token values.
+                When False (default), return the raw provider token mapping.
+        """
 
     @abstractmethod
     async def get_latest_token(self, provider_type: ProviderType) -> str | None:

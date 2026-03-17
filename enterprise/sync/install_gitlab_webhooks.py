@@ -1,33 +1,27 @@
-import asyncio
-from typing import cast
-from uuid import uuid4
+from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING, cast
+
+from integrations.gitlab.webhook_installation import (
+    BreakLoopException,
+    install_webhook_on_resource,
+    verify_webhook_conditions,
+)
 from integrations.types import GitLabResourceType
 from integrations.utils import GITLAB_WEBHOOK_URL
 from sqlalchemy import text
-from storage.database import session_maker
+from storage.database import a_session_maker
 from storage.gitlab_webhook import GitlabWebhook, WebhookStatus
 from storage.gitlab_webhook_store import GitlabWebhookStore
 
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.gitlab.gitlab_service import GitLabServiceImpl
-from openhands.integrations.service_types import GitService
+
+if TYPE_CHECKING:
+    from integrations.gitlab.gitlab_service import SaaSGitLabService
 
 CHUNK_SIZE = 100
-WEBHOOK_NAME = 'OpenHands Resolver'
-SCOPES: list[str] = [
-    'note_events',
-    'merge_requests_events',
-    'confidential_issues_events',
-    'issues_events',
-    'confidential_note_events',
-    'job_events',
-    'pipeline_events',
-]
-
-
-class BreakLoopException(Exception):
-    pass
 
 
 class VerifyWebhookStatus:
@@ -43,80 +37,9 @@ class VerifyWebhookStatus:
         if status == WebhookStatus.RATE_LIMITED:
             raise BreakLoopException()
 
-    async def check_if_resource_exists(
-        self,
-        gitlab_service: type[GitService],
-        resource_type: GitLabResourceType,
-        resource_id: str,
-        webhook_store: GitlabWebhookStore,
-        webhook: GitlabWebhook,
-    ):
-        """
-        Check if the GitLab resource still exists
-        """
-        from integrations.gitlab.gitlab_service import SaaSGitLabService
-
-        gitlab_service = cast(type[SaaSGitLabService], gitlab_service)
-
-        does_resource_exist, status = await gitlab_service.check_resource_exists(
-            resource_type, resource_id
-        )
-
-        logger.info(
-            'Does resource exists',
-            extra={
-                'does_resource_exist': does_resource_exist,
-                'status': status,
-                'resource_id': resource_id,
-                'resource_type': resource_type,
-            },
-        )
-
-        self.determine_if_rate_limited(status)
-        if not does_resource_exist and status != WebhookStatus.RATE_LIMITED:
-            await webhook_store.delete_webhook(webhook)
-            raise BreakLoopException()
-
-    async def check_if_user_has_admin_acccess_to_resource(
-        self,
-        gitlab_service: type[GitService],
-        resource_type: GitLabResourceType,
-        resource_id: str,
-        webhook_store: GitlabWebhookStore,
-        webhook: GitlabWebhook,
-    ):
-        """
-        Check is user still has permission to resource
-        """
-        from integrations.gitlab.gitlab_service import SaaSGitLabService
-
-        gitlab_service = cast(type[SaaSGitLabService], gitlab_service)
-
-        (
-            is_user_admin_of_resource,
-            status,
-        ) = await gitlab_service.check_user_has_admin_access_to_resource(
-            resource_type, resource_id
-        )
-
-        logger.info(
-            'Is user admin',
-            extra={
-                'is_user_admin': is_user_admin_of_resource,
-                'status': status,
-                'resource_id': resource_id,
-                'resource_type': resource_type,
-            },
-        )
-
-        self.determine_if_rate_limited(status)
-        if not is_user_admin_of_resource:
-            await webhook_store.delete_webhook(webhook)
-            raise BreakLoopException()
-
     async def check_if_webhook_already_exists_on_resource(
         self,
-        gitlab_service: type[GitService],
+        gitlab_service: SaaSGitLabService,
         resource_type: GitLabResourceType,
         resource_id: str,
         webhook_store: GitlabWebhookStore,
@@ -125,14 +48,13 @@ class VerifyWebhookStatus:
         """
         Check whether webhook already exists on resource
         """
-        from integrations.gitlab.gitlab_service import SaaSGitLabService
-
-        gitlab_service = cast(type[SaaSGitLabService], gitlab_service)
         (
             does_webhook_exist_on_resource,
             status,
         ) = await gitlab_service.check_webhook_exists_on_resource(
-            resource_type, resource_id, GITLAB_WEBHOOK_URL
+            resource_type=resource_type,
+            resource_id=resource_id,
+            webhook_url=GITLAB_WEBHOOK_URL,
         )
 
         logger.info(
@@ -156,29 +78,14 @@ class VerifyWebhookStatus:
 
     async def verify_conditions_are_met(
         self,
-        gitlab_service: type[GitService],
+        gitlab_service: SaaSGitLabService,
         resource_type: GitLabResourceType,
         resource_id: str,
         webhook_store: GitlabWebhookStore,
         webhook: GitlabWebhook,
     ):
-        await self.check_if_resource_exists(
-            gitlab_service=gitlab_service,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            webhook_store=webhook_store,
-            webhook=webhook,
-        )
-
-        await self.check_if_user_has_admin_acccess_to_resource(
-            gitlab_service=gitlab_service,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            webhook_store=webhook_store,
-            webhook=webhook,
-        )
-
-        await self.check_if_webhook_already_exists_on_resource(
+        # Use the standalone function
+        await verify_webhook_conditions(
             gitlab_service=gitlab_service,
             resource_type=resource_type,
             resource_id=resource_id,
@@ -188,7 +95,7 @@ class VerifyWebhookStatus:
 
     async def create_new_webhook(
         self,
-        gitlab_service: type[GitService],
+        gitlab_service: SaaSGitLabService,
         resource_type: GitLabResourceType,
         resource_id: str,
         webhook_store: GitlabWebhookStore,
@@ -197,50 +104,14 @@ class VerifyWebhookStatus:
         """
         Install webhook on resource
         """
-        from integrations.gitlab.gitlab_service import SaaSGitLabService
-
-        gitlab_service = cast(type[SaaSGitLabService], gitlab_service)
-
-        webhook_secret = f'{webhook.user_id}-{str(uuid4())}'
-        webhook_uuid = f'{str(uuid4())}'
-
-        webhook_id, status = await gitlab_service.install_webhook(
+        # Use the standalone function
+        await install_webhook_on_resource(
+            gitlab_service=gitlab_service,
             resource_type=resource_type,
             resource_id=resource_id,
-            webhook_name=WEBHOOK_NAME,
-            webhook_url=GITLAB_WEBHOOK_URL,
-            webhook_secret=webhook_secret,
-            webhook_uuid=webhook_uuid,
-            scopes=SCOPES,
+            webhook_store=webhook_store,
+            webhook=webhook,
         )
-
-        logger.info(
-            'Creating new webhook',
-            extra={
-                'webhook_id': webhook_id,
-                'status': status,
-                'resource_id': resource_id,
-                'resource_type': resource_type,
-            },
-        )
-
-        self.determine_if_rate_limited(status)
-
-        if webhook_id:
-            await webhook_store.update_webhook(
-                webhook=webhook,
-                update_fields={
-                    'webhook_secret': webhook_secret,
-                    'webhook_exists': True,  # webhook was created
-                    'webhook_url': GITLAB_WEBHOOK_URL,
-                    'scopes': SCOPES,
-                    'webhook_uuid': webhook_uuid,  # required to identify which webhook installation is sending payload
-                },
-            )
-
-            logger.info(
-                f'Installed webhook for {webhook.user_id} on {resource_type}:{resource_id}'
-            )
 
     async def install_webhooks(self):
         """
@@ -262,7 +133,7 @@ class VerifyWebhookStatus:
 
         # Check if the table exists before proceeding
         # This handles cases where the CronJob runs before database migrations complete
-        with session_maker() as session:
+        async with a_session_maker() as session:
             query = text("""
                 SELECT EXISTS (
                     SELECT FROM information_schema.tables
@@ -297,12 +168,12 @@ class VerifyWebhookStatus:
                     webhook
                 )
 
-                gitlab_service_impl = GitLabServiceImpl(external_auth_id=user_id)
+                # GitLabServiceImpl returns SaaSGitLabService in enterprise context
+                from integrations.gitlab.gitlab_service import SaaSGitLabService
 
-                if not isinstance(gitlab_service_impl, SaaSGitLabService):
-                    raise Exception('Only SaaSGitLabService is supported')
-                # Cast needed when mypy can see OpenHands
-                gitlab_service = cast(type[SaaSGitLabService], gitlab_service_impl)
+                gitlab_service = cast(
+                    SaaSGitLabService, GitLabServiceImpl(external_auth_id=user_id)
+                )
 
                 await self.verify_conditions_are_met(
                     gitlab_service=gitlab_service,

@@ -1,3 +1,10 @@
+# IMPORTANT: LEGACY V0 CODE - Deprecated since version 1.0.0, scheduled for removal April 1, 2026
+# This file is part of the legacy (V0) implementation of OpenHands and will be removed soon as we complete the migration to V1.
+# OpenHands V1 uses the Software Agent SDK for the agentic core and runs a new application server. Please refer to:
+#   - V1 agentic core (SDK): https://github.com/OpenHands/software-agent-sdk
+#   - V1 application server (in this repo): openhands/app_server/
+# Unless you are working on deprecation, please avoid extending this legacy file and consult the V1 codepaths above.
+# Tag: Legacy-V0
 """This runtime runs the action_execution_server directly on the local machine without Docker."""
 
 import os
@@ -108,10 +115,10 @@ def check_dependencies(code_repo_path: str, check_browser: bool) -> None:
             session = server.new_session(session_name='test-session')
         except Exception:
             raise ValueError('tmux is not properly installed or available on the path.')
-        pane = session.attached_pane
+        pane = session.active_pane
         pane.send_keys('echo "test"')
         pane_output = '\n'.join(pane.cmd('capture-pane', '-p').stdout)
-        session.kill_session()
+        session.kill()
         if 'test' not in pane_output:
             raise ValueError('libtmux is not properly installed. ' + ERROR_MESSAGE)
 

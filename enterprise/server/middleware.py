@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, cast
 
 import jwt
 from fastapi import Request, Response, status
@@ -12,14 +12,11 @@ from server.auth.auth_error import (
 )
 from server.auth.gitlab_sync import schedule_gitlab_repo_sync
 from server.auth.saas_user_auth import SaasUserAuth, token_manager
-from server.routes.auth import (
-    get_cookie_domain,
-    get_cookie_samesite,
-    set_response_cookie,
-)
+from server.routes.auth import set_response_cookie
+from server.utils.url_utils import get_cookie_domain, get_cookie_samesite
 
 from openhands.core.logger import openhands_logger as logger
-from openhands.server.user_auth.user_auth import AuthType, get_user_auth
+from openhands.server.user_auth.user_auth import AuthType, UserAuth, get_user_auth
 from openhands.server.utils import config
 
 
@@ -43,19 +40,21 @@ class SetAuthCookieMiddleware:
             if not user_auth or user_auth.auth_type != AuthType.COOKIE:
                 return response
             if user_auth.refreshed:
+                if user_auth.access_token is None:
+                    return response
                 set_response_cookie(
                     request=request,
                     response=response,
                     keycloak_access_token=user_auth.access_token.get_secret_value(),
                     keycloak_refresh_token=user_auth.refresh_token.get_secret_value(),
                     secure=False if request.url.hostname == 'localhost' else True,
-                    accepted_tos=user_auth.accepted_tos,
+                    accepted_tos=user_auth.accepted_tos or False,
                 )
 
                 # On re-authentication (token refresh), kick off background sync for GitLab repos
-                schedule_gitlab_repo_sync(
-                    await user_auth.get_user_id(),
-                )
+                user_id = await user_auth.get_user_id()
+                if user_id:
+                    schedule_gitlab_repo_sync(user_id)
 
             if (
                 self._should_attach(request)
@@ -91,23 +90,28 @@ class SetAuthCookieMiddleware:
             if keycloak_auth_cookie:
                 response.delete_cookie(
                     key='keycloak_auth',
-                    domain=get_cookie_domain(request),
-                    samesite=get_cookie_samesite(request),
+                    domain=get_cookie_domain(),
+                    samesite=get_cookie_samesite(),
                 )
             return response
 
     def _get_user_auth(self, request: Request) -> SaasUserAuth | None:
-        return getattr(request.state, 'user_auth', None)
+        user_auth: UserAuth | None = getattr(request.state, 'user_auth', None)
+        if user_auth is None:
+            return None
+        return cast(SaasUserAuth, user_auth)
 
     def _check_tos(self, request: Request):
         keycloak_auth_cookie = request.cookies.get('keycloak_auth')
         auth_header = request.headers.get('Authorization')
         mcp_auth_header = request.headers.get('X-Session-API-Key')
-        accepted_tos = False
+        api_auth_header = request.headers.get('X-Access-Token')
+        accepted_tos: bool | None = False
         if (
             keycloak_auth_cookie is None
             and (auth_header is None or not auth_header.startswith('Bearer '))
             and mcp_auth_header is None
+            and api_auth_header is None
         ):
             raise NoCredentialsError
 
@@ -144,7 +148,7 @@ class SetAuthCookieMiddleware:
         # "if accepted_tos is not None" as there should not be any users with
         # accepted_tos equal to "None"
         if accepted_tos is False and request.url.path != '/api/accept_tos':
-            logger.error('User has not accepted the terms of service')
+            logger.warning('User has not accepted the terms of service')
             raise TosNotAcceptedError
 
     def _should_attach(self, request: Request) -> bool:
@@ -159,10 +163,23 @@ class SetAuthCookieMiddleware:
             '/api/billing/cancel',
             '/api/billing/customer-setup-success',
             '/api/billing/stripe-webhook',
+            '/api/email/resend',
+            '/api/organizations/members/invite/accept',
             '/oauth/device/authorize',
             '/oauth/device/token',
+            '/api/v1/web-client/config',
         )
         if path in ignore_paths:
+            return False
+
+        # Allow public access to shared conversations and events
+        if path.startswith('/api/shared-conversations') or path.startswith(
+            '/api/shared-events'
+        ):
+            return False
+
+        # Webhooks access is controlled using separate API keys
+        if path.startswith('/api/v1/webhooks/'):
             return False
 
         is_mcp = path.startswith('/mcp')
@@ -172,7 +189,7 @@ class SetAuthCookieMiddleware:
     async def _logout(self, request: Request):
         # Log out of keycloak - this prevents issues where you did not log in with the idp you believe you used
         try:
-            user_auth: SaasUserAuth = await get_user_auth(request)
+            user_auth = cast(SaasUserAuth, await get_user_auth(request))
             if user_auth and user_auth.refresh_token:
                 await token_manager.logout(user_auth.refresh_token.get_secret_value())
         except Exception:

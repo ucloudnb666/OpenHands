@@ -13,16 +13,19 @@ from server.auth.auth_error import (
     ExpiredError,
     NoCredentialsError,
 )
-from server.auth.domain_blocker import domain_blocker
+from server.auth.constants import BITBUCKET_DATA_CENTER_HOST
 from server.auth.token_manager import TokenManager
 from server.config import get_config
 from server.logger import logger
 from server.rate_limit import RateLimiter, create_redis_rate_limiter
+from sqlalchemy import delete, select
 from storage.api_key_store import ApiKeyStore
 from storage.auth_tokens import AuthTokens
-from storage.database import session_maker
+from storage.database import a_session_maker
 from storage.saas_secrets_store import SaasSecretsStore
 from storage.saas_settings_store import SaasSettingsStore
+from storage.user_authorization import UserAuthorizationType
+from storage.user_authorization_store import UserAuthorizationStore
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from openhands.integrations.provider import (
@@ -77,6 +80,15 @@ class SaasUserAuth(UserAuth):
         self.access_token = SecretStr(tokens['access_token'])
         self.refresh_token = SecretStr(tokens['refresh_token'])
         self.refreshed = True
+        if not self.email or not self.email_verified or not self.user_id:
+            # We don't need to verify the signature here because we just refreshed
+            # this token from the IDP via token_manager.refresh()
+            access_token_payload = jwt.decode(
+                tokens['access_token'], options={'verify_signature': False}
+            )
+            self.user_id = access_token_payload['sub']
+            self.email = access_token_payload['email']
+            self.email_verified = access_token_payload['email_verified']
 
     def _is_token_expired(self, token: SecretStr):
         logger.debug('saas_user_auth_is_token_expired')
@@ -103,20 +115,18 @@ class SaasUserAuth(UserAuth):
             return settings
         settings_store = await self.get_user_settings_store()
         settings = await settings_store.load()
-        # If load() returned None, should settings be created?
         if settings:
             settings.email = self.email
             settings.email_verified = self.email_verified
             self._settings = settings
         return settings
 
-    async def get_secrets_store(self):
+    async def get_secrets_store(self) -> SaasSecretsStore:
         logger.debug('saas_user_auth_get_secrets_store')
         secrets_store = self.secrets_store
         if secrets_store:
             return secrets_store
-        user_id = await self.get_user_id()
-        secrets_store = SaasSecretsStore(user_id, session_maker, get_config())
+        secrets_store = SaasSecretsStore(self.user_id, get_config())
         self.secrets_store = secrets_store
         return secrets_store
 
@@ -153,12 +163,13 @@ class SaasUserAuth(UserAuth):
 
         try:
             # TODO: I think we can do this in a single request if we refactor
-            with session_maker() as session:
-                tokens = (
-                    session.query(AuthTokens)
-                    .where(AuthTokens.keycloak_user_id == self.user_id)
-                    .all()
+            async with a_session_maker() as session:
+                result = await session.execute(
+                    select(AuthTokens).where(
+                        AuthTokens.keycloak_user_id == self.user_id
+                    )
                 )
+                tokens = result.scalars().all()
 
             for token in tokens:
                 idp_type = ProviderType(token.identity_provider)
@@ -166,6 +177,9 @@ class SaasUserAuth(UserAuth):
                     host = None
                     if user_secrets and idp_type in user_secrets.provider_tokens:
                         host = user_secrets.provider_tokens[idp_type].host
+
+                    if idp_type == ProviderType.BITBUCKET_DATA_CENTER and not host:
+                        host = BITBUCKET_DATA_CENTER_HOST or None
 
                     provider_token = await token_manager.get_idp_token(
                         access_token.get_secret_value(),
@@ -184,11 +198,11 @@ class SaasUserAuth(UserAuth):
                             'idp_type': token.identity_provider,
                         },
                     )
-                    with session_maker() as session:
-                        session.query(AuthTokens).filter(
-                            AuthTokens.id == token.id
-                        ).delete()
-                        session.commit()
+                    async with a_session_maker() as session:
+                        await session.execute(
+                            delete(AuthTokens).where(AuthTokens.id == token.id)
+                        )
+                        await session.commit()
                     raise
 
             self.provider_tokens = MappingProxyType(provider_tokens)
@@ -201,16 +215,15 @@ class SaasUserAuth(UserAuth):
         settings_store = self.settings_store
         if settings_store:
             return settings_store
-        user_id = await self.get_user_id()
-        settings_store = SaasSettingsStore(user_id, session_maker, get_config())
+        settings_store = SaasSettingsStore(self.user_id, get_config())
         self.settings_store = settings_store
         return settings_store
 
     async def get_mcp_api_key(self) -> str:
         api_key_store = ApiKeyStore.get_instance()
-        mcp_api_key = api_key_store.retrieve_mcp_api_key(self.user_id)
+        mcp_api_key = await api_key_store.retrieve_mcp_api_key(self.user_id)
         if not mcp_api_key:
-            mcp_api_key = api_key_store.create_api_key(
+            mcp_api_key = await api_key_store.create_api_key(
                 self.user_id, 'MCP_API_KEY', None
             )
         return mcp_api_key
@@ -270,15 +283,17 @@ async def saas_user_auth_from_bearer(request: Request) -> SaasUserAuth | None:
             return None
 
         api_key_store = ApiKeyStore.get_instance()
-        user_id = api_key_store.validate_api_key(api_key)
+        user_id = await api_key_store.validate_api_key(api_key)
         if not user_id:
             return None
         offline_token = await token_manager.load_offline_token(user_id)
-        return SaasUserAuth(
+        saas_user_auth = SaasUserAuth(
             user_id=user_id,
             refresh_token=SecretStr(offline_token),
             auth_type=AuthType.BEARER,
         )
+        await saas_user_auth.refresh()
+        return saas_user_auth
     except Exception as exc:
         raise BearerTokenError from exc
 
@@ -316,14 +331,16 @@ async def saas_user_auth_from_signed_token(signed_token: str) -> SaasUserAuth:
     email = access_token_payload['email']
     email_verified = access_token_payload['email_verified']
 
-    # Check if email domain is blocked
-    if email and domain_blocker.is_active() and domain_blocker.is_domain_blocked(email):
-        logger.warning(
-            f'Blocked authentication attempt for existing user with email: {email}'
-        )
-        raise AuthError(
-            'Access denied: Your email domain is not allowed to access this service'
-        )
+    # Check if email is blacklisted (whitelist takes precedence)
+    if email:
+        auth_type = await UserAuthorizationStore.get_authorization_type(email, None)
+        if auth_type == UserAuthorizationType.BLACKLIST:
+            logger.warning(
+                f'Blocked authentication attempt for existing user with email: {email}'
+            )
+            raise AuthError(
+                'Access denied: Your email domain is not allowed to access this service'
+            )
 
     logger.debug('saas_user_auth_from_signed_token:return')
 

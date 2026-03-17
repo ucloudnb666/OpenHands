@@ -14,7 +14,47 @@ import SettingsService from "#/api/settings-service/settings-service.api";
 import * as ToastHandlers from "#/utils/custom-toast-handlers";
 
 describe("frontend/routes/_oh", () => {
-  const RouteStub = createRoutesStub([{ Component: MainApp, path: "/" }]);
+  const { DEFAULT_FEATURE_FLAGS, useIsAuthedMock, useConfigMock } = vi.hoisted(
+    () => {
+      const defaultFeatureFlags = {
+        enable_billing: false,
+        hide_llm_settings: false,
+        enable_jira: false,
+        enable_jira_dc: false,
+        enable_linear: false,
+        hide_users_page: false,
+        hide_billing_page: false,
+        hide_integrations_page: false,
+      };
+
+      return {
+        DEFAULT_FEATURE_FLAGS: defaultFeatureFlags,
+        useIsAuthedMock: vi.fn().mockReturnValue({
+          data: true,
+          isLoading: false,
+          isFetching: false,
+          isError: false,
+        }),
+        useConfigMock: vi.fn().mockReturnValue({
+          data: { app_mode: "oss", feature_flags: defaultFeatureFlags },
+          isLoading: false,
+        }),
+      };
+    },
+  );
+
+  vi.mock("#/hooks/query/use-is-authed", () => ({
+    useIsAuthed: () => useIsAuthedMock(),
+  }));
+
+  vi.mock("#/hooks/query/use-config", () => ({
+    useConfig: () => useConfigMock(),
+  }));
+
+  const RouteStub = createRoutesStub([
+    { Component: MainApp, path: "/" },
+    { Component: () => <div data-testid="login-page" />, path: "/login" },
+  ]);
 
   const { userIsAuthenticatedMock, settingsAreUpToDateMock } = vi.hoisted(
     () => ({
@@ -40,6 +80,17 @@ describe("frontend/routes/_oh", () => {
   });
 
   it("should render", async () => {
+    useIsAuthedMock.mockReturnValue({
+      data: true,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+    });
+    useConfigMock.mockReturnValue({
+      data: { app_mode: "oss", feature_flags: DEFAULT_FEATURE_FLAGS },
+      isLoading: false,
+    });
+
     renderWithProviders(<RouteStub />);
     await screen.findByTestId("root-layout");
   });
@@ -53,6 +104,17 @@ describe("frontend/routes/_oh", () => {
 
   it("should not render the AI config modal if the settings are up-to-date", async () => {
     settingsAreUpToDateMock.mockReturnValue(true);
+    useIsAuthedMock.mockReturnValue({
+      data: true,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+    });
+    useConfigMock.mockReturnValue({
+      data: { app_mode: "oss", feature_flags: DEFAULT_FEATURE_FLAGS },
+      isLoading: false,
+    });
+
     renderWithProviders(<RouteStub />);
 
     await waitFor(() => {
@@ -70,16 +132,19 @@ describe("frontend/routes/_oh", () => {
       "handleCaptureConsent",
     );
 
+    // @ts-expect-error - partial mock for testing
     getConfigSpy.mockResolvedValue({
-      APP_MODE: "oss",
-      GITHUB_CLIENT_ID: "test-id",
-      POSTHOG_CLIENT_KEY: "test-key",
-      FEATURE_FLAGS: {
-        ENABLE_BILLING: false,
-        HIDE_LLM_SETTINGS: false,
-        ENABLE_JIRA: false,
-        ENABLE_JIRA_DC: false,
-        ENABLE_LINEAR: false,
+      app_mode: "oss",
+      posthog_client_key: "test-key",
+      feature_flags: {
+        enable_billing: false,
+        hide_llm_settings: false,
+        enable_jira: false,
+        enable_jira_dc: false,
+        enable_linear: false,
+        hide_users_page: false,
+        hide_billing_page: false,
+        hide_integrations_page: false,
       },
     });
 
@@ -108,17 +173,24 @@ describe("frontend/routes/_oh", () => {
 
   it("should not render the user consent form if saas mode", async () => {
     const getConfigSpy = vi.spyOn(OptionService, "getConfig");
+    // @ts-expect-error - partial mock for testing
     getConfigSpy.mockResolvedValue({
-      APP_MODE: "saas",
-      GITHUB_CLIENT_ID: "test-id",
-      POSTHOG_CLIENT_KEY: "test-key",
-      FEATURE_FLAGS: {
-        ENABLE_BILLING: false,
-        HIDE_LLM_SETTINGS: false,
-        ENABLE_JIRA: false,
-        ENABLE_JIRA_DC: false,
-        ENABLE_LINEAR: false,
+      app_mode: "saas",
+      posthog_client_key: "test-key",
+      feature_flags: {
+        enable_billing: false,
+        hide_llm_settings: false,
+        enable_jira: false,
+        enable_jira_dc: false,
+        enable_linear: false,
+        hide_users_page: false,
+        hide_billing_page: false,
+        hide_integrations_page: false,
       },
+    });
+    useConfigMock.mockReturnValue({
+      data: { app_mode: "saas", feature_flags: DEFAULT_FEATURE_FLAGS },
+      isLoading: false,
     });
 
     renderWithProviders(<RouteStub />);
@@ -192,17 +264,24 @@ describe("frontend/routes/_oh", () => {
       "displaySuccessToast",
     );
 
+    // @ts-expect-error - partial mock for testing
     getConfigSpy.mockResolvedValue({
-      APP_MODE: "saas",
-      GITHUB_CLIENT_ID: "test-id",
-      POSTHOG_CLIENT_KEY: "test-key",
-      FEATURE_FLAGS: {
-        ENABLE_BILLING: false,
-        HIDE_LLM_SETTINGS: false,
-        ENABLE_JIRA: false,
-        ENABLE_JIRA_DC: false,
-        ENABLE_LINEAR: false,
+      app_mode: "saas",
+      posthog_client_key: "test-key",
+      feature_flags: {
+        enable_billing: false,
+        hide_llm_settings: false,
+        enable_jira: false,
+        enable_jira_dc: false,
+        enable_linear: false,
+        hide_users_page: false,
+        hide_billing_page: false,
+        hide_integrations_page: false,
       },
+    });
+    useConfigMock.mockReturnValue({
+      data: { app_mode: "saas", feature_flags: DEFAULT_FEATURE_FLAGS },
+      isLoading: false,
     });
 
     getSettingsSpy.mockRejectedValue(createAxiosNotFoundErrorObject());

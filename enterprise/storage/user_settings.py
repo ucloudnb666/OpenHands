@@ -27,6 +27,7 @@ class UserSettings(Base):  # type: ignore
     )
     sandbox_base_container_image = Column(String, nullable=True)
     sandbox_runtime_container_image = Column(String, nullable=True)
+    sandbox_grouping_strategy = Column(String, nullable=True)
     user_version = Column(Integer, nullable=False, default=0)
     accepted_tos = Column(DateTime, nullable=True)
     mcp_config = Column(JSON, nullable=True)
@@ -39,3 +40,6 @@ class UserSettings(Base):  # type: ignore
     git_user_name = Column(String, nullable=True)
     git_user_email = Column(String, nullable=True)
     v1_enabled = Column(Boolean, nullable=True)
+    already_migrated = Column(
+        Boolean, nullable=True, default=False
+    )  # False = not migrated, True = migrated

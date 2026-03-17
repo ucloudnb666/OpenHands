@@ -84,17 +84,26 @@ describe("TaskTrackingObservationContent", () => {
     expect(taskItems).toHaveLength(3);
   });
 
-  it("displays task IDs and notes", () => {
+  it("does not display task IDs but displays notes", () => {
     render(<TaskTrackingObservationContent event={mockEvent} />);
 
-    expect(screen.getByText("ID: task-1")).toBeInTheDocument();
-    expect(screen.getByText("ID: task-2")).toBeInTheDocument();
-    expect(screen.getByText("ID: task-3")).toBeInTheDocument();
+    expect(screen.queryByText("ID: task-1")).not.toBeInTheDocument();
+    expect(screen.queryByText("ID: task-2")).not.toBeInTheDocument();
+    expect(screen.queryByText("ID: task-3")).not.toBeInTheDocument();
 
     expect(screen.getByText("Notes: This is a test task")).toBeInTheDocument();
     expect(
       screen.getByText("Notes: Completed successfully"),
     ).toBeInTheDocument();
+  });
+
+  it("does not display Notes when notes are empty", () => {
+    render(<TaskTrackingObservationContent event={mockEvent} />);
+
+    // task-2 has no notes, so "Notes:" should not appear for it
+    // We have 2 tasks with notes, so there should be exactly 2 "Notes:" elements
+    const notesElements = screen.getAllByText(/^Notes:/);
+    expect(notesElements).toHaveLength(2);
   });
 
   it("does not render task list when command is not 'plan'", () => {

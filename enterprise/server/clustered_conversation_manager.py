@@ -7,9 +7,9 @@ from uuid import uuid4
 import socketio
 from server.logger import logger
 from server.utils.conversation_callback_utils import invoke_conversation_callbacks
-from storage.database import session_maker
-from storage.saas_settings_store import SaasSettingsStore
-from storage.stored_conversation_metadata import StoredConversationMetadata
+from sqlalchemy import select
+from storage.database import a_session_maker
+from storage.stored_conversation_metadata_saas import StoredConversationMetadataSaas
 
 from openhands.core.config import LLMConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
@@ -524,17 +524,18 @@ class ClusteredConversationManager(StandaloneConversationManager):
                     f'local_connection_to_stopped_conversation:{connection_id}:{conversation_id}'
                 )
                 # Look up the user_id from the database
-                with session_maker() as session:
-                    conversation_metadata = (
-                        session.query(StoredConversationMetadata)
-                        .filter(
-                            StoredConversationMetadata.conversation_id
+                async with a_session_maker() as session:
+                    result = await session.execute(
+                        select(StoredConversationMetadataSaas).where(
+                            StoredConversationMetadataSaas.conversation_id
                             == conversation_id
                         )
-                        .first()
                     )
+                    conversation_metadata_saas = result.scalars().first()
                     user_id = (
-                        conversation_metadata.user_id if conversation_metadata else None
+                        str(conversation_metadata_saas.user_id)
+                        if conversation_metadata_saas
+                        else None
                     )
                 # Handle the stopped conversation asynchronously
                 asyncio.create_task(
@@ -743,9 +744,14 @@ class ClusteredConversationManager(StandaloneConversationManager):
             return
 
         # Restart the agent loop
+        from storage.saas_settings_store import SaasSettingsStore
+
         config = load_openhands_config()
         settings_store = await SaasSettingsStore.get_instance(config, user_id)
         settings = await settings_store.load()
+        if not settings:
+            logger.error(f'Failed to load settings for user {user_id}')
+            return
         await self.maybe_start_agent_loop(conversation_id, settings, user_id)
 
     async def _start_agent_loop(

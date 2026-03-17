@@ -1,9 +1,12 @@
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 from storage.saas_conversation_store import SaasConversationStore
+from storage.user import User
 
+from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
 
 
@@ -20,12 +23,26 @@ def mock_call_sync_from_async():
         yield
 
 
+@pytest.fixture(autouse=True)
+def mock_user_store():
+    """Mock UserStore.get_user_by_id to return a mock user"""
+    mock_user = MagicMock(spec=User)
+    mock_user.current_org_id = UUID('5594c7b6-f959-4b81-92e9-b09c206f5081')
+
+    with patch('storage.user_store.UserStore.get_user_by_id', return_value=mock_user):
+        yield
+
+
 @pytest.mark.asyncio
 async def test_save_and_get(session_maker):
-    store = SaasConversationStore('12345', session_maker)
+    store = SaasConversationStore(
+        '5594c7b6-f959-4b81-92e9-b09c206f5081',
+        UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+        session_maker,
+    )
     metadata = ConversationMetadata(
         conversation_id='my-conversation-id',
-        user_id='12345',
+        user_id='5594c7b6-f959-4b81-92e9-b09c206f5081',
         selected_repository='my-repo',
         selected_branch=None,
         created_at=datetime.now(UTC),
@@ -47,13 +64,17 @@ async def test_save_and_get(session_maker):
 
 @pytest.mark.asyncio
 async def test_search(session_maker):
-    store = SaasConversationStore('12345', session_maker)
+    store = SaasConversationStore(
+        '5594c7b6-f959-4b81-92e9-b09c206f5081',
+        UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+        session_maker,
+    )
 
     # Create test conversations with different timestamps
     conversations = [
         ConversationMetadata(
             conversation_id=f'conv-{i}',
-            user_id='12345',
+            user_id='5594c7b6-f959-4b81-92e9-b09c206f5081',
             selected_repository='repo',
             selected_branch=None,
             created_at=datetime(2024, 1, i + 1, tzinfo=UTC),
@@ -92,10 +113,14 @@ async def test_search(session_maker):
 
 @pytest.mark.asyncio
 async def test_delete_metadata(session_maker):
-    store = SaasConversationStore('12345', session_maker)
+    store = SaasConversationStore(
+        '5594c7b6-f959-4b81-92e9-b09c206f5081',
+        UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+        session_maker,
+    )
     metadata = ConversationMetadata(
         conversation_id='to-delete',
-        user_id='12345',
+        user_id='5594c7b6-f959-4b81-92e9-b09c206f5081',
         selected_repository='repo',
         selected_branch=None,
         created_at=datetime.now(UTC),
@@ -112,17 +137,25 @@ async def test_delete_metadata(session_maker):
 
 @pytest.mark.asyncio
 async def test_get_nonexistent_metadata(session_maker):
-    store = SaasConversationStore('12345', session_maker)
+    store = SaasConversationStore(
+        '5594c7b6-f959-4b81-92e9-b09c206f5081',
+        UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+        session_maker,
+    )
     with pytest.raises(FileNotFoundError):
         await store.get_metadata('nonexistent-id')
 
 
 @pytest.mark.asyncio
 async def test_exists(session_maker):
-    store = SaasConversationStore('12345', session_maker)
+    store = SaasConversationStore(
+        '5594c7b6-f959-4b81-92e9-b09c206f5081',
+        UUID('5594c7b6-f959-4b81-92e9-b09c206f5081'),
+        session_maker,
+    )
     metadata = ConversationMetadata(
         conversation_id='exists-test',
-        user_id='12345',
+        user_id='5594c7b6-f959-4b81-92e9-b09c206f5081',
         selected_repository='repo',
         selected_branch='test-branch',
         created_at=datetime.now(UTC),
@@ -131,3 +164,53 @@ async def test_exists(session_maker):
     assert not await store.exists('exists-test')
     await store.save_metadata(metadata)
     assert await store.exists('exists-test')
+
+
+class TestGetInstance:
+    """Tests for SaasConversationStore.get_instance method.
+
+    The get_instance method uses async UserStore.get_user_by_id because
+    callers now use asyncio.run_coroutine_threadsafe() to dispatch to the main
+    event loop where asyncpg connections work properly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_instance_uses_async_get_user_by_id(self):
+        """Verify get_instance calls the async get_user_by_id for proper event loop handling."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        mock_user = MagicMock(spec=User)
+        mock_user.current_org_id = UUID(user_id)
+        mock_config = MagicMock(spec=OpenHandsConfig)
+
+        with patch(
+            'storage.saas_conversation_store.UserStore.get_user_by_id',
+            AsyncMock(return_value=mock_user),
+        ) as mock_async_get_user, patch(
+            'storage.saas_conversation_store.session_maker'
+        ):
+            # Act
+            store = await SaasConversationStore.get_instance(mock_config, user_id)
+
+            # Assert
+            mock_async_get_user.assert_called_once_with(user_id)
+            assert store.user_id == user_id
+            assert store.org_id == mock_user.current_org_id
+
+    @pytest.mark.asyncio
+    async def test_get_instance_handles_none_user(self):
+        """Verify get_instance handles case when user is not found."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        mock_config = MagicMock(spec=OpenHandsConfig)
+
+        with patch(
+            'storage.saas_conversation_store.UserStore.get_user_by_id',
+            AsyncMock(return_value=None),
+        ), patch('storage.saas_conversation_store.session_maker'):
+            # Act
+            store = await SaasConversationStore.get_instance(mock_config, user_id)
+
+            # Assert
+            assert store.user_id == user_id
+            assert store.org_id is None

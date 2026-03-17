@@ -78,6 +78,8 @@ export interface Conversation {
   pr_number?: number[] | null;
   conversation_version?: "V0" | "V1";
   sub_conversation_ids?: string[];
+  public?: boolean;
+  sandbox_id?: string | null;
 }
 
 export interface ResultSet<T> {
@@ -109,7 +111,7 @@ export interface InputMetadata {
 
 export interface Microagent {
   name: string;
-  type: "repo" | "knowledge";
+  type: "repo" | "knowledge" | "agentskills";
   content: string;
   triggers: string[];
 }

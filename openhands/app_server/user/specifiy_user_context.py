@@ -21,10 +21,14 @@ class SpecifyUserContext(UserContext):
     async def get_user_info(self) -> UserInfo:
         raise NotImplementedError()
 
-    async def get_authenticated_git_url(self, repository: str) -> str:
+    async def get_authenticated_git_url(
+        self, repository: str, is_optional: bool = False
+    ) -> str:
         raise NotImplementedError()
 
-    async def get_provider_tokens(self) -> PROVIDER_TOKEN_TYPE | None:
+    async def get_provider_tokens(
+        self, as_env_vars: bool = False
+    ) -> PROVIDER_TOKEN_TYPE | dict[str, str] | None:
         raise NotImplementedError()
 
     async def get_latest_token(self, provider_type: ProviderType) -> str | None:

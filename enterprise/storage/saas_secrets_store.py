@@ -5,9 +5,10 @@ from base64 import b64decode, b64encode
 from dataclasses import dataclass
 
 from cryptography.fernet import Fernet
-from sqlalchemy.orm import sessionmaker
-from storage.database import session_maker
+from sqlalchemy import delete, select
+from storage.database import a_session_maker
 from storage.stored_custom_secrets import StoredCustomSecrets
+from storage.user_store import UserStore
 
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.logger import openhands_logger as logger
@@ -18,20 +19,23 @@ from openhands.storage.secrets.secrets_store import SecretsStore
 @dataclass
 class SaasSecretsStore(SecretsStore):
     user_id: str
-    session_maker: sessionmaker
     config: OpenHandsConfig
 
     async def load(self) -> Secrets | None:
         if not self.user_id:
             return None
+        user = await UserStore.get_user_by_id(self.user_id)
+        org_id = user.current_org_id if user else None
 
-        with self.session_maker() as session:
+        async with a_session_maker() as session:
             # Fetch all secrets for the given user ID
-            settings = (
-                session.query(StoredCustomSecrets)
-                .filter(StoredCustomSecrets.keycloak_user_id == self.user_id)
-                .all()
+            query = select(StoredCustomSecrets).filter(
+                StoredCustomSecrets.keycloak_user_id == self.user_id
             )
+            if org_id is not None:
+                query = query.filter(StoredCustomSecrets.org_id == org_id)
+            result = await session.execute(query)
+            settings = result.scalars().all()
 
             if not settings:
                 return Secrets()
@@ -48,12 +52,19 @@ class SaasSecretsStore(SecretsStore):
             return Secrets(custom_secrets=kwargs)  # type: ignore[arg-type]
 
     async def store(self, item: Secrets):
-        with self.session_maker() as session:
+        user = await UserStore.get_user_by_id(self.user_id)
+        if user is None:
+            raise ValueError(f'User not found: {self.user_id}')
+        org_id = user.current_org_id
+
+        async with a_session_maker() as session:
             # Incoming secrets are always the most updated ones
             # Delete all existing records and override with incoming ones
-            session.query(StoredCustomSecrets).filter(
-                StoredCustomSecrets.keycloak_user_id == self.user_id
-            ).delete()
+            await session.execute(
+                delete(StoredCustomSecrets).filter(
+                    StoredCustomSecrets.keycloak_user_id == self.user_id
+                )
+            )
 
             # Prepare the new secrets data
             kwargs = item.model_dump(context={'expose_secrets': True})
@@ -76,13 +87,14 @@ class SaasSecretsStore(SecretsStore):
             for secret_name, secret_value, description in secret_tuples:
                 new_secret = StoredCustomSecrets(
                     keycloak_user_id=self.user_id,
+                    org_id=org_id,
                     secret_name=secret_name,
                     secret_value=secret_value,
                     description=description,
                 )
                 session.add(new_secret)
 
-            session.commit()
+            await session.commit()
 
     def _decrypt_kwargs(self, kwargs: dict):
         fernet = self._fernet()
@@ -121,9 +133,7 @@ class SaasSecretsStore(SecretsStore):
     async def get_instance(
         cls,
         config: OpenHandsConfig,
-        user_id: str | None,
+        user_id: str,  # type: ignore[override]
     ) -> SaasSecretsStore:
-        if not user_id:
-            raise Exception('SaasSecretsStore cannot be constructed with no user_id')
         logger.debug(f'saas_secrets_store.get_instance::{user_id}')
-        return SaasSecretsStore(user_id, session_maker, config)
+        return SaasSecretsStore(user_id, config)
