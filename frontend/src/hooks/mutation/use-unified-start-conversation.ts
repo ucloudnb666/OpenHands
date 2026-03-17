@@ -83,7 +83,7 @@ export const useUnifiedResumeConversationSandbox = () => {
     },
     onSuccess: (_, variables) => {
       // Clear error messages when starting/resuming conversation
-      removeErrorMessage();
+      removeErrorMessage(true);
 
       updateConversationStatusInCache(
         queryClient,

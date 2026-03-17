@@ -329,7 +329,7 @@ export function WsClientProvider({
       }
       sioRef.current = null;
       pendingEventsRef.current = [];
-      removeErrorMessage();
+      removeErrorMessage(true);
       setWebSocketStatus("DISCONNECTED");
       return () => undefined; // conversation intentionally stopped
     }

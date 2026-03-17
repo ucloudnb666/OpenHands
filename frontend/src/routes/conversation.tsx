@@ -57,7 +57,7 @@ function AppContent() {
     clearTerminal();
     resetConversationState();
     setCurrentAgentState(AgentState.LOADING);
-    removeErrorMessage();
+    removeErrorMessage(true);
     clearEvents();
   }, [
     conversationId,

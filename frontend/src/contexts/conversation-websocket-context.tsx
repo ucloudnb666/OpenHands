@@ -363,7 +363,7 @@ export function ConversationWebSocketProvider({
               posthog,
             });
             if (isBudgetOrCreditError(event.detail)) {
-              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS);
+              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS, true);
               trackCreditLimitReached({
                 conversationId: conversationId || "unknown",
               });
@@ -371,7 +371,7 @@ export function ConversationWebSocketProvider({
               setErrorMessage(event.detail);
             }
           } else {
-            // Clear error message on any non-ConversationErrorEvent
+            // Clear non-persistent error messages on any non-ConversationErrorEvent
             removeErrorMessage();
           }
 
@@ -389,7 +389,7 @@ export function ConversationWebSocketProvider({
             });
             // Use friendly i18n message for budget/credit errors instead of raw error
             if (isBudgetOrCreditError(event.error)) {
-              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS);
+              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS, true);
               trackCreditLimitReached({
                 conversationId: conversationId || "unknown",
               });
@@ -526,7 +526,7 @@ export function ConversationWebSocketProvider({
               posthog,
             });
             if (isBudgetOrCreditError(event.detail)) {
-              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS);
+              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS, true);
               trackCreditLimitReached({
                 conversationId: conversationId || "unknown",
               });
@@ -534,7 +534,7 @@ export function ConversationWebSocketProvider({
               setErrorMessage(event.detail);
             }
           } else {
-            // Clear error message on any non-ConversationErrorEvent
+            // Clear non-persistent error messages on any non-ConversationErrorEvent
             removeErrorMessage();
           }
 
@@ -552,7 +552,7 @@ export function ConversationWebSocketProvider({
             });
             // Use friendly i18n message for budget/credit errors instead of raw error
             if (isBudgetOrCreditError(event.error)) {
-              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS);
+              setErrorMessage(I18nKey.STATUS$ERROR_LLM_OUT_OF_CREDITS, true);
               trackCreditLimitReached({
                 conversationId: conversationId || "unknown",
               });
