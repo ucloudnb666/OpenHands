@@ -11,6 +11,7 @@ import { Settings } from "#/types/settings";
  * - agent: Custom agent selection (when not using default)
  * - enable_default_condenser: Memory condenser toggle (when disabled, as default is enabled)
  * - condenser_max_size: Custom condenser size (when different from default)
+ * - search_api_key: Search API key (when set)
  */
 export const hasAdvancedSettingsSet = (
   settings: Partial<Settings>,
@@ -31,11 +32,17 @@ export const hasAdvancedSettingsSet = (
     settings.condenser_max_size !== undefined &&
     settings.condenser_max_size !== null &&
     settings.condenser_max_size !== DEFAULT_SETTINGS.condenser_max_size;
+  // Check if search API key is set (non-empty string)
+  const hasSearchApiKey =
+    settings.search_api_key !== undefined &&
+    settings.search_api_key !== null &&
+    settings.search_api_key.trim() !== "";
 
   return (
     hasBaseUrl ||
     hasCustomAgent ||
     hasDisabledCondenser ||
-    hasCustomCondenserSize
+    hasCustomCondenserSize ||
+    hasSearchApiKey
   );
 };
