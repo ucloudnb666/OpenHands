@@ -48,7 +48,7 @@ describe("ContextMenuCTA", () => {
     expect(learnMoreLink).toHaveAttribute("rel", "noopener noreferrer");
   });
 
-  it("should render the stacked icon", () => {
+  it("should render the server icon", () => {
     render(<ContextMenuCTA />);
 
     const contentContainer = screen.getByTestId("context-menu-cta-content");

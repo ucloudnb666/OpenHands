@@ -4,7 +4,7 @@ import { Card } from "#/ui/card";
 import { CardTitle } from "#/ui/card-title";
 import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
-import StackedIcon from "#/icons/stacked.svg?react";
+import ServerIcon from "#/icons/server.svg?react";
 import { useTracking } from "#/hooks/use-tracking";
 
 export function ContextMenuCTA() {
@@ -29,7 +29,7 @@ export function ContextMenuCTA() {
         data-testid="context-menu-cta-content"
         className={cn("flex flex-col gap-[11px] p-[25px]")}
       >
-        <StackedIcon width={40} height={40} />
+        <ServerIcon width={40} height={40} />
 
         <CardTitle>{t(I18nKey.CTA$ENTERPRISE_TITLE)}</CardTitle>
 
