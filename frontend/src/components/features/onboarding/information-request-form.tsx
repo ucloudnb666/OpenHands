@@ -4,83 +4,12 @@ import { useNavigate } from "react-router";
 import { I18nKey } from "#/i18n/declaration";
 import { Card } from "#/ui/card";
 import { Text } from "#/ui/typography";
+import { FormInput } from "./form-input";
+import OpenHandsLogoWhite from "#/assets/branding/openhands-logo-white.svg?react";
 import CloudIcon from "#/icons/cloud.svg?react";
 import StackedIcon from "#/icons/stacked.svg?react";
-import WaveIcon from "#/icons/wave.svg?react";
 
 export type RequestType = "saas" | "self-hosted";
-
-interface FormInputProps {
-  id: string;
-  label: string;
-  value: string;
-  placeholder: string;
-  type?: "text" | "email";
-  onChange: (value: string) => void;
-}
-
-function FormInput({
-  id,
-  label,
-  value,
-  placeholder,
-  type = "text",
-  onChange,
-}: FormInputProps) {
-  return (
-    <div className="flex flex-col gap-1.5 w-full">
-      <label
-        htmlFor={id}
-        className="text-sm font-medium text-white cursor-pointer"
-      >
-        {label}
-      </label>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full rounded-md border border-[#3a3a3a] bg-transparent px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-white focus:outline-none transition-colors"
-      />
-    </div>
-  );
-}
-
-interface FormTextareaProps {
-  id: string;
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-}
-
-function FormTextarea({
-  id,
-  label,
-  value,
-  placeholder,
-  onChange,
-}: FormTextareaProps) {
-  return (
-    <div className="flex flex-col gap-1.5 w-full">
-      <label
-        htmlFor={id}
-        className="text-sm font-medium text-white cursor-pointer"
-      >
-        {label}
-      </label>
-      <textarea
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={4}
-        className="w-full rounded-md border border-[#3a3a3a] bg-transparent px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-white focus:outline-none transition-colors resize-none"
-      />
-    </div>
-  );
-}
 
 interface InformationRequestFormProps {
   requestType: RequestType;
@@ -103,7 +32,6 @@ export function InformationRequestForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: Implement form submission
-    console.log("Form submitted:", { requestType, ...formData });
     navigate("/");
   };
 
@@ -136,7 +64,7 @@ export function InformationRequestForm({
     >
       {/* Header */}
       <div className="flex flex-col items-center gap-4">
-        <WaveIcon className="w-12 h-12" />
+        <OpenHandsLogoWhite width={55} height={55} />
         <div className="text-center flex flex-col gap-2">
           <h1 className="text-2xl font-bold text-white">{title}</h1>
           <Text className="text-[#8C8C8C]">{subtitle}</Text>
@@ -181,11 +109,12 @@ export function InformationRequestForm({
             }
           />
 
-          <FormTextarea
+          <FormInput
             id="message"
             label={t(I18nKey.ENTERPRISE$FORM_MESSAGE_LABEL)}
             value={formData.message}
             placeholder={messagePlaceholder}
+            rows={4}
             onChange={(value) =>
               setFormData((prev) => ({ ...prev, message: value }))
             }
