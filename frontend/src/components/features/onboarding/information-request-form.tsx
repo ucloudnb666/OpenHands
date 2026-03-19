@@ -5,7 +5,6 @@ import { I18nKey } from "#/i18n/declaration";
 import { Card } from "#/ui/card";
 import { Text } from "#/ui/typography";
 import { FormInput } from "./form-input";
-import { RequestSubmittedModal } from "./request-submitted-modal";
 import OpenHandsLogoWhite from "#/assets/branding/openhands-logo-white.svg?react";
 import CloudIcon from "#/icons/cloud-minimal.svg?react";
 import StackedIcon from "#/icons/stacked.svg?react";
@@ -30,7 +29,6 @@ export function InformationRequestForm({
     message: "",
   });
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
-  const [showModal, setShowModal] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +46,8 @@ export function InformationRequestForm({
     }
 
     // TODO: Implement actual form submission API call
-    setShowModal(true);
-  };
-
-  const handleModalClose = () => {
-    setShowModal(false);
-    navigate("/");
+    // Navigate to homepage with state to show confirmation modal
+    navigate("/", { state: { showRequestSubmittedModal: true } });
   };
 
   const isSaas = requestType === "saas";
@@ -192,8 +186,6 @@ export function InformationRequestForm({
           <Text className="text-[#8C8C8C]">{cardDescription}</Text>
         </Card>
       </div>
-
-      {showModal && <RequestSubmittedModal onClose={handleModalClose} />}
     </div>
   );
 }
