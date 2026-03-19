@@ -14,6 +14,14 @@ vi.mock("react-router", async () => {
   };
 });
 
+// Mock useTracking
+const mockTrackEnterpriseLeadFormSubmitted = vi.fn();
+vi.mock("#/hooks/use-tracking", () => ({
+  useTracking: () => ({
+    trackEnterpriseLeadFormSubmitted: mockTrackEnterpriseLeadFormSubmitted,
+  }),
+}));
+
 describe("InformationRequestForm", () => {
   const defaultProps = {
     requestType: "saas" as RequestType,
@@ -190,6 +198,16 @@ describe("InformationRequestForm", () => {
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 
+    it("should not call tracking when form is submitted with empty fields", async () => {
+      const user = userEvent.setup();
+      renderWithRouter();
+
+      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      await user.click(submitButton);
+
+      expect(mockTrackEnterpriseLeadFormSubmitted).not.toHaveBeenCalled();
+    });
+
     it("should navigate to homepage with modal state when form is submitted with all fields filled", async () => {
       const user = userEvent.setup();
       renderWithRouter();
@@ -204,6 +222,70 @@ describe("InformationRequestForm", () => {
 
       expect(mockNavigate).toHaveBeenCalledWith("/", {
         state: { showRequestSubmittedModal: true },
+      });
+    });
+
+    it("should call tracking with form data when form is submitted successfully", async () => {
+      const user = userEvent.setup();
+      renderWithRouter({ ...defaultProps, requestType: "saas" });
+
+      await user.type(screen.getByTestId("form-input-name"), "John Doe");
+      await user.type(screen.getByTestId("form-input-company"), "Acme Inc");
+      await user.type(screen.getByTestId("form-input-email"), "john@example.com");
+      await user.type(screen.getByTestId("form-input-message"), "Hello world");
+
+      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      await user.click(submitButton);
+
+      expect(mockTrackEnterpriseLeadFormSubmitted).toHaveBeenCalledTimes(1);
+      expect(mockTrackEnterpriseLeadFormSubmitted).toHaveBeenCalledWith({
+        requestType: "saas",
+        name: "John Doe",
+        company: "Acme Inc",
+        email: "john@example.com",
+        message: "Hello world",
+      });
+    });
+
+    it("should call tracking with self-hosted request type", async () => {
+      const user = userEvent.setup();
+      renderWithRouter({ ...defaultProps, requestType: "self-hosted" });
+
+      await user.type(screen.getByTestId("form-input-name"), "Jane Smith");
+      await user.type(screen.getByTestId("form-input-company"), "Tech Corp");
+      await user.type(screen.getByTestId("form-input-email"), "jane@techcorp.com");
+      await user.type(screen.getByTestId("form-input-message"), "Interested in self-hosted");
+
+      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      await user.click(submitButton);
+
+      expect(mockTrackEnterpriseLeadFormSubmitted).toHaveBeenCalledWith({
+        requestType: "self-hosted",
+        name: "Jane Smith",
+        company: "Tech Corp",
+        email: "jane@techcorp.com",
+        message: "Interested in self-hosted",
+      });
+    });
+
+    it("should trim whitespace from form fields before tracking", async () => {
+      const user = userEvent.setup();
+      renderWithRouter();
+
+      await user.type(screen.getByTestId("form-input-name"), "  John Doe  ");
+      await user.type(screen.getByTestId("form-input-company"), "  Acme Inc  ");
+      await user.type(screen.getByTestId("form-input-email"), "  john@example.com  ");
+      await user.type(screen.getByTestId("form-input-message"), "  Hello world  ");
+
+      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      await user.click(submitButton);
+
+      expect(mockTrackEnterpriseLeadFormSubmitted).toHaveBeenCalledWith({
+        requestType: "saas",
+        name: "John Doe",
+        company: "Acme Inc",
+        email: "john@example.com",
+        message: "Hello world",
       });
     });
 

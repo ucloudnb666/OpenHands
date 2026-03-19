@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { I18nKey } from "#/i18n/declaration";
+import { useTracking } from "#/hooks/use-tracking";
 import { Card } from "#/ui/card";
 import { Text } from "#/ui/typography";
 import { FormInput } from "./form-input";
@@ -22,6 +23,7 @@ export function InformationRequestForm({
 }: InformationRequestFormProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { trackEnterpriseLeadFormSubmitted } = useTracking();
   const [formData, setFormData] = useState({
     name: "",
     company: "",
@@ -46,6 +48,15 @@ export function InformationRequestForm({
     }
 
     // TODO: Implement actual form submission API call
+    // Track form submission in PostHog
+    trackEnterpriseLeadFormSubmitted({
+      requestType,
+      name: formData.name.trim(),
+      company: formData.company.trim(),
+      email: formData.email.trim(),
+      message: formData.message.trim(),
+    });
+
     // Navigate to homepage with state to show confirmation modal
     navigate("/", { state: { showRequestSubmittedModal: true } });
   };
