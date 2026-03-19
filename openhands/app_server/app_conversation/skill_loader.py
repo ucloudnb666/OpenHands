@@ -10,7 +10,10 @@ thin proxy that:
 All source-specific skill loading is handled by the agent-server.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 import httpx
 from pydantic import BaseModel
@@ -21,6 +24,9 @@ from openhands.integrations.provider import ProviderType
 from openhands.integrations.service_types import AuthenticationError
 from openhands.sdk.context.skills import Skill
 from openhands.sdk.context.skills.trigger import KeywordTrigger, TaskTrigger
+
+if TYPE_CHECKING:
+    from openhands.storage.data_models.settings import MarketplaceRegistration
 
 _logger = logging.getLogger(__name__)
 
@@ -57,6 +63,16 @@ class SkillInfo(BaseModel):
     source: str | None = None
     description: str | None = None
     is_agentskills_format: bool = False
+
+
+class MarketplaceRegistrationPayload(BaseModel):
+    """Marketplace registration for agent-server API request."""
+
+    name: str
+    source: str
+    ref: str | None = None
+    repo_path: str | None = None
+    auto_load: str | None = None
 
 
 async def _is_gitlab_repository(repo_name: str, user_context: UserContext) -> bool:
@@ -272,6 +288,7 @@ async def load_skills_from_agent_server(
     load_user: bool = True,
     load_project: bool = True,
     load_org: bool = True,
+    registered_marketplaces: list[MarketplaceRegistration] | None = None,
 ) -> list[Skill]:
     """Load all skills from the agent-server.
 
@@ -288,12 +305,27 @@ async def load_skills_from_agent_server(
         load_user: Whether to load user skills (default: True)
         load_project: Whether to load project skills (default: True)
         load_org: Whether to load organization skills (default: True)
+        registered_marketplaces: List of marketplace registrations (optional)
 
     Returns:
         List of Skill objects merged from all sources.
         Returns empty list on error.
     """
     try:
+        # Convert marketplace registrations to API payload format
+        marketplace_payloads = None
+        if registered_marketplaces:
+            marketplace_payloads = [
+                MarketplaceRegistrationPayload(
+                    name=reg.name,
+                    source=reg.source,
+                    ref=reg.ref,
+                    repo_path=reg.repo_path,
+                    auto_load=reg.auto_load,
+                ).model_dump()
+                for reg in registered_marketplaces
+            ]
+
         # Build request payload
         payload = {
             'load_public': load_public,
@@ -303,6 +335,7 @@ async def load_skills_from_agent_server(
             'project_dir': project_dir,
             'org_config': org_config.model_dump() if org_config else None,
             'sandbox_config': sandbox_config.model_dump() if sandbox_config else None,
+            'registered_marketplaces': marketplace_payloads,
         }
 
         # Build headers

@@ -691,3 +691,144 @@ class TestGetOrgRepositoryUrl:
 
         # Assert
         assert result is None
+
+
+# ===== Tests for registered_marketplaces support =====
+
+
+class TestLoadSkillsWithMarketplaces:
+    """Test load_skills_from_agent_server with registered_marketplaces parameter."""
+
+    @pytest.mark.asyncio
+    @patch('httpx.AsyncClient')
+    async def test_passes_registered_marketplaces_in_payload(self, mock_client_class):
+        """Test that registered_marketplaces is included in the API payload."""
+        from openhands.storage.data_models.settings import MarketplaceRegistration
+
+        # Arrange
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            'skills': [],
+            'sources': {},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        marketplaces = [
+            MarketplaceRegistration(
+                name='public',
+                source='github:OpenHands/skills',
+                auto_load='all',
+            ),
+            MarketplaceRegistration(
+                name='team',
+                source='github:acme/plugins',
+                ref='v1.0.0',
+                repo_path='marketplaces/internal',
+            ),
+        ]
+
+        # Act
+        await load_skills_from_agent_server(
+            agent_server_url='http://localhost:8000',
+            session_api_key='test-key',
+            project_dir='/workspace/project',
+            registered_marketplaces=marketplaces,
+        )
+
+        # Assert
+        mock_client.post.assert_called_once()
+        call_args = mock_client.post.call_args
+        payload = call_args[1]['json']
+
+        assert 'registered_marketplaces' in payload
+        assert len(payload['registered_marketplaces']) == 2
+
+        # Verify first marketplace
+        mp1 = payload['registered_marketplaces'][0]
+        assert mp1['name'] == 'public'
+        assert mp1['source'] == 'github:OpenHands/skills'
+        assert mp1['auto_load'] == 'all'
+        assert mp1['ref'] is None
+        assert mp1['repo_path'] is None
+
+        # Verify second marketplace
+        mp2 = payload['registered_marketplaces'][1]
+        assert mp2['name'] == 'team'
+        assert mp2['source'] == 'github:acme/plugins'
+        assert mp2['ref'] == 'v1.0.0'
+        assert mp2['repo_path'] == 'marketplaces/internal'
+        assert mp2['auto_load'] is None
+
+    @pytest.mark.asyncio
+    @patch('httpx.AsyncClient')
+    async def test_handles_none_registered_marketplaces(self, mock_client_class):
+        """Test that None registered_marketplaces is handled correctly."""
+        # Arrange
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            'skills': [],
+            'sources': {},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        # Act
+        await load_skills_from_agent_server(
+            agent_server_url='http://localhost:8000',
+            session_api_key='test-key',
+            project_dir='/workspace/project',
+            registered_marketplaces=None,
+        )
+
+        # Assert
+        mock_client.post.assert_called_once()
+        call_args = mock_client.post.call_args
+        payload = call_args[1]['json']
+
+        # registered_marketplaces should be None when not provided
+        assert payload.get('registered_marketplaces') is None
+
+    @pytest.mark.asyncio
+    @patch('httpx.AsyncClient')
+    async def test_handles_empty_registered_marketplaces(self, mock_client_class):
+        """Test that empty registered_marketplaces list is handled correctly."""
+        # Arrange
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            'skills': [],
+            'sources': {},
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        # Act
+        await load_skills_from_agent_server(
+            agent_server_url='http://localhost:8000',
+            session_api_key='test-key',
+            project_dir='/workspace/project',
+            registered_marketplaces=[],
+        )
+
+        # Assert
+        mock_client.post.assert_called_once()
+        call_args = mock_client.post.call_args
+        payload = call_args[1]['json']
+
+        # Empty list should be passed as None (falsy check in code)
+        assert payload.get('registered_marketplaces') is None

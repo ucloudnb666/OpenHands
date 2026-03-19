@@ -97,6 +97,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
         selected_repository: str | None,
         project_dir: str,
         agent_server_url: str,
+        registered_marketplaces: list | None = None,
     ) -> list[Skill]:
         """Load skills from all sources via the agent-server.
 
@@ -107,12 +108,16 @@ class AppConversationServiceBase(AppConversationService, ABC):
         - Organization skills (from {org}/.openhands repo)
         - Project/repo skills (from repo .agents/skills/, .openhands/microagents/, and legacy .openhands/skills/)
         - Sandbox skills (from exposed URLs)
+        - Registered marketplaces (from user settings)
 
         Args:
             sandbox: SandboxInfo containing exposed URLs and agent-server URL
             selected_repository: Repository name or None
             project_dir: Project root directory (resolved via get_project_dir).
             agent_server_url: Agent-server URL (required)
+            registered_marketplaces: Optional list of MarketplaceRegistration objects
+                from user settings. Marketplaces with auto_load='all' will have
+                their plugins loaded automatically.
 
         Returns:
             List of merged Skill objects from all sources, or empty list on failure
@@ -141,6 +146,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
                 load_user=True,
                 load_project=True,
                 load_org=True,
+                registered_marketplaces=registered_marketplaces,
             )
 
             _logger.info(

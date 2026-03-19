@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -18,6 +18,78 @@ from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.utils import load_openhands_config
 from openhands.storage.data_models.secrets import Secrets
+
+
+class MarketplaceRegistration(BaseModel):
+    """Registration for a plugin marketplace.
+
+    Represents a marketplace that can be registered for plugin resolution.
+    Marketplaces can be auto-loaded (plugins loaded at conversation start)
+    or registered only (available for explicit plugin references).
+
+    Examples:
+        >>> # Auto-load all plugins from a marketplace
+        >>> MarketplaceRegistration(
+        ...     name="public",
+        ...     source="github:OpenHands/skills",
+        ...     auto_load="all"
+        ... )
+
+        >>> # Register marketplace without auto-loading
+        >>> MarketplaceRegistration(
+        ...     name="experimental",
+        ...     source="github:acme/experimental"
+        ... )
+
+        >>> # Marketplace in monorepo subdirectory
+        >>> MarketplaceRegistration(
+        ...     name="team",
+        ...     source="github:acme/monorepo",
+        ...     repo_path="marketplaces/internal",
+        ...     auto_load="all"
+        ... )
+    """
+
+    name: str = Field(description='Identifier for this marketplace registration')
+    source: str = Field(
+        description="Marketplace source: 'github:owner/repo', git URL, or local path"
+    )
+    ref: str | None = Field(
+        default=None,
+        description='Optional branch, tag, or commit (only for git sources)',
+    )
+    repo_path: str | None = Field(
+        default=None,
+        description=(
+            'Subdirectory path within the git repository containing the marketplace '
+            "(e.g., 'marketplaces/internal' for monorepos). "
+            'Only relevant for git sources, not local paths.'
+        ),
+    )
+    auto_load: Literal['all'] | None = Field(
+        default=None,
+        description=(
+            'Auto-load behavior for this marketplace. '
+            "'all' = load all plugins at conversation start. "
+            'None = registered for resolution but not auto-loaded.'
+        ),
+    )
+
+    @field_validator('repo_path')
+    @classmethod
+    def validate_repo_path(cls, v: str | None) -> str | None:
+        """Validate repo_path is a safe relative path within the repository."""
+        if v is None:
+            return v
+        # Must be relative (no absolute paths)
+        if v.startswith('/'):
+            raise ValueError('repo_path must be relative, not absolute')
+        # No parent directory traversal
+        if '..' in v:
+            raise ValueError(
+                "repo_path cannot contain '..' (parent directory traversal)"
+            )
+        return v
 
 
 class SandboxGroupingStrategy(str, Enum):
@@ -71,6 +143,17 @@ class Settings(BaseModel):
     v1_enabled: bool = True
     sandbox_grouping_strategy: SandboxGroupingStrategy = (
         SandboxGroupingStrategy.NO_GROUPING
+    )
+    # Marketplace registrations for plugin resolution
+    # Users can register multiple marketplaces with different auto-load behaviors
+    registered_marketplaces: list[MarketplaceRegistration] = Field(
+        default_factory=list,
+        description=(
+            'List of marketplace registrations for plugin resolution. '
+            "Marketplaces with auto_load='all' will have their plugins loaded "
+            'automatically at conversation start. '
+            'See MarketplaceRegistration for details.'
+        ),
     )
 
     model_config = ConfigDict(
