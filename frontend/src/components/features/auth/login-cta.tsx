@@ -4,7 +4,7 @@ import { CardTitle } from "#/ui/card-title";
 import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
 import { cn } from "#/utils/utils";
-import ServerIcon from "#/icons/server.svg?react";
+import StackedIcon from "#/icons/stacked.svg?react";
 import { useTracking } from "#/hooks/use-tracking";
 
 export function LoginCTA() {
@@ -23,7 +23,7 @@ export function LoginCTA() {
     >
       <div className={cn("flex flex-col gap-[11px] p-6")}>
         <div className={cn("size-10")}>
-          <ServerIcon width={40} height={40} />
+          <StackedIcon width={40} height={40} />
         </div>
 
         <CardTitle>{t(I18nKey.CTA$ENTERPRISE)}</CardTitle>
