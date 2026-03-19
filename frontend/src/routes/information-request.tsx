@@ -103,7 +103,6 @@ export default function InformationRequest() {
         data-testid="information-request-page"
         className="w-full max-w-4xl flex flex-col items-center gap-8 p-6"
       >
-        <OpenHandsLogoWhite width={55} height={55} />
         <InformationRequestForm
           requestType={selectedRequestType}
           onBack={handleFormBack}

@@ -1,9 +1,86 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router";
 import { I18nKey } from "#/i18n/declaration";
-import { BrandButton } from "#/components/features/settings/brand-button";
+import { Card } from "#/ui/card";
+import { Text } from "#/ui/typography";
+import CloudIcon from "#/icons/cloud.svg?react";
+import StackedIcon from "#/icons/stacked.svg?react";
+import WaveIcon from "#/icons/wave.svg?react";
 
 export type RequestType = "saas" | "self-hosted";
+
+interface FormInputProps {
+  id: string;
+  label: string;
+  value: string;
+  placeholder: string;
+  type?: "text" | "email";
+  onChange: (value: string) => void;
+}
+
+function FormInput({
+  id,
+  label,
+  value,
+  placeholder,
+  type = "text",
+  onChange,
+}: FormInputProps) {
+  return (
+    <div className="flex flex-col gap-1.5 w-full">
+      <label
+        htmlFor={id}
+        className="text-sm font-medium text-white cursor-pointer"
+      >
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-[#3a3a3a] bg-transparent px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-white focus:outline-none transition-colors"
+      />
+    </div>
+  );
+}
+
+interface FormTextareaProps {
+  id: string;
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}
+
+function FormTextarea({
+  id,
+  label,
+  value,
+  placeholder,
+  onChange,
+}: FormTextareaProps) {
+  return (
+    <div className="flex flex-col gap-1.5 w-full">
+      <label
+        htmlFor={id}
+        className="text-sm font-medium text-white cursor-pointer"
+      >
+        {label}
+      </label>
+      <textarea
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        className="w-full rounded-md border border-[#3a3a3a] bg-transparent px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-white focus:outline-none transition-colors resize-none"
+      />
+    </div>
+  );
+}
 
 interface InformationRequestFormProps {
   requestType: RequestType;
@@ -15,125 +92,136 @@ export function InformationRequestForm({
   onBack,
 }: InformationRequestFormProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
     company: "",
+    email: "",
     message: "",
   });
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: Implement form submission
     console.log("Form submitted:", { requestType, ...formData });
+    navigate("/");
   };
 
-  const title =
-    requestType === "saas"
-      ? t(I18nKey.ENTERPRISE$SAAS_TITLE)
-      : t(I18nKey.ENTERPRISE$SELF_HOSTED_TITLE);
+  const isSaas = requestType === "saas";
+
+  const title = isSaas
+    ? t(I18nKey.ENTERPRISE$FORM_SAAS_TITLE)
+    : t(I18nKey.ENTERPRISE$FORM_SELF_HOSTED_TITLE);
+
+  const subtitle = isSaas
+    ? t(I18nKey.ENTERPRISE$FORM_SAAS_SUBTITLE)
+    : t(I18nKey.ENTERPRISE$FORM_SELF_HOSTED_SUBTITLE);
+
+  const cardTitle = isSaas
+    ? t(I18nKey.ENTERPRISE$SAAS_TITLE)
+    : t(I18nKey.ENTERPRISE$SELF_HOSTED_TITLE);
+
+  const cardDescription = isSaas
+    ? t(I18nKey.ENTERPRISE$SAAS_DESCRIPTION)
+    : t(I18nKey.ENTERPRISE$SELF_HOSTED_DESCRIPTION);
+
+  const messagePlaceholder = isSaas
+    ? t(I18nKey.ENTERPRISE$FORM_MESSAGE_SAAS_PLACEHOLDER)
+    : t(I18nKey.ENTERPRISE$FORM_MESSAGE_SELF_HOSTED_PLACEHOLDER);
 
   return (
     <div
       data-testid="information-request-form"
-      className="w-full max-w-md flex flex-col gap-6"
+      className="w-full max-w-4xl flex flex-col items-center gap-8"
     >
-      <div className="text-center">
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
-        <p className="text-[#8C8C8C] mt-2">
-          {t(I18nKey.ENTERPRISE$FORM_SUBTITLE)}
-        </p>
+      {/* Header */}
+      <div className="flex flex-col items-center gap-4">
+        <WaveIcon className="w-12 h-12" />
+        <div className="text-center flex flex-col gap-2">
+          <h1 className="text-2xl font-bold text-white">{title}</h1>
+          <Text className="text-[#8C8C8C]">{subtitle}</Text>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="name" className="text-sm text-white">
-            {t(I18nKey.ENTERPRISE$FORM_NAME_LABEL)}
-          </label>
-          <input
-            type="text"
+      {/* Content: Form + Card */}
+      <div className="w-full flex flex-col md:flex-row gap-6">
+        {/* Form */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 flex flex-col gap-4 max-w-lg"
+        >
+          <FormInput
             id="name"
-            name="name"
+            label={t(I18nKey.ENTERPRISE$FORM_NAME_LABEL)}
             value={formData.name}
-            onChange={handleInputChange}
-            required
-            className="px-4 py-2.5 bg-[#0D0D0D] border border-[#242424] rounded-sm text-white placeholder-[#8C8C8C] focus:outline-none focus:border-[#404040]"
             placeholder={t(I18nKey.ENTERPRISE$FORM_NAME_PLACEHOLDER)}
+            onChange={(value) =>
+              setFormData((prev) => ({ ...prev, name: value }))
+            }
           />
-        </div>
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="email" className="text-sm text-white">
-            {t(I18nKey.ENTERPRISE$FORM_EMAIL_LABEL)}
-          </label>
-          <input
-            type="email"
-            id="email"
-            name="email"
-            value={formData.email}
-            onChange={handleInputChange}
-            required
-            className="px-4 py-2.5 bg-[#0D0D0D] border border-[#242424] rounded-sm text-white placeholder-[#8C8C8C] focus:outline-none focus:border-[#404040]"
-            placeholder={t(I18nKey.ENTERPRISE$FORM_EMAIL_PLACEHOLDER)}
-          />
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="company" className="text-sm text-white">
-            {t(I18nKey.ENTERPRISE$FORM_COMPANY_LABEL)}
-          </label>
-          <input
-            type="text"
+          <FormInput
             id="company"
-            name="company"
+            label={t(I18nKey.ENTERPRISE$FORM_COMPANY_LABEL)}
             value={formData.company}
-            onChange={handleInputChange}
-            required
-            className="px-4 py-2.5 bg-[#0D0D0D] border border-[#242424] rounded-sm text-white placeholder-[#8C8C8C] focus:outline-none focus:border-[#404040]"
             placeholder={t(I18nKey.ENTERPRISE$FORM_COMPANY_PLACEHOLDER)}
+            onChange={(value) =>
+              setFormData((prev) => ({ ...prev, company: value }))
+            }
           />
-        </div>
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="message" className="text-sm text-white">
-            {t(I18nKey.ENTERPRISE$FORM_MESSAGE_LABEL)}
-          </label>
-          <textarea
+          <FormInput
+            id="email"
+            label={t(I18nKey.ENTERPRISE$FORM_EMAIL_LABEL)}
+            type="email"
+            value={formData.email}
+            placeholder={t(I18nKey.ENTERPRISE$FORM_EMAIL_PLACEHOLDER)}
+            onChange={(value) =>
+              setFormData((prev) => ({ ...prev, email: value }))
+            }
+          />
+
+          <FormTextarea
             id="message"
-            name="message"
+            label={t(I18nKey.ENTERPRISE$FORM_MESSAGE_LABEL)}
             value={formData.message}
-            onChange={handleInputChange}
-            rows={4}
-            className="px-4 py-2.5 bg-[#0D0D0D] border border-[#242424] rounded-sm text-white placeholder-[#8C8C8C] focus:outline-none focus:border-[#404040] resize-none"
-            placeholder={t(I18nKey.ENTERPRISE$FORM_MESSAGE_PLACEHOLDER)}
+            placeholder={messagePlaceholder}
+            onChange={(value) =>
+              setFormData((prev) => ({ ...prev, message: value }))
+            }
           />
-        </div>
 
-        <div className="flex flex-col gap-3 mt-4">
-          <BrandButton
-            type="submit"
-            variant="primary"
-            className="w-full px-6 py-2.5"
-          >
-            {t(I18nKey.ENTERPRISE$FORM_SUBMIT)}
-          </BrandButton>
-          <BrandButton
-            type="button"
-            variant="secondary"
-            onClick={onBack}
-            className="w-full px-6 py-2.5 bg-[#050505] text-white border border-[#242424] hover:bg-white hover:text-black"
-          >
-            {t(I18nKey.COMMON$BACK)}
-          </BrandButton>
-        </div>
-      </form>
+          {/* Buttons */}
+          <div className="flex gap-4 mt-4">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex-1 px-6 py-2.5 text-sm rounded-sm bg-transparent text-white border border-[#3a3a3a] hover:bg-[#1a1a1a] transition-colors"
+            >
+              {t(I18nKey.COMMON$BACK)}
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-6 py-2.5 text-sm rounded-sm bg-white text-black border border-white hover:bg-gray-100 transition-colors"
+            >
+              {t(I18nKey.ENTERPRISE$FORM_SUBMIT)}
+            </button>
+          </div>
+        </form>
+
+        {/* Info Card */}
+        <Card theme="dark" className="flex-1 flex-col p-6 gap-4 max-w-sm">
+          <div className="w-10 h-10">
+            {isSaas ? (
+              <CloudIcon className="w-10 h-10" />
+            ) : (
+              <StackedIcon className="w-10 h-10" />
+            )}
+          </div>
+          <h3 className="text-lg font-semibold text-white">{cardTitle}</h3>
+          <Text className="text-[#8C8C8C]">{cardDescription}</Text>
+        </Card>
+      </div>
     </div>
   );
 }
