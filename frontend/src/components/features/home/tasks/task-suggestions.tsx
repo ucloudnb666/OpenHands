@@ -85,10 +85,7 @@ export function TaskSuggestions({ filterFor }: TaskSuggestionsProps) {
                 {t(I18nKey.TASKS$NO_GIT_PROVIDERS_DESCRIPTION)}
               </Typography.Text>
 
-              <Link
-                to="/settings/integrations"
-                className="w-fit hover:underline"
-              >
+              <Link to="/settings" className="w-fit hover:underline">
                 <Typography.Text className="text-xs leading-4 text-[#FAFAFA] font-normal">
                   {t(I18nKey.TASKS$NO_GIT_PROVIDERS_CTA)}
                 </Typography.Text>
