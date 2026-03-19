@@ -66,9 +66,7 @@ export function InformationRequestForm({
       <div className="w-full flex flex-col items-center gap-4">
         <OpenHandsLogoWhite width={56} height={56} />
         <div className="text-center flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold leading-[30px] text-white">
-            {title}
-          </h1>
+          <h1 className="text-2xl font-semibold text-white">{title}</h1>
           <Text className="text-[#8C8C8C] leading-5">{subtitle}</Text>
         </div>
       </div>
@@ -144,7 +142,7 @@ export function InformationRequestForm({
         <Card
           theme="dark"
           gradient="standard"
-          className="w-full md:w-80 flex-col p-[25px] gap-4"
+          className="w-full md:w-80 flex-col p-6 gap-4"
         >
           <div className="w-10 h-10">
             {isSaas ? (
@@ -156,9 +154,7 @@ export function InformationRequestForm({
           <h3 className="text-xl font-semibold leading-7 text-[#FAFAFA]">
             {cardTitle}
           </h3>
-          <Text className="text-[#8C8C8C] leading-[22.75px]">
-            {cardDescription}
-          </Text>
+          <Text className="text-[#8C8C8C]">{cardDescription}</Text>
         </Card>
       </div>
     </div>

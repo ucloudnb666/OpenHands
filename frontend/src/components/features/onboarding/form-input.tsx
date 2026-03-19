@@ -19,13 +19,13 @@ export function FormInput({
 }: FormInputProps) {
   const inputId = `form-input-${id}`;
   const inputClassName =
-    "w-full h-10 rounded border border-t-[#242424] border-[#242424] bg-[#1F1F1F66] px-3 py-2 text-sm text-white placeholder:text-[#8C8C8C] focus:border-white focus:outline-none transition-colors";
+    "w-full min-h-10 rounded border border-[#242424] bg-[#050505] px-3 py-2 text-sm leading-5 text-white placeholder:text-[#8C8C8C] placeholder:leading-5 focus:border-white focus:outline-none transition-colors";
 
   return (
     <div className="flex flex-col gap-1.5 w-full">
       <label
         htmlFor={inputId}
-        className="text-sm font-medium leading-5 text-neutral-400 cursor-pointer"
+        className="text-sm font-medium leading-5 text-[#FAFAFA] cursor-pointer"
       >
         {label}
       </label>
