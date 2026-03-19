@@ -180,17 +180,18 @@ describe("InformationRequestForm", () => {
       expect(messageInput).toHaveAttribute("aria-invalid", "false");
     });
 
-    it("should not navigate when form is submitted with empty fields", async () => {
+    it("should not show modal when form is submitted with empty fields", async () => {
       const user = userEvent.setup();
       renderWithRouter();
 
       const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
       await user.click(submitButton);
 
+      expect(screen.queryByTestId("request-submitted-modal")).not.toBeInTheDocument();
       expect(mockNavigate).not.toHaveBeenCalled();
     });
 
-    it("should navigate when form is submitted with all fields filled", async () => {
+    it("should show modal when form is submitted with all fields filled", async () => {
       const user = userEvent.setup();
       renderWithRouter();
 
@@ -201,6 +202,26 @@ describe("InformationRequestForm", () => {
 
       const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
       await user.click(submitButton);
+
+      expect(screen.getByTestId("request-submitted-modal")).toBeInTheDocument();
+    });
+
+    it("should navigate to homepage when modal Done button is clicked", async () => {
+      const user = userEvent.setup();
+      renderWithRouter();
+
+      // Fill form and submit
+      await user.type(screen.getByTestId("form-input-name"), "John Doe");
+      await user.type(screen.getByTestId("form-input-company"), "Acme Inc");
+      await user.type(screen.getByTestId("form-input-email"), "john@example.com");
+      await user.type(screen.getByTestId("form-input-message"), "Hello world");
+
+      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      await user.click(submitButton);
+
+      // Click Done on modal
+      const doneButton = screen.getByRole("button", { name: "ENTERPRISE$DONE_BUTTON" });
+      await user.click(doneButton);
 
       expect(mockNavigate).toHaveBeenCalledWith("/");
     });
