@@ -8,6 +8,7 @@ import { BrandButton } from "#/components/features/settings/brand-button";
 import {
   InformationRequestForm,
   RequestType,
+  FormData,
 } from "#/components/features/onboarding/information-request-form";
 import OpenHandsLogoWhite from "#/assets/branding/openhands-logo-white.svg?react";
 import CloudIcon from "#/icons/cloud-minimal.svg?react";
@@ -74,6 +75,12 @@ export default function InformationRequest() {
   const navigate = useNavigate();
   const [selectedRequestType, setSelectedRequestType] =
     useState<RequestType | null>(null);
+  const [formData, setFormData] = useState<FormData>({
+    name: "",
+    company: "",
+    email: "",
+    message: "",
+  });
 
   const handleBack = () => {
     navigate("/login");
@@ -110,6 +117,8 @@ export default function InformationRequest() {
       >
         <InformationRequestForm
           requestType={selectedRequestType}
+          formData={formData}
+          onFormDataChange={setFormData}
           onBack={handleFormBack}
         />
       </div>

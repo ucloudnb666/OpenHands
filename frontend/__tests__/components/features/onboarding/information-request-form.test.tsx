@@ -2,9 +2,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createRoutesStub } from "react-router";
+import { useState } from "react";
 import {
   InformationRequestForm,
   RequestType,
+  FormData,
 } from "#/components/features/onboarding/information-request-form";
 
 // Mock useTracking
@@ -14,6 +16,12 @@ vi.mock("#/hooks/use-tracking", () => ({
     trackEnterpriseLeadFormSubmitted: mockTrackEnterpriseLeadFormSubmitted,
   }),
 }));
+
+// Wrapper to manage form state (needed since component is controlled)
+function StatefulForm({ requestType, onBack }: { requestType: RequestType; onBack: () => void }) {
+  const [formData, setFormData] = useState<FormData>({ name: "", company: "", email: "", message: "" });
+  return <InformationRequestForm requestType={requestType} formData={formData} onFormDataChange={setFormData} onBack={onBack} />;
+}
 
 describe("InformationRequestForm", () => {
   const defaultProps = {
@@ -29,7 +37,7 @@ describe("InformationRequestForm", () => {
     const Stub = createRoutesStub([
       {
         path: "/",
-        Component: () => <InformationRequestForm {...props} />,
+        Component: () => <StatefulForm {...props} />,
       },
       {
         path: "/login",
