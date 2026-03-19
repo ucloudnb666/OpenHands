@@ -57,7 +57,8 @@ class Settings(BaseModel):
 
     SDK-managed fields (LLM config, condenser, verification, agent) live
     exclusively in ``agent_settings`` using dotted keys such as
-    ``llm.model``.  Convenience properties provide typed read access.
+    ``llm.model``. Convenience properties provide typed access while
+    preserving backward-compatible assignment semantics for legacy code.
     """
 
     language: str | None = None
@@ -90,51 +91,104 @@ class Settings(BaseModel):
         validate_assignment=True,
     )
 
+    def _set_agent_setting(self, key: str, value: Any) -> None:
+        if value is None:
+            self.agent_settings.pop(key, None)
+            return
+        if isinstance(value, SecretStr):
+            self.agent_settings[key] = value.get_secret_value()
+            return
+        self.agent_settings[key] = value
+
     # ------------------------------------------------------------------
-    # Convenience read accessors into agent_settings
+    # Convenience accessors into agent_settings
     # ------------------------------------------------------------------
 
     @property
     def llm_model(self) -> str | None:
         return self.agent_settings.get('llm.model')
 
+    @llm_model.setter
+    def llm_model(self, value: str | None) -> None:
+        self._set_agent_setting('llm.model', value)
+
     @property
     def llm_api_key(self) -> SecretStr | None:
         val = self.agent_settings.get('llm.api_key')
         return SecretStr(val) if val else None
 
+    @llm_api_key.setter
+    def llm_api_key(self, value: SecretStr | str | None) -> None:
+        self._set_agent_setting('llm.api_key', value)
+
     @property
     def llm_base_url(self) -> str | None:
         return self.agent_settings.get('llm.base_url')
+
+    @llm_base_url.setter
+    def llm_base_url(self, value: str | None) -> None:
+        self._set_agent_setting('llm.base_url', value)
 
     @property
     def agent(self) -> str | None:
         return self.agent_settings.get('agent')
 
+    @agent.setter
+    def agent(self, value: str | None) -> None:
+        self._set_agent_setting('agent', value)
+
     @property
     def confirmation_mode(self) -> bool | None:
         return self.agent_settings.get('verification.confirmation_mode')
+
+    @confirmation_mode.setter
+    def confirmation_mode(self, value: bool | None) -> None:
+        self._set_agent_setting('verification.confirmation_mode', value)
 
     @property
     def security_analyzer(self) -> str | None:
         return self.agent_settings.get('verification.security_analyzer')
 
+    @security_analyzer.setter
+    def security_analyzer(self, value: str | None) -> None:
+        self._set_agent_setting('verification.security_analyzer', value)
+
     @property
     def max_iterations(self) -> int | None:
         return self.agent_settings.get('max_iterations')
+
+    @max_iterations.setter
+    def max_iterations(self, value: int | None) -> None:
+        self._set_agent_setting('max_iterations', value)
 
     @property
     def enable_default_condenser(self) -> bool:
         return self.agent_settings.get('condenser.enabled', True)
 
+    @enable_default_condenser.setter
+    def enable_default_condenser(self, value: bool | None) -> None:
+        self._set_agent_setting('condenser.enabled', value)
+
     @property
     def condenser_max_size(self) -> int | None:
         return self.agent_settings.get('condenser.max_size')
+
+    @condenser_max_size.setter
+    def condenser_max_size(self, value: int | None) -> None:
+        self._set_agent_setting('condenser.max_size', value)
 
     @property
     def llm_api_key_is_set(self) -> bool:
         val = self.agent_settings.get('llm.api_key')
         return bool(val and str(val).strip())
+
+    @property
+    def sdk_settings_values(self) -> dict[str, Any]:
+        return self.agent_settings
+
+    @sdk_settings_values.setter
+    def sdk_settings_values(self, value: dict[str, Any] | None) -> None:
+        self.agent_settings = dict(value or {})
 
     # ------------------------------------------------------------------
     # Serialization
@@ -171,6 +225,11 @@ class Settings(BaseModel):
             return data
 
         agent_vals: dict[str, Any] = dict(data.get('agent_settings') or {})
+
+        legacy_agent_vals = data.pop('sdk_settings_values', None)
+        if isinstance(legacy_agent_vals, dict):
+            for key, value in legacy_agent_vals.items():
+                agent_vals.setdefault(key, value)
 
         for flat_key, dotted_key in _LEGACY_FLAT_TO_SDK.items():
             if flat_key in data and dotted_key not in agent_vals:

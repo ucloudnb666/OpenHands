@@ -76,9 +76,35 @@ def settings_store(async_session_maker, mock_config):
                 del item_dict['email_verified']
             if 'secrets_store' in item_dict:
                 del item_dict['secrets_store']
+            if 'agent_settings' in item_dict:
+                del item_dict['agent_settings']
+
+            legacy_fields = {
+                'agent': item.agent,
+                'llm_model': item.llm_model,
+                'llm_api_key': item.llm_api_key.get_secret_value()
+                if item.llm_api_key
+                else None,
+                'llm_base_url': item.llm_base_url,
+                'max_iterations': item.max_iterations,
+                'confirmation_mode': item.confirmation_mode,
+                'security_analyzer': item.security_analyzer,
+                'enable_default_condenser': item.enable_default_condenser,
+                'condenser_max_size': item.condenser_max_size,
+            }
+            item_dict.update(
+                {
+                    key: value
+                    for key, value in legacy_fields.items()
+                    if value is not None
+                }
+            )
+
+            sdk_settings_values = item.sdk_settings_values
 
             # Encrypt the data before storing
             store._encrypt_kwargs(item_dict)
+            item_dict['sdk_settings_values'] = sdk_settings_values
 
             # Continue with the original implementation
             from sqlalchemy import select
@@ -130,10 +156,8 @@ async def test_store_and_load_keycloak_user(settings_store):
     # Load and verify settings
     loaded_settings = await settings_store.load()
     assert loaded_settings is not None
-    assert loaded_settings.sdk_settings_values == {
-        'critic_mode': 'all_actions',
-        'enable_critic': True,
-    }
+    assert loaded_settings.sdk_settings_values['critic_mode'] == 'all_actions'
+    assert loaded_settings.sdk_settings_values['enable_critic'] is True
     assert loaded_settings.llm_api_key.get_secret_value() == 'secret_key'
     assert loaded_settings.agent == 'smith'
 
