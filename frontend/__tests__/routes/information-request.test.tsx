@@ -14,6 +14,13 @@ vi.mock("react-router", async () => {
   };
 });
 
+// Mock useTracking to avoid QueryClient dependency
+vi.mock("#/hooks/use-tracking", () => ({
+  useTracking: () => ({
+    trackEnterpriseLeadFormSubmitted: vi.fn(),
+  }),
+}));
+
 describe("InformationRequest", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,7 +71,7 @@ describe("InformationRequest", () => {
     renderWithRouter();
 
     expect(screen.getByText("ENTERPRISE$SELF_HOSTED_TITLE")).toBeInTheDocument();
-    expect(screen.getByText("ENTERPRISE$SELF_HOSTED_DESCRIPTION")).toBeInTheDocument();
+    expect(screen.getByText("ENTERPRISE$SELF_HOSTED_CARD_DESCRIPTION")).toBeInTheDocument();
   });
 
   it("should render SaaS features", () => {
