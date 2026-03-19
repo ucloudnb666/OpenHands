@@ -15,7 +15,6 @@ import { ENABLE_PROJ_USER_JOURNEY } from "#/utils/feature-flags";
 
 function HomeScreen() {
   const { data: config } = useConfig();
-
   const [selectedRepo, setSelectedRepo] = React.useState<GitRepository | null>(
     null,
   );
