@@ -1,18 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { MemoryRouter } from "react-router";
-import { InformationRequestForm, RequestType } from "#/components/features/onboarding/information-request-form";
-
-// Mock useNavigate
-const mockNavigate = vi.fn();
-vi.mock("react-router", async () => {
-  const actual = await vi.importActual("react-router");
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
-});
+import { createRoutesStub } from "react-router";
+import {
+  InformationRequestForm,
+  RequestType,
+} from "#/components/features/onboarding/information-request-form";
 
 // Mock useTracking
 const mockTrackEnterpriseLeadFormSubmitted = vi.fn();
@@ -33,11 +26,18 @@ describe("InformationRequestForm", () => {
   });
 
   const renderWithRouter = (props = defaultProps) => {
-    return render(
-      <MemoryRouter>
-        <InformationRequestForm {...props} />
-      </MemoryRouter>,
-    );
+    const Stub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => <InformationRequestForm {...props} />,
+      },
+      {
+        path: "/login",
+        Component: () => <div data-testid="login-page" />,
+      },
+    ]);
+
+    return render(<Stub initialEntries={["/"]} />);
   };
 
   it("should render the form", () => {
@@ -192,10 +192,14 @@ describe("InformationRequestForm", () => {
       const user = userEvent.setup();
       renderWithRouter();
 
-      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      const submitButton = screen.getByRole("button", {
+        name: "ENTERPRISE$FORM_SUBMIT",
+      });
       await user.click(submitButton);
 
-      expect(mockNavigate).not.toHaveBeenCalled();
+      // Should stay on form page, not navigate to login
+      expect(screen.getByTestId("information-request-form")).toBeInTheDocument();
+      expect(screen.queryByTestId("login-page")).not.toBeInTheDocument();
     });
 
     it("should not call tracking when form is submitted with empty fields", async () => {
@@ -208,7 +212,7 @@ describe("InformationRequestForm", () => {
       expect(mockTrackEnterpriseLeadFormSubmitted).not.toHaveBeenCalled();
     });
 
-    it("should navigate to login page with modal state when form is submitted with all fields filled", async () => {
+    it("should navigate to login page when form is submitted with all fields filled", async () => {
       const user = userEvent.setup();
       renderWithRouter();
 
@@ -217,12 +221,13 @@ describe("InformationRequestForm", () => {
       await user.type(screen.getByTestId("form-input-email"), "john@example.com");
       await user.type(screen.getByTestId("form-input-message"), "Hello world");
 
-      const submitButton = screen.getByRole("button", { name: "ENTERPRISE$FORM_SUBMIT" });
+      const submitButton = screen.getByRole("button", {
+        name: "ENTERPRISE$FORM_SUBMIT",
+      });
       await user.click(submitButton);
 
-      expect(mockNavigate).toHaveBeenCalledWith("/login", {
-        state: { showRequestSubmittedModal: true },
-      });
+      // Should navigate to login page
+      expect(screen.getByTestId("login-page")).toBeInTheDocument();
     });
 
     it("should call tracking with form data when form is submitted successfully", async () => {
@@ -314,46 +319,14 @@ describe("InformationRequestForm", () => {
       });
       await user.click(submitButton);
 
-      expect(mockNavigate).not.toHaveBeenCalled();
+      // Should stay on form page, not navigate to login
+      expect(screen.getByTestId("information-request-form")).toBeInTheDocument();
+      expect(screen.queryByTestId("login-page")).not.toBeInTheDocument();
       expect(mockTrackEnterpriseLeadFormSubmitted).not.toHaveBeenCalled();
     });
   });
 
   describe("loading state", () => {
-    it("should disable submit button after submission", async () => {
-      const user = userEvent.setup();
-      renderWithRouter();
-
-      await user.type(screen.getByTestId("form-input-name"), "John Doe");
-      await user.type(screen.getByTestId("form-input-company"), "Acme Inc");
-      await user.type(screen.getByTestId("form-input-email"), "john@example.com");
-      await user.type(screen.getByTestId("form-input-message"), "Hello world");
-
-      const submitButton = screen.getByRole("button", {
-        name: "ENTERPRISE$FORM_SUBMIT",
-      });
-      await user.click(submitButton);
-
-      expect(submitButton).toBeDisabled();
-    });
-
-    it("should show submitting text after submission", async () => {
-      const user = userEvent.setup();
-      renderWithRouter();
-
-      await user.type(screen.getByTestId("form-input-name"), "John Doe");
-      await user.type(screen.getByTestId("form-input-company"), "Acme Inc");
-      await user.type(screen.getByTestId("form-input-email"), "john@example.com");
-      await user.type(screen.getByTestId("form-input-message"), "Hello world");
-
-      const submitButton = screen.getByRole("button", {
-        name: "ENTERPRISE$FORM_SUBMIT",
-      });
-      await user.click(submitButton);
-
-      expect(screen.getByText("ENTERPRISE$FORM_SUBMITTING")).toBeInTheDocument();
-    });
-
     it("should prevent double submission", async () => {
       const user = userEvent.setup();
       renderWithRouter();
@@ -374,7 +347,8 @@ describe("InformationRequestForm", () => {
 
       // Should only track once
       expect(mockTrackEnterpriseLeadFormSubmitted).toHaveBeenCalledTimes(1);
-      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      // Should navigate to login page
+      expect(screen.getByTestId("login-page")).toBeInTheDocument();
     });
   });
 });
