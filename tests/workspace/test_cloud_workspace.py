@@ -449,3 +449,87 @@ def test_saas_runtime_mode_context_manager():
     """Context manager works in saas_runtime_mode without side effects."""
     with _make_saas_workspace() as ws:
         assert ws.host == "http://localhost:60000"
+
+
+# --- completion callback tests ---
+
+
+def test_callback_on_successful_exit():
+    """__exit__ POSTs COMPLETED status to callback URL on clean exit."""
+    ws = _make_saas_workspace(
+        automation_callback_url="https://svc.test/complete",
+        automation_run_id="run-42",
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    with patch("httpx.Client") as MockClient:
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        MockClient.return_value = mock_client
+
+        ws.__exit__(None, None, None)
+
+        mock_client.post.assert_called_once()
+        url, = mock_client.post.call_args.args
+        payload = mock_client.post.call_args.kwargs["json"]
+        assert url == "https://svc.test/complete"
+        assert payload["status"] == "COMPLETED"
+        assert payload["run_id"] == "run-42"
+        assert "error" not in payload
+
+
+def test_callback_on_exception_exit():
+    """__exit__ POSTs FAILED status with error detail on exception."""
+    ws = _make_saas_workspace(
+        automation_callback_url="https://svc.test/complete",
+        automation_run_id="run-99",
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    with patch("httpx.Client") as MockClient:
+        mock_client = MagicMock()
+        mock_client.post.return_value = mock_resp
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        MockClient.return_value = mock_client
+
+        exc = RuntimeError("script crashed")
+        ws.__exit__(RuntimeError, exc, None)
+
+        payload = mock_client.post.call_args.kwargs["json"]
+        assert payload["status"] == "FAILED"
+        assert payload["run_id"] == "run-99"
+        assert "script crashed" in payload["error"]
+
+
+def test_no_callback_when_url_not_set():
+    """No HTTP call when automation_callback_url is None."""
+    ws = _make_saas_workspace()
+    assert ws.automation_callback_url is None
+
+    with patch("httpx.Client") as MockClient:
+        ws.__exit__(None, None, None)
+        MockClient.assert_not_called()
+
+
+def test_callback_failure_does_not_raise():
+    """Callback errors are swallowed — cleanup still runs."""
+    ws = _make_saas_workspace(
+        automation_callback_url="https://svc.test/complete",
+    )
+
+    with patch("httpx.Client") as MockClient:
+        mock_client = MagicMock()
+        mock_client.post.side_effect = httpx.ConnectError("refused")
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        MockClient.return_value = mock_client
+
+        # Should not raise
+        ws.__exit__(None, None, None)

@@ -137,6 +137,21 @@ class OpenHandsCloudWorkspace(RemoteWorkspace):
         ),
     )
 
+    # Automation completion callback (used by the automation service)
+    automation_callback_url: str | None = Field(
+        default=None,
+        description=(
+            "URL to POST completion status to when the context manager exits. "
+            "Set by the automation service; not intended for direct user use."
+        ),
+    )
+    automation_run_id: str | None = Field(
+        default=None,
+        description=(
+            "Automation run ID included in the completion callback payload."
+        ),
+    )
+
     # Private state
     _sandbox_id: str | None = PrivateAttr(default=None)
     _session_api_key: str | None = PrivateAttr(default=None)
@@ -615,4 +630,37 @@ class OpenHandsCloudWorkspace(RemoteWorkspace):
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self._send_completion_callback(exc_type, exc_val)
         self.cleanup()
+
+    def _send_completion_callback(
+        self, exc_type: type | None, exc_val: BaseException | None
+    ) -> None:
+        """POST completion status to the automation service (best-effort).
+
+        Called by ``__exit__`` before ``cleanup()``.  Does nothing when
+        ``automation_callback_url`` is not set.
+        """
+        try:
+            callback_url = self.automation_callback_url
+        except AttributeError:
+            return
+
+        if not callback_url:
+            return
+
+        status = "COMPLETED" if exc_type is None else "FAILED"
+        payload: dict[str, Any] = {"status": status}
+        if self.automation_run_id:
+            payload["run_id"] = self.automation_run_id
+        if exc_val is not None:
+            payload["error"] = str(exc_val)
+
+        try:
+            with httpx.Client(timeout=10.0) as cb_client:
+                resp = cb_client.post(callback_url, json=payload)
+                logger.info(
+                    f"Completion callback sent ({status}): {resp.status_code}"
+                )
+        except Exception as e:
+            logger.warning(f"Completion callback failed: {e}")
