@@ -22,10 +22,20 @@ const cardVariants = cva("flex", {
         "before:pointer-events-none",
       ].join(" "),
     },
+    gradient: {
+      none: "",
+      standard: [
+        "bg-[#0A0A0A80] border-t-[#24242499]",
+        "shadow-[0px_4px_6px_-4px_#0000001A,0px_10px_15px_-3px_#0000001A]",
+        "before:absolute before:inset-0 before:rounded-2xl before:pointer-events-none",
+        "before:bg-[radial-gradient(144.32%_106.6%_at_50%_0%,rgba(255,255,255,0.14)_0%,rgba(0,0,0,0)_55%)]",
+      ].join(" "),
+    },
   },
   defaultVariants: {
     theme: "default",
     hover: "none",
+    gradient: "none",
   },
 });
 
@@ -35,11 +45,18 @@ interface CardProps extends VariantProps<typeof cardVariants> {
   testId?: string;
 }
 
-export function Card({ children, className, testId, theme, hover }: CardProps) {
+export function Card({
+  children,
+  className,
+  testId,
+  theme,
+  hover,
+  gradient,
+}: CardProps) {
   return (
     <div
       data-testid={testId}
-      className={cn(cardVariants({ theme, hover }), className)}
+      className={cn(cardVariants({ theme, hover, gradient }), className)}
     >
       {children}
     </div>

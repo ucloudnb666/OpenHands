@@ -143,7 +143,8 @@ export function InformationRequestForm({
         {/* CTA Card */}
         <Card
           theme="dark"
-          className="w-full md:w-80 flex-col p-[25px] gap-4 border-t-[#24242499] bg-[#0A0A0A80] shadow-[0px_4px_6px_-4px_#0000001A,0px_10px_15px_-3px_#0000001A] before:absolute before:inset-0 before:rounded-2xl before:bg-[radial-gradient(144.32%_106.6%_at_50%_0%,rgba(255,255,255,0.14)_0%,rgba(0,0,0,0)_55%)] before:pointer-events-none"
+          gradient="standard"
+          className="w-full md:w-80 flex-col p-[25px] gap-4"
         >
           <div className="w-10 h-10">
             {isSaas ? (
