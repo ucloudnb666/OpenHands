@@ -1,10 +1,10 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { formSubmissionService } from "#/api/form-submission-service/form-submission-service.api";
+import { openHands } from "#/api/open-hands-axios";
 import { useSubmitEnterpriseLead } from "#/hooks/mutation/use-submit-enterprise-lead";
 
-vi.mock("#/api/form-submission-service/form-submission-service.api");
+vi.mock("#/api/open-hands-axios");
 
 describe("useSubmitEnterpriseLead", () => {
   const mockFormData = {
@@ -25,10 +25,8 @@ describe("useSubmitEnterpriseLead", () => {
     vi.clearAllMocks();
   });
 
-  it("should call submitEnterpriseLead with correct data", async () => {
-    vi.mocked(formSubmissionService.submitEnterpriseLead).mockResolvedValue(
-      mockResponse,
-    );
+  it("should call API with correct payload", async () => {
+    vi.mocked(openHands.post).mockResolvedValue({ data: mockResponse });
 
     const { result } = renderHook(() => useSubmitEnterpriseLead(), {
       wrapper: ({ children }) => (
@@ -41,16 +39,25 @@ describe("useSubmitEnterpriseLead", () => {
     result.current.mutate(mockFormData);
 
     await waitFor(() => {
-      expect(
-        formSubmissionService.submitEnterpriseLead,
-      ).toHaveBeenCalledWith(mockFormData);
+      expect(openHands.post).toHaveBeenCalledWith(
+        "/api/forms/submit",
+        {
+          form_type: "enterprise_lead",
+          answers: {
+            request_type: "saas",
+            name: "John Doe",
+            company: "Acme Corp",
+            email: "john@acme.com",
+            message: "Interested in enterprise plan.",
+          },
+        },
+        { withCredentials: true },
+      );
     });
   });
 
   it("should return success state after successful submission", async () => {
-    vi.mocked(formSubmissionService.submitEnterpriseLead).mockResolvedValue(
-      mockResponse,
-    );
+    vi.mocked(openHands.post).mockResolvedValue({ data: mockResponse });
 
     const { result } = renderHook(() => useSubmitEnterpriseLead(), {
       wrapper: ({ children }) => (
@@ -70,9 +77,7 @@ describe("useSubmitEnterpriseLead", () => {
 
   it("should return error state after failed submission", async () => {
     const mockError = new Error("Network error");
-    vi.mocked(formSubmissionService.submitEnterpriseLead).mockRejectedValue(
-      mockError,
-    );
+    vi.mocked(openHands.post).mockRejectedValue(mockError);
 
     const { result } = renderHook(() => useSubmitEnterpriseLead(), {
       wrapper: ({ children }) => (
@@ -100,10 +105,8 @@ describe("useSubmitEnterpriseLead", () => {
     });
   });
 
-  it("should call submitEnterpriseLead with self-hosted request type", async () => {
-    vi.mocked(formSubmissionService.submitEnterpriseLead).mockResolvedValue(
-      mockResponse,
-    );
+  it("should handle self-hosted request type", async () => {
+    vi.mocked(openHands.post).mockResolvedValue({ data: mockResponse });
 
     const selfHostedFormData = {
       ...mockFormData,
@@ -121,22 +124,27 @@ describe("useSubmitEnterpriseLead", () => {
     result.current.mutate(selfHostedFormData);
 
     await waitFor(() => {
-      expect(
-        formSubmissionService.submitEnterpriseLead,
-      ).toHaveBeenCalledWith(selfHostedFormData);
+      expect(openHands.post).toHaveBeenCalledWith(
+        "/api/forms/submit",
+        expect.objectContaining({
+          answers: expect.objectContaining({
+            request_type: "self-hosted",
+          }),
+        }),
+        { withCredentials: true },
+      );
     });
   });
 
   it("should be in pending state while submitting", async () => {
-    // Create a promise that we can control
-    let resolvePromise: (value: typeof mockResponse) => void;
-    const controlledPromise = new Promise<typeof mockResponse>((resolve) => {
-      resolvePromise = resolve;
-    });
-
-    vi.mocked(formSubmissionService.submitEnterpriseLead).mockReturnValue(
-      controlledPromise,
+    let resolvePromise: (value: { data: typeof mockResponse }) => void;
+    const controlledPromise = new Promise<{ data: typeof mockResponse }>(
+      (resolve) => {
+        resolvePromise = resolve;
+      },
     );
+
+    vi.mocked(openHands.post).mockReturnValue(controlledPromise);
 
     const { result } = renderHook(() => useSubmitEnterpriseLead(), {
       wrapper: ({ children }) => (
@@ -152,8 +160,7 @@ describe("useSubmitEnterpriseLead", () => {
       expect(result.current.isPending).toBe(true);
     });
 
-    // Resolve the promise
-    resolvePromise!(mockResponse);
+    resolvePromise!({ data: mockResponse });
 
     await waitFor(() => {
       expect(result.current.isPending).toBe(false);
