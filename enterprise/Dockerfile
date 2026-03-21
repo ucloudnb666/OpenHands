@@ -19,7 +19,18 @@ RUN apt-get update && \
         libc6 \
         libgnutls30 \
         libsqlite3-0 \
-        perl-base && \
+        perl-base \
+        # GnuPG packages - CVE-2026-24882 (HIGH), CVE-2025-68972 (MEDIUM)
+        dirmngr \
+        gnupg \
+        gnupg-l10n \
+        gnupg-utils \
+        gpg \
+        gpg-agent \
+        gpg-wks-client \
+        gpgconf \
+        gpgsm \
+        gpgv && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
