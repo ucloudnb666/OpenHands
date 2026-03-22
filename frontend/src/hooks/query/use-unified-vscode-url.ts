@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import ConversationService from "#/api/conversation-service/conversation-service.api";
 import { useConversationId } from "#/hooks/use-conversation-id";
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
@@ -11,7 +10,7 @@ import { useBatchSandboxes } from "./use-batch-sandboxes";
 
 interface VSCodeUrlResult {
   url: string | null;
-  error: string | null;
+  errorKey: I18nKey | null;
 }
 
 /**
@@ -20,7 +19,6 @@ interface VSCodeUrlResult {
  * - V1: Gets the VSCode URL from sandbox exposed_urls
  */
 export const useUnifiedVSCodeUrl = () => {
-  const { t } = useTranslation();
   const { conversationId } = useConversationId();
   const { data: conversation } = useActiveConversation();
   const runtimeIsReady = useRuntimeIsReady({ allowAgentError: true });
@@ -37,6 +35,13 @@ export const useUnifiedVSCodeUrl = () => {
   // Fetch sandbox data for V1 conversations
   const sandboxesQuery = useBatchSandboxes(sandboxId ? [sandboxId] : []);
 
+  // Extract the first sandbox for V1 conversations
+  const sandbox = sandboxesQuery.data?.[0];
+  // Extract vscode URL from sandbox exposed_urls
+  const sandboxVscodeUrl = sandbox?.exposed_urls?.find(
+    (url) => url.name === "VSCODE",
+  )?.url;
+
   const mainQuery = useQuery<VSCodeUrlResult>({
     queryKey: [
       "unified",
@@ -44,38 +49,23 @@ export const useUnifiedVSCodeUrl = () => {
       conversationId,
       isV1Conversation,
       sandboxId,
+      sandboxVscodeUrl,
     ],
     queryFn: async () => {
       if (!conversationId) throw new Error("No conversation ID");
 
       // V1: Get VSCode URL from sandbox exposed_urls
       if (isV1Conversation) {
-        if (
-          !sandboxesQuery.data ||
-          sandboxesQuery.data.length === 0 ||
-          !sandboxesQuery.data[0]
-        ) {
+        if (!sandboxVscodeUrl) {
           return {
             url: null,
-            error: t(I18nKey.VSCODE$URL_NOT_AVAILABLE),
-          };
-        }
-
-        const sandbox = sandboxesQuery.data[0];
-        const vscodeUrl = sandbox.exposed_urls?.find(
-          (url) => url.name === "VSCODE",
-        );
-
-        if (!vscodeUrl) {
-          return {
-            url: null,
-            error: t(I18nKey.VSCODE$URL_NOT_AVAILABLE),
+            errorKey: I18nKey.VSCODE$URL_NOT_AVAILABLE,
           };
         }
 
         return {
-          url: transformVSCodeUrl(vscodeUrl.url),
-          error: null,
+          url: transformVSCodeUrl(sandboxVscodeUrl),
+          errorKey: null,
         };
       }
 
@@ -85,13 +75,13 @@ export const useUnifiedVSCodeUrl = () => {
       if (data.vscode_url) {
         return {
           url: transformVSCodeUrl(data.vscode_url),
-          error: null,
+          errorKey: null,
         };
       }
 
       return {
         url: null,
-        error: t(I18nKey.VSCODE$URL_NOT_AVAILABLE),
+        errorKey: I18nKey.VSCODE$URL_NOT_AVAILABLE,
       };
     },
     enabled:

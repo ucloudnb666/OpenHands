@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import ConversationService from "#/api/conversation-service/conversation-service.api";
 import V1ConversationService from "#/api/conversation-service/v1-conversation-service.api";
 import { useConversationId } from "#/hooks/use-conversation-id";
@@ -11,11 +10,10 @@ import { useRuntimeIsReady } from "#/hooks/use-runtime-is-ready";
 // Define the return type for the VS Code URL query
 interface VSCodeUrlResult {
   url: string | null;
-  error: string | null;
+  errorKey: I18nKey | null;
 }
 
 export const useVSCodeUrl = () => {
-  const { t } = useTranslation();
   const { conversationId } = useConversationId();
   const { data: conversation } = useActiveConversation();
   const runtimeIsReady = useRuntimeIsReady();
@@ -45,12 +43,12 @@ export const useVSCodeUrl = () => {
       if (data.vscode_url) {
         return {
           url: transformVSCodeUrl(data.vscode_url),
-          error: null,
+          errorKey: null,
         };
       }
       return {
         url: null,
-        error: t(I18nKey.VSCODE$URL_NOT_AVAILABLE),
+        errorKey: I18nKey.VSCODE$URL_NOT_AVAILABLE,
       };
     },
     enabled: runtimeIsReady && !!conversationId,

@@ -51,11 +51,11 @@ function VSCodeTab() {
     );
   }
 
-  if (error || data?.error || !data?.url || iframeError) {
+  if (error || data?.errorKey || !data?.url || iframeError) {
     return (
       <div className="w-full h-full flex items-center text-center justify-center text-2xl text-tertiary-light">
         {iframeError ||
-          data?.error ||
+          (data?.errorKey && t(data.errorKey)) ||
           String(error) ||
           t(I18nKey.VSCODE$URL_NOT_AVAILABLE)}
       </div>
