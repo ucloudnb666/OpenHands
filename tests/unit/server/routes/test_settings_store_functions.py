@@ -314,6 +314,36 @@ def test_legacy_flat_fields_migrate_to_agent_vals():
     assert s.agent == 'CodeActAgent'
 
 
+
+def test_agent_settings_normalized_with_schema_version_and_extras():
+    s = Settings(
+        llm_model='anthropic/claude-sonnet-4-5-20250929',
+        confirmation_mode=True,
+        agent_settings={'max_iterations': 64, 'custom.extra': 'keep-me'},
+    )
+
+    assert s.agent_settings['schema_version'] == 1
+    assert s.agent_settings['llm.model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert s.agent_settings['verification.confirmation_mode'] is True
+    assert s.agent_settings['max_iterations'] == 64
+    assert s.agent_settings['custom.extra'] == 'keep-me'
+
+
+def test_agent_settings_persistence_strips_secret_values():
+    s = Settings(
+        llm_model='anthropic/claude-sonnet-4-5-20250929',
+        llm_api_key='super-secret',
+        agent_settings={'max_iterations': 64},
+    )
+
+    persisted = s.normalized_agent_settings(strip_secret_values=True)
+
+    assert persisted['schema_version'] == 1
+    assert persisted['llm.model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert persisted['max_iterations'] == 64
+    assert 'llm.api_key' not in persisted
+
+
 # Tests for store_provider_tokens
 @pytest.mark.asyncio
 async def test_store_provider_tokens_new_tokens(test_client, file_secrets_store):

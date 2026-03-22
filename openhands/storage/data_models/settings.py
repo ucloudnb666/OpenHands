@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from functools import lru_cache
 from typing import Annotated, Any
 
 from pydantic import (
@@ -40,6 +41,28 @@ _LEGACY_FLAT_TO_SDK: dict[str, str] = {
     'condenser_max_size': 'condenser.max_size',
     'max_iterations': 'max_iterations',
 }
+
+
+@lru_cache(maxsize=1)
+def _sdk_schema_field_metadata() -> tuple[set[str], set[str]]:
+    schema = AgentSettings.export_schema()
+    field_keys: set[str] = set()
+    secret_keys: set[str] = set()
+    for section in schema.sections:
+        for field in section.fields:
+            field_keys.add(field.key)
+            if field.secret:
+                secret_keys.add(field.key)
+    return field_keys, secret_keys
+
+
+def _lookup_dotted_value(source: dict[str, Any], dotted_key: str) -> Any:
+    current: Any = source
+    for part in dotted_key.split('.'):
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
 
 
 class SandboxGroupingStrategy(str, Enum):
@@ -182,6 +205,60 @@ class Settings(BaseModel):
         val = self.agent_settings.get('llm.api_key')
         return bool(val and str(val).strip())
 
+    def normalized_agent_settings(
+        self, *, strip_secret_values: bool = False
+    ) -> dict[str, Any]:
+        """Return a canonical flat agent_settings mapping for the current SDK."""
+        payload: dict[str, Any] = {}
+        for key, value in self.agent_settings.items():
+            if key == 'schema_version':
+                payload['schema_version'] = value
+                continue
+            _assign_dotted_value(payload, key, value)
+
+        try:
+            migrated_payload = AgentSettings._migrate_schema(dict(payload))
+            if not isinstance(migrated_payload, dict):
+                return dict(self.agent_settings)
+            sdk_settings = AgentSettings.model_validate(migrated_payload)
+        except Exception:
+            return dict(self.agent_settings)
+
+        field_keys, secret_keys = _sdk_schema_field_metadata()
+        extras = {
+            key: value
+            for key, value in self.agent_settings.items()
+            if key not in field_keys and key != 'schema_version'
+        }
+        normalized = dict(extras)
+        normalized['schema_version'] = sdk_settings.schema_version
+
+        sdk_dump = sdk_settings.model_dump(
+            mode='json',
+            exclude_none=True,
+            context={'expose_secrets': True},
+        )
+        for key in field_keys:
+            if _lookup_dotted_value(migrated_payload, key) is None:
+                continue
+            value = _lookup_dotted_value(sdk_dump, key)
+            if value is None:
+                continue
+            if strip_secret_values and key in secret_keys:
+                continue
+            normalized[key] = value
+
+        return normalized
+
+    def normalize_agent_settings(self, *, strip_secret_values: bool = False) -> bool:
+        normalized = self.normalized_agent_settings(
+            strip_secret_values=strip_secret_values
+        )
+        if normalized == self.agent_settings:
+            return False
+        self.agent_settings = normalized
+        return True
+
     @property
     def sdk_settings_values(self) -> dict[str, Any]:
         return self.agent_settings
@@ -267,6 +344,12 @@ class Settings(BaseModel):
             data['secret_store'] = secret_store
 
         return data
+
+    @model_validator(mode='after')
+    def _normalize_agent_settings_after(self) -> 'Settings':
+        self.normalize_agent_settings()
+        return self
+
 
     @field_serializer('secrets_store')
     def secrets_store_serializer(self, secrets: Secrets, info: SerializationInfo):

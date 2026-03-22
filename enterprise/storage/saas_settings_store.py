@@ -69,6 +69,22 @@ class SaasSettingsStore(SettingsStore):
                 )
                 return result.scalars().first()
 
+    async def _persist_agent_settings_async(
+        self, org_id: uuid.UUID, agent_settings: dict
+    ) -> None:
+        async with a_session_maker() as session:
+            stmt = (
+                update(OrgMember)
+                .where(
+                    OrgMember.org_id == org_id,
+                    OrgMember.user_id == uuid.UUID(self.user_id),
+                )
+                .values(agent_settings=agent_settings)
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+
     async def load(self) -> Settings | None:
         user = await UserStore.get_user_by_id(self.user_id)
         if not user:
@@ -123,6 +139,11 @@ class SaasSettingsStore(SettingsStore):
             kwargs.pop('sandbox_grouping_strategy', None)
 
         settings = Settings(**kwargs)
+        persisted_agent_settings = settings.normalized_agent_settings(
+            strip_secret_values=True
+        )
+        if persisted_agent_settings != (org_member.agent_settings or {}):
+            await self._persist_agent_settings_async(org_id, persisted_agent_settings)
         return settings
 
     async def store(self, item: Settings):
@@ -186,6 +207,9 @@ class SaasSettingsStore(SettingsStore):
                 )
 
             kwargs = item.model_dump(context={'expose_secrets': True})
+            kwargs['agent_settings'] = item.normalized_agent_settings(
+                strip_secret_values=True
+            )
             for model in (user, org, org_member):
                 for key, value in kwargs.items():
                     if hasattr(model, key):

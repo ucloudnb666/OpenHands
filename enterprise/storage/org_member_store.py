@@ -164,6 +164,21 @@ class OrgMemberStore:
             for c in OrgMember.__table__.columns
             if (normalized := c.name.lstrip('_')) and hasattr(user_settings, normalized)
         }
+        if not kwargs.get('agent_settings'):
+            legacy_settings = Settings(
+                agent=user_settings.agent,
+                llm_model=user_settings.llm_model,
+                llm_api_key=user_settings.llm_api_key,
+                llm_base_url=user_settings.llm_base_url,
+                max_iterations=user_settings.max_iterations,
+                confirmation_mode=user_settings.confirmation_mode,
+                security_analyzer=user_settings.security_analyzer,
+                enable_default_condenser=user_settings.enable_default_condenser,
+                condenser_max_size=user_settings.condenser_max_size,
+            )
+            kwargs['agent_settings'] = legacy_settings.normalized_agent_settings(
+                strip_secret_values=True
+            )
         return kwargs
 
     @staticmethod

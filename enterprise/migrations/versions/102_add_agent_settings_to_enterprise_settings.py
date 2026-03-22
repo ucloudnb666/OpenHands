@@ -31,6 +31,42 @@ def upgrade() -> None:
         sa.Column('agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON),
     )
 
+    op.execute(
+        sa.text(
+            """
+            UPDATE user_settings
+            SET agent_settings = jsonb_strip_nulls(
+                jsonb_build_object(
+                    'schema_version', 1,
+                    'agent', agent,
+                    'llm.model', llm_model,
+                    'llm.base_url', llm_base_url,
+                    'verification.confirmation_mode', confirmation_mode,
+                    'verification.security_analyzer', security_analyzer,
+                    'condenser.enabled', enable_default_condenser,
+                    'condenser.max_size', condenser_max_size,
+                    'max_iterations', max_iterations
+                ) || COALESCE(agent_settings::jsonb, '{}'::jsonb)
+            )::json
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            UPDATE org_member
+            SET agent_settings = jsonb_strip_nulls(
+                jsonb_build_object(
+                    'schema_version', 1,
+                    'llm.model', llm_model,
+                    'llm.base_url', llm_base_url,
+                    'max_iterations', max_iterations
+                ) || COALESCE(agent_settings::jsonb, '{}'::jsonb)
+            )::json
+            """
+        )
+    )
+
 
 def downgrade() -> None:
     op.drop_column('org_member', 'agent_settings')

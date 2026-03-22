@@ -975,6 +975,23 @@ class UserStore:
             'max_iterations', org_member.max_iterations
         )
 
+        from openhands.storage.data_models.settings import Settings
+
+        agent_settings = Settings(
+            agent=org.agent,
+            llm_model=llm_model,
+            llm_api_key=org_member.llm_api_key.get_secret_value()
+            if org_member.llm_api_key
+            else None,
+            llm_base_url=llm_base_url,
+            max_iterations=max_iterations,
+            confirmation_mode=org.confirmation_mode,
+            security_analyzer=org.security_analyzer,
+            enable_default_condenser=org.enable_default_condenser,
+            condenser_max_size=org.condenser_max_size,
+            agent_settings=org_member.agent_settings or {},
+        ).normalized_agent_settings(strip_secret_values=True)
+
         return UserSettings(
             keycloak_user_id=user_id,
             # OrgMember fields
@@ -1018,6 +1035,7 @@ class UserStore:
             enable_solvability_analysis=org.enable_solvability_analysis,
             v1_enabled=org.v1_enabled,
             condenser_max_size=org.condenser_max_size,
+            agent_settings=agent_settings,
             already_migrated=False,
         )
 
