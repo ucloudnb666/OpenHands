@@ -65,6 +65,15 @@ def _lookup_dotted_value(source: dict[str, Any], dotted_key: str) -> Any:
     return current
 
 
+def _normalize_persisted_sdk_value(dotted_key: str, value: Any) -> Any:
+    if dotted_key == 'llm.model' and isinstance(value, str):
+        if value.startswith('openhands/'):
+            return value
+        if value.startswith('litellm_proxy/'):
+            return f'openhands/{value.removeprefix("litellm_proxy/")}'
+    return value
+
+
 class SandboxGroupingStrategy(str, Enum):
     """Strategy for grouping conversations within sandboxes."""
 
@@ -208,7 +217,12 @@ class Settings(BaseModel):
     def normalized_agent_settings(
         self, *, strip_secret_values: bool = False
     ) -> dict[str, Any]:
-        """Return a canonical flat agent_settings mapping for the current SDK."""
+        """Return a canonical flat agent_settings mapping for persistence.
+
+        This normalizes schema/version drift without running values back through
+        runtime-only SDK coercions such as the internal OpenHands LLM provider
+        rewrite.
+        """
         payload: dict[str, Any] = {}
         for key, value in self.agent_settings.items():
             if key == 'schema_version':
@@ -220,7 +234,6 @@ class Settings(BaseModel):
             migrated_payload = AgentSettings._migrate_schema(dict(payload))
             if not isinstance(migrated_payload, dict):
                 return dict(self.agent_settings)
-            sdk_settings = AgentSettings.model_validate(migrated_payload)
         except Exception:
             return dict(self.agent_settings)
 
@@ -231,22 +244,15 @@ class Settings(BaseModel):
             if key not in field_keys and key != 'schema_version'
         }
         normalized = dict(extras)
-        normalized['schema_version'] = sdk_settings.schema_version
+        normalized['schema_version'] = migrated_payload.get('schema_version', 1)
 
-        sdk_dump = sdk_settings.model_dump(
-            mode='json',
-            exclude_none=True,
-            context={'expose_secrets': True},
-        )
         for key in field_keys:
-            if _lookup_dotted_value(migrated_payload, key) is None:
-                continue
-            value = _lookup_dotted_value(sdk_dump, key)
+            value = _lookup_dotted_value(migrated_payload, key)
             if value is None:
                 continue
             if strip_secret_values and key in secret_keys:
                 continue
-            normalized[key] = value
+            normalized[key] = _normalize_persisted_sdk_value(key, value)
 
         return normalized
 

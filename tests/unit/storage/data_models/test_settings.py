@@ -102,6 +102,7 @@ def test_settings_preserve_agent_settings():
 
     assert settings.llm_api_key.get_secret_value() == 'test-key'
     assert settings.agent_settings == {
+        'schema_version': 1,
         'llm.api_key': 'test-key',
         'verification.critic_enabled': True,
         'verification.critic_mode': 'all_actions',

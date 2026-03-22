@@ -394,6 +394,24 @@ def test_agent_settings_persistence_strips_secret_values():
     assert 'llm.api_key' not in persisted
 
 
+def test_openhands_model_settings_remain_user_facing():
+    s = Settings(llm_model='openhands/claude-opus-4-5-20251101')
+
+    assert s.agent_settings['llm.model'] == 'openhands/claude-opus-4-5-20251101'
+    assert s.normalized_agent_settings(strip_secret_values=True)['llm.model'] == (
+        'openhands/claude-opus-4-5-20251101'
+    )
+
+
+def test_litellm_proxy_model_settings_migrate_back_to_openhands_prefix():
+    s = Settings(agent_settings={'llm.model': 'litellm_proxy/claude-opus-4-5-20251101'})
+
+    assert s.agent_settings['llm.model'] == 'openhands/claude-opus-4-5-20251101'
+    assert s.normalized_agent_settings(strip_secret_values=True)['llm.model'] == (
+        'openhands/claude-opus-4-5-20251101'
+    )
+
+
 # Tests for store_provider_tokens
 @pytest.mark.asyncio
 async def test_store_provider_tokens_new_tokens(test_client, file_secrets_store):
