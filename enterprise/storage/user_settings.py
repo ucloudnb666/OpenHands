@@ -40,8 +40,16 @@ class UserSettings(Base):  # type: ignore
     git_user_name = Column(String, nullable=True)
     git_user_email = Column(String, nullable=True)
     v1_enabled = Column(Boolean, nullable=True)
-    sdk_settings_values = Column(JSON, nullable=False, default=dict)
+    agent_settings = Column(JSON, nullable=False, default=dict)
 
     already_migrated = Column(
         Boolean, nullable=True, default=False
     )  # False = not migrated, True = migrated
+
+    @property
+    def sdk_settings_values(self) -> dict:
+        return self.agent_settings or {}
+
+    @sdk_settings_values.setter
+    def sdk_settings_values(self, value: dict | None) -> None:
+        self.agent_settings = value or {}

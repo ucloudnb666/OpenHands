@@ -115,7 +115,7 @@ class SaasSettingsStore(SettingsStore):
             kwargs['llm_api_key_for_byor'] = org_member.llm_api_key_for_byor
         if org_member.llm_base_url:
             kwargs['llm_base_url'] = org_member.llm_base_url
-        kwargs['sdk_settings_values'] = org_member.sdk_settings_values or {}
+        kwargs['agent_settings'] = org_member.agent_settings or {}
         if org.v1_enabled is None:
             kwargs['v1_enabled'] = True
         # Apply default if sandbox_grouping_strategy is None in the database
