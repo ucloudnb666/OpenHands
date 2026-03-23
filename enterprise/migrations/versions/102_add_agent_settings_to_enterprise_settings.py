@@ -74,7 +74,6 @@ def upgrade() -> None:
     op.alter_column("user_settings", "agent_settings", server_default=None)
     op.alter_column("org_member", "agent_settings", server_default=None)
 
-
     op.drop_column("user_settings", "agent")
     op.drop_column("user_settings", "max_iterations")
     op.drop_column("user_settings", "security_analyzer")
