@@ -816,15 +816,40 @@ export function ConversationWebSocketProvider({
     sendMessage: sendPlanningSocketMessage,
   } = useWebSocket(planningAgentWsUrl || "", planningWebsocketOptions);
 
+  const mainSocketRef = useRef(mainSocket);
+  const planningAgentSocketRef = useRef(planningAgentSocket);
+  const mainConnectionStateRef = useRef(mainConnectionState);
+  const planningConnectionStateRef = useRef(planningConnectionState);
+
+  React.useEffect(() => {
+    mainSocketRef.current = mainSocket;
+  }, [mainSocket]);
+
+  React.useEffect(() => {
+    planningAgentSocketRef.current = planningAgentSocket;
+  }, [planningAgentSocket]);
+
+  React.useEffect(() => {
+    mainConnectionStateRef.current = mainConnectionState;
+  }, [mainConnectionState]);
+
+  React.useEffect(() => {
+    planningConnectionStateRef.current = planningConnectionState;
+  }, [planningConnectionState]);
+
   // V1 send message function via WebSocket
   // Falls back to REST API queue when WebSocket is not connected
   const sendMessage = useCallback(
     async (message: V1SendMessageRequest): Promise<SendMessageResult> => {
       const currentMode = useConversationStore.getState().conversationMode;
       const currentSocket =
-        currentMode === "plan" ? planningAgentSocket : mainSocket;
+        currentMode === "plan"
+          ? planningAgentSocketRef.current
+          : mainSocketRef.current;
       const currentConnectionState =
-        currentMode === "plan" ? planningConnectionState : mainConnectionState;
+        currentMode === "plan"
+          ? planningConnectionStateRef.current
+          : mainConnectionStateRef.current;
       const sendOverSocket =
         currentMode === "plan"
           ? sendPlanningSocketMessage
@@ -873,10 +898,6 @@ export function ConversationWebSocketProvider({
       }
     },
     [
-      mainConnectionState,
-      mainSocket,
-      planningConnectionState,
-      planningAgentSocket,
       sendMainSocketMessage,
       sendPlanningSocketMessage,
       setErrorMessage,
