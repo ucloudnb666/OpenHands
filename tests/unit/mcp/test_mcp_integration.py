@@ -1,5 +1,6 @@
 """Integration test for MCP settings merging in the full flow."""
 
+import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,11 +11,14 @@ from openhands.storage.data_models.settings import Settings
 from openhands.storage.settings.file_settings_store import FileSettingsStore
 
 
+@pytest.fixture(autouse=True)
+def allow_short_context_windows():
+    with patch.dict(os.environ, {'ALLOW_SHORT_CONTEXT_WINDOWS': 'true'}, clear=False):
+        yield
+
+
 def _mcp_config(settings: Settings) -> MCPConfig | None:
-    raw_mcp_config = settings.get_agent_setting('mcp_config')
-    if raw_mcp_config is None:
-        return None
-    return MCPConfig.model_validate(raw_mcp_config)
+    return settings.to_legacy_mcp_config()
 
 
 @pytest.mark.asyncio
@@ -45,10 +49,7 @@ async def test_user_auth_mcp_merging_integration():
     with patch.object(
         user_auth, 'get_user_settings_store', return_value=mock_settings_store
     ):
-        with patch(
-            'openhands.storage.data_models.settings.Settings.from_config',
-            return_value=config_settings,
-        ):
+        with patch.object(Settings, 'from_config', return_value=config_settings):
             # Get user settings - this should trigger the merging
             merged_settings = await user_auth.get_user_settings()
 
@@ -88,9 +89,8 @@ async def test_user_auth_caching_behavior():
     with patch.object(
         user_auth, 'get_user_settings_store', return_value=mock_settings_store
     ):
-        with patch(
-            'openhands.storage.data_models.settings.Settings.from_config',
-            return_value=config_settings,
+        with patch.object(
+            Settings, 'from_config', return_value=config_settings
         ) as mock_from_config:
             # First call should load and merge
             settings1 = await user_auth.get_user_settings()

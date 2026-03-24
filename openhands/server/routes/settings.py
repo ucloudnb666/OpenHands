@@ -6,7 +6,6 @@
 # Unless you are working on deprecation, please avoid extending this legacy file and consult the V1 codepaths above.
 # Tag: Legacy-V0
 # This module belongs to the old V0 web server. The V1 application server lives under openhands/app_server/.
-import importlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, status
@@ -17,6 +16,7 @@ from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
     ProviderType,
 )
+from openhands.sdk.settings import AgentSettings
 from openhands.server.dependencies import get_dependencies
 from openhands.server.routes.secrets import invalidate_legacy_secrets_store
 from openhands.server.settings import (
@@ -34,14 +34,9 @@ from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.settings_store import SettingsStore
 
 
-def _get_agent_settings_schema() -> dict[str, Any] | None:
-    """Return the SDK settings schema when the SDK package is installed."""
-    try:
-        settings_module = importlib.import_module('openhands.sdk.settings')
-    except ModuleNotFoundError:
-        return None
-
-    return settings_module.AgentSettings.export_schema().model_dump(mode='json')
+def _get_agent_settings_schema() -> dict[str, Any]:
+    """Return the SDK agent settings schema for the legacy V0 settings API."""
+    return AgentSettings.export_schema().model_dump(mode='json')
 
 
 def _get_schema_field_keys(schema: dict[str, Any] | None) -> set[str]:

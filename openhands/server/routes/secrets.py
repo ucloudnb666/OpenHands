@@ -128,22 +128,23 @@ async def store_provider_tokens(
         if not user_secrets:
             user_secrets = Secrets()
 
-        if provider_info.provider_tokens:
+        updated_provider_tokens = dict(provider_info.provider_tokens or {})
+        if updated_provider_tokens:
             existing_providers = [provider for provider in user_secrets.provider_tokens]
 
             # Merge incoming settings store with the existing one
-            for provider, token_value in list(provider_info.provider_tokens.items()):
+            for provider, token_value in list(updated_provider_tokens.items()):
                 if provider in existing_providers and not token_value.token:
                     existing_token = user_secrets.provider_tokens.get(provider)
                     if existing_token and existing_token.token:
-                        provider_info.provider_tokens[provider] = existing_token
+                        updated_provider_tokens[provider] = existing_token
 
-                provider_info.provider_tokens[provider] = provider_info.provider_tokens[
+                updated_provider_tokens[provider] = updated_provider_tokens[
                     provider
                 ].model_copy(update={'host': token_value.host})
 
         updated_secrets = user_secrets.model_copy(
-            update={'provider_tokens': provider_info.provider_tokens}
+            update={'provider_tokens': updated_provider_tokens}
         )
         await secrets_store.store(updated_secrets)
 

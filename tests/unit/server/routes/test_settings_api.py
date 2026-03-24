@@ -84,14 +84,6 @@ def test_client():
         yield client
 
 
-def test_get_agent_settings_schema_returns_none_when_sdk_missing():
-    with patch(
-        'openhands.server.routes.settings._get_agent_settings_schema',
-        return_value=None,
-    ) as mock_fn:
-        assert mock_fn() is None
-
-
 def test_get_agent_settings_schema_includes_verification_section():
     schema = settings_routes._get_agent_settings_schema()
     assert schema is not None

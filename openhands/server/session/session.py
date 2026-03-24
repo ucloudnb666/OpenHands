@@ -164,8 +164,7 @@ class WebSession:
         if git_user_email is not None:
             self.config.git_user_email = git_user_email
         max_iterations = (
-            settings.raw_agent_settings.get('max_iterations')
-            or self.config.max_iterations
+            settings.get_agent_setting('max_iterations') or self.config.max_iterations
         )
 
         # Prioritize settings over config for max_budget_per_task
@@ -213,8 +212,7 @@ class WebSession:
         agent_config.runtime = self.config.runtime
         agent_name = agent_cls if agent_cls is not None else 'agent'
         llm_config = self.config.get_llm_config_from_agent(agent_name)
-        condenser_settings = agent_settings.condenser
-        if condenser_settings.enabled:
+        if agent_settings.condenser.enabled:
             # Default condenser chains three condensers together:
             # 1. a conversation window condenser that handles explicit
             # condensation requests,
@@ -224,7 +222,6 @@ class WebSession:
             # The order matters: with the browser output first, the summarizer
             # will only see the most recent browser output, which should keep
             # the summarization cost down.
-            max_events_for_condenser = condenser_settings.max_size
             default_condenser_config = CondenserPipelineConfig(
                 condensers=[
                     ConversationWindowCondenserConfig(),
@@ -232,7 +229,7 @@ class WebSession:
                     LLMSummarizingCondenserConfig(
                         llm_config=llm_config,
                         keep_first=4,
-                        max_size=max_events_for_condenser,
+                        max_size=agent_settings.condenser.max_size,
                     ),
                 ]
             )
@@ -242,7 +239,7 @@ class WebSession:
                 f' browser_output_masking(attention_window=2), '
                 f' llm(model="{llm_config.model}", '
                 f' base_url="{llm_config.base_url}", '
-                f' keep_first=4, max_size={max_events_for_condenser})'
+                f' keep_first=4, max_size={agent_settings.condenser.max_size})'
             )
             agent_config.condenser = default_condenser_config
         agent = Agent.get_cls(agent_cls)(agent_config, self.llm_registry)

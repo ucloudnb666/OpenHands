@@ -36,10 +36,7 @@ async def test_mcp_settings_merge_config_only():
     # Frontend settings without MCP config
     frontend_settings = Settings(llm_model='gpt-4')
 
-    with patch(
-        'openhands.storage.data_models.settings.Settings.from_config',
-        return_value=mock_config_settings,
-    ):
+    with patch.object(Settings, 'from_config', return_value=mock_config_settings):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     # Should use config.toml MCP settings
@@ -64,10 +61,7 @@ async def test_mcp_settings_merge_frontend_only():
         ),
     )
 
-    with patch(
-        'openhands.storage.data_models.settings.Settings.from_config',
-        return_value=mock_config_settings,
-    ):
+    with patch.object(Settings, 'from_config', return_value=mock_config_settings):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     # Should keep frontend MCP settings
@@ -106,10 +100,7 @@ async def test_mcp_settings_merge_both_present():
         ),
     )
 
-    with patch(
-        'openhands.storage.data_models.settings.Settings.from_config',
-        return_value=mock_config_settings,
-    ):
+    with patch.object(Settings, 'from_config', return_value=mock_config_settings):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     # Should merge both with config.toml taking priority (appearing first)
@@ -140,10 +131,7 @@ async def test_mcp_settings_merge_no_config():
         ),
     )
 
-    with patch(
-        'openhands.storage.data_models.settings.Settings.from_config',
-        return_value=mock_config_settings,
-    ):
+    with patch.object(Settings, 'from_config', return_value=mock_config_settings):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     # Should keep frontend settings unchanged
@@ -163,10 +151,7 @@ async def test_mcp_settings_merge_neither_present():
     # Frontend settings without MCP config
     frontend_settings = Settings(llm_model='gpt-4')
 
-    with patch(
-        'openhands.storage.data_models.settings.Settings.from_config',
-        return_value=mock_config_settings,
-    ):
+    with patch.object(Settings, 'from_config', return_value=mock_config_settings):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     # Should keep frontend settings unchanged

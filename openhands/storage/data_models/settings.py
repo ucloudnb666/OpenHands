@@ -504,31 +504,29 @@ class Settings(BaseModel):
         llm_config: LLMConfig = app_config.get_llm_config()
         if llm_config.api_key is None:
             return None
-        security = app_config.security
 
-        mcp_config = None
-        if hasattr(app_config, 'mcp'):
-            mcp_config = app_config.mcp.model_dump(mode='python')
-
-        raw_api_key = llm_config.api_key.get_secret_value()
-        agent_vals: dict[str, Any] = {
-            'agent': app_config.default_agent,
-            'llm.model': llm_config.model,
-            'llm.api_key': raw_api_key,
-            'llm.base_url': llm_config.base_url,
-            'mcp_config': mcp_config,
-            'verification.confirmation_mode': security.confirmation_mode,
-            'verification.security_analyzer': security.security_analyzer,
-            'max_iterations': app_config.max_iterations,
-        }
-
-        return Settings(
+        settings = Settings(
             language='en',
             remote_runtime_resource_factor=app_config.sandbox.remote_runtime_resource_factor,
             search_api_key=app_config.search_api_key,
             max_budget_per_task=app_config.max_budget_per_task,
-            agent_settings={k: v for k, v in agent_vals.items() if v is not None},
         )
+        settings.set_agent_setting('agent', app_config.default_agent)
+        settings.set_agent_setting('llm.model', llm_config.model)
+        settings.set_agent_setting('llm.api_key', llm_config.api_key)
+        settings.set_agent_setting('llm.base_url', llm_config.base_url)
+        settings.set_agent_setting(
+            'verification.confirmation_mode',
+            app_config.security.confirmation_mode,
+        )
+        settings.set_agent_setting(
+            'verification.security_analyzer',
+            app_config.security.security_analyzer,
+        )
+        settings.set_agent_setting('max_iterations', app_config.max_iterations)
+        if hasattr(app_config, 'mcp'):
+            settings.set_agent_setting('mcp_config', app_config.mcp)
+        return settings
 
     def merge_with_config_settings(self) -> 'Settings':
         """Merge config.toml MCP settings with stored SDK agent_settings."""

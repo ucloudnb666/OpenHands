@@ -234,7 +234,7 @@ class TestGetCurrentUserExposeSecrets:
         """Without expose_secrets, llm_api_key is masked (no session key needed)."""
         user_info = UserInfo(
             id=USER_ID,
-            agent_settings={'llm.api_key': 'sk-test-key-123'},
+            agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-test-key-123'},
         )
         mock_context = AsyncMock()
         mock_context.get_user_info = AsyncMock(return_value=user_info)
@@ -446,7 +446,10 @@ class TestExposeSecretsIntegration:
         """Bearer token alone cannot expose secrets (no X-Session-API-Key)."""
         mock_user_ctx = AsyncMock()
         mock_user_ctx.get_user_info = AsyncMock(
-            return_value=UserInfo(id=USER_ID, llm_api_key=SecretStr('sk-secret-123'))
+            return_value=UserInfo(
+                id=USER_ID,
+                agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-secret-123'},
+            )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
 
@@ -462,7 +465,10 @@ class TestExposeSecretsIntegration:
         """Invalid session key (no matching sandbox) is rejected."""
         mock_user_ctx = AsyncMock()
         mock_user_ctx.get_user_info = AsyncMock(
-            return_value=UserInfo(id=USER_ID, llm_api_key=SecretStr('sk-secret-123'))
+            return_value=UserInfo(
+                id=USER_ID,
+                agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-secret-123'},
+            )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
 
@@ -489,7 +495,10 @@ class TestExposeSecretsIntegration:
         """Session key from a different user's sandbox is rejected."""
         mock_user_ctx = AsyncMock()
         mock_user_ctx.get_user_info = AsyncMock(
-            return_value=UserInfo(id='user-A', llm_api_key=SecretStr('sk-secret-123'))
+            return_value=UserInfo(
+                id='user-A',
+                agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-secret-123'},
+            )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value='user-A')
 
@@ -563,7 +572,10 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm.api_key': 'sk-should-be-masked'},
+                agent_settings={
+                    'llm.model': 'gpt-4o',
+                    'llm.api_key': 'sk-should-be-masked',
+                },
             )
         )
 

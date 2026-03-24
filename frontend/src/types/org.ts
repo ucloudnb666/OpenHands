@@ -13,19 +13,6 @@ export interface Organization {
   sandbox_runtime_container_image: string;
   org_version: number;
   agent_settings?: Record<string, unknown>;
-  agent?: string;
-  default_max_iterations?: number;
-  security_analyzer?: string;
-  confirmation_mode?: boolean;
-  default_llm_model?: string;
-  default_llm_base_url?: string;
-  enable_default_condenser?: boolean;
-  condenser_max_size?: number;
-  mcp_config?: {
-    tools: unknown[];
-    settings: Record<string, unknown>;
-  };
-
   search_api_key: string | null;
   sandbox_api_key: string | null;
   max_budget_per_task: number;

@@ -17,7 +17,7 @@ from pydantic import (
 )
 
 from openhands.core.config.mcp_config import MCPConfig
-from openhands.integrations.provider import CustomSecret, ProviderToken  # noqa: F401
+from openhands.integrations.provider import CUSTOM_SECRETS_TYPE, PROVIDER_TOKEN_TYPE
 from openhands.integrations.service_types import ProviderType
 from openhands.storage.data_models.settings import Settings
 
@@ -26,13 +26,13 @@ class POSTProviderModel(BaseModel):
     """Settings for POST requests."""
 
     mcp_config: MCPConfig | None = None
-    provider_tokens: dict[ProviderType, ProviderToken] = {}
+    provider_tokens: PROVIDER_TOKEN_TYPE = {}
 
 
 class POSTCustomSecrets(BaseModel):
     """Add a new custom secret."""
 
-    custom_secrets: dict[str, CustomSecret] = {}
+    custom_secrets: CUSTOM_SECRETS_TYPE = {}
 
 
 class GETSettingsModel(Settings):
