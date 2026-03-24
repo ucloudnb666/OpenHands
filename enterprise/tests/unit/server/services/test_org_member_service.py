@@ -2277,8 +2277,8 @@ class TestOrgMemberServiceGetMe:
             assert result.user_id == str(current_user_id)
             assert result.email == 'test@example.com'
             assert result.role == 'owner'
-            assert result.llm_model == 'gpt-4'
-            assert result.max_iterations == 50
+            assert result.agent_settings['llm.model'] == 'gpt-4'
+            assert result.agent_settings['max_iterations'] == 50
             assert result.status == 'active'
 
     @pytest.mark.asyncio

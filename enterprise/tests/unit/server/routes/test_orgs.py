@@ -106,7 +106,10 @@ async def test_create_org_success(mock_app):
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+        },
         enable_default_condenser=True,
         enable_proactive_conversation_starters=True,
     )
@@ -140,7 +143,9 @@ async def test_create_org_success(mock_app):
         assert response_data['contact_email'] == 'john@example.com'
         assert response_data['credits'] == 100.0
         assert response_data['org_version'] == 5
-        assert response_data['default_llm_model'] == 'claude-opus-4-5-20251101'
+        assert (
+            response_data['agent_settings']['llm.model'] == 'claude-opus-4-5-20251101'
+        )
 
 
 @pytest.mark.asyncio
@@ -918,12 +923,15 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         contact_name='John Doe',
         contact_email='john@example.com',
         conversation_expiration=3600,
-        agent='CodeActAgent',
-        default_max_iterations=50,
-        security_analyzer='enabled',
-        confirmation_mode=True,
-        default_llm_model='claude-opus-4-5-20251101',
-        default_llm_base_url='https://api.example.com',
+        agent_settings={
+            'schema_version': 1,
+            'agent': 'CodeActAgent',
+            'max_iterations': 50,
+            'verification.security_analyzer': 'enabled',
+            'verification.confirmation_mode': True,
+            'llm.model': 'claude-opus-4-5-20251101',
+            'llm.base_url': 'https://api.example.com',
+        },
         remote_runtime_resource_factor=2,
         enable_default_condenser=True,
         billing_margin=0.15,
@@ -962,20 +970,18 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         assert org_data['contact_name'] == 'John Doe'
         assert org_data['contact_email'] == 'john@example.com'
         assert org_data['conversation_expiration'] == 3600
-        assert org_data['agent'] == 'CodeActAgent'
-        assert org_data['default_max_iterations'] == 50
-        assert org_data['security_analyzer'] == 'enabled'
-        assert org_data['confirmation_mode'] is True
-        assert org_data['default_llm_model'] == 'claude-opus-4-5-20251101'
-        assert org_data['default_llm_base_url'] == 'https://api.example.com'
+        assert org_data['agent_settings']['agent'] == 'CodeActAgent'
+        assert org_data['agent_settings']['max_iterations'] == 50
+        assert org_data['agent_settings']['verification.security_analyzer'] == 'enabled'
+        assert org_data['agent_settings']['verification.confirmation_mode'] is True
+        assert org_data['agent_settings']['llm.model'] == 'claude-opus-4-5-20251101'
+        assert org_data['agent_settings']['llm.base_url'] == 'https://api.example.com'
         assert org_data['remote_runtime_resource_factor'] == 2
-        assert org_data['enable_default_condenser'] is True
         assert org_data['billing_margin'] == 0.15
         assert org_data['enable_proactive_conversation_starters'] is True
         assert org_data['sandbox_base_container_image'] == 'test-image'
         assert org_data['sandbox_runtime_container_image'] == 'test-runtime'
         assert org_data['org_version'] == 5
-        assert org_data['mcp_config'] == {'key': 'value'}
         assert org_data['max_budget_per_task'] == 1000.0
         assert org_data['enable_solvability_analysis'] is True
         assert org_data['v1_enabled'] is True
@@ -2032,13 +2038,13 @@ async def test_update_org_invalid_uuid_format(mock_update_app):
 @pytest.mark.asyncio
 async def test_update_org_invalid_field_values(mock_update_app, mock_owner_role):
     """
-    GIVEN: Update request with invalid field values (e.g., negative max_iterations)
+    GIVEN: Update request with invalid field values (e.g., negative billing margin)
     WHEN: PATCH /api/organizations/{org_id} is called
     THEN: 422 validation error is returned
     """
     # Arrange
     org_id = uuid.uuid4()
-    update_data = {'default_max_iterations': -1}  # Invalid: must be > 0
+    update_data = {'billing_margin': -1}  # Invalid: must be >= 0
 
     with patch(
         'server.auth.authorization.get_user_org_role',
@@ -2998,15 +3004,21 @@ class TestGetMeEndpoint:
         status_val='active',
     ):
         """Create a MeResponse for testing."""
+        agent_settings = {'schema_version': 1}
+        if llm_model is not None:
+            agent_settings['llm.model'] = llm_model
+        if llm_base_url is not None:
+            agent_settings['llm.base_url'] = llm_base_url
+        if max_iterations is not None:
+            agent_settings['max_iterations'] = max_iterations
+
         return MeResponse(
             org_id=str(org_id),
             user_id=str(user_id),
             email=email,
             role=role,
             llm_api_key=llm_api_key,
-            llm_model=llm_model,
-            llm_base_url=llm_base_url,
-            max_iterations=max_iterations,
+            agent_settings=agent_settings,
             status=status_val,
         )
 
@@ -3041,9 +3053,9 @@ class TestGetMeEndpoint:
         assert data['user_id'] == test_user_id
         assert data['email'] == 'owner@example.com'
         assert data['role'] == 'owner'
-        assert data['llm_model'] == 'gpt-4'
-        assert data['llm_base_url'] == 'https://api.example.com'
-        assert data['max_iterations'] == 50
+        assert data['agent_settings']['llm.model'] == 'gpt-4'
+        assert data['agent_settings']['llm.base_url'] == 'https://api.example.com'
+        assert data['agent_settings']['max_iterations'] == 50
         assert data['status'] == 'active'
 
     @pytest.mark.asyncio
@@ -3167,9 +3179,7 @@ class TestGetMeEndpoint:
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data['llm_model'] is None
-        assert data['llm_base_url'] is None
-        assert data['max_iterations'] is None
+        assert data['agent_settings'] == {'schema_version': 1}
 
     @pytest.mark.asyncio
     async def test_get_me_with_admin_role(self, mock_me_app, test_user_id, test_org_id):

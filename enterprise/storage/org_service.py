@@ -547,6 +547,24 @@ class OrgService:
             )
             return existing_org
 
+        restricted_fields = {'agent_settings', 'search_api_key', 'sandbox_api_key'}
+        if restricted_fields.intersection(
+            update_dict
+        ) and not await OrgService.has_admin_or_owner_role(user_id, org_id):
+            logger.warning(
+                'Insufficient role for restricted organization settings update',
+                extra={
+                    'user_id': user_id,
+                    'org_id': str(org_id),
+                    'restricted_fields': sorted(
+                        restricted_fields.intersection(update_dict)
+                    ),
+                },
+            )
+            raise PermissionError(
+                'Admin or owner role required to update organization agent settings'
+            )
+
         # Perform the update
         try:
             updated_org = await OrgStore.update_org(org_id, update_dict)
