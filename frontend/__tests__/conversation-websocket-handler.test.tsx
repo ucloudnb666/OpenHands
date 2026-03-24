@@ -41,7 +41,6 @@ import { conversationWebSocketTestSetup } from "./helpers/msw-websocket-setup";
 import { useEventStore } from "#/stores/use-event-store";
 import { isV1Event } from "#/types/v1/type-guards";
 import { useSelectedOrganizationStore } from "#/stores/selected-organization-store";
-import { useConversationStore } from "#/stores/conversation-store";
 
 // Mock useUserConversation to return V1 conversation data
 vi.mock("#/hooks/query/use-user-conversation", () => ({
@@ -66,12 +65,6 @@ beforeAll(() => {
 
 beforeEach(() => {
   useSelectedOrganizationStore.setState({ organizationId: "test-org-id" });
-  useConversationStore.setState({
-    conversationMode: "code",
-    subConversationTaskId: null,
-    planContent: null,
-    shouldHideSuggestions: false,
-  });
 });
 
 afterEach(() => {
@@ -81,12 +74,6 @@ afterEach(() => {
   // Reset stores to prevent state leakage between tests
   useErrorMessageStore.getState().removeErrorMessage();
   useEventStore.getState().clearEvents();
-  useConversationStore.setState({
-    conversationMode: "code",
-    subConversationTaskId: null,
-    planContent: null,
-    shouldHideSuggestions: false,
-  });
 });
 
 afterAll(async () => {

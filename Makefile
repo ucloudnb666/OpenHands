@@ -12,7 +12,6 @@ DEFAULT_MODEL = "gpt-4o"
 CONFIG_FILE = config.toml
 PRE_COMMIT_CONFIG_PATH = "./dev_config/python/.pre-commit-config.yaml"
 PYTHON_VERSION = 3.12
-REQUIRED_POETRY_VERSION = 2.3.2
 KIND_CLUSTER_NAME = "local-hands"
 
 # ANSI color codes
@@ -120,19 +119,18 @@ check-tmux:
 check-poetry:
 	@echo "$(YELLOW)Checking Poetry installation...$(RESET)"
 	@if command -v poetry > /dev/null; then \
-		POETRY_VERSION=$$(poetry --version 2>&1 | sed -E 's/Poetry \(version ([0-9]+\.[0-9]+\.[0-9]+)\)/\1/'); \
-		if python$(PYTHON_VERSION) -c 'import sys; current = tuple(map(int, sys.argv[1].split("."))); required = tuple(map(int, sys.argv[2].split("."))); raise SystemExit(0 if current >= required else 1)' "$$POETRY_VERSION" "$(REQUIRED_POETRY_VERSION)"; then \
-			echo "$(BLUE)$$(poetry --version) is already installed.$(RESET)"; \
+		POETRY_VERSION=$(shell poetry --version 2>&1 | sed -E 's/Poetry \(version ([0-9]+\.[0-9]+\.[0-9]+)\)/\1/'); \
+		IFS='.' read -r -a POETRY_VERSION_ARRAY <<< "$$POETRY_VERSION"; \
+		if [ $${POETRY_VERSION_ARRAY[0]} -gt 1 ] || ([ $${POETRY_VERSION_ARRAY[0]} -eq 1 ] && [ $${POETRY_VERSION_ARRAY[1]} -ge 8 ]); then \
+			echo "$(BLUE)$(shell poetry --version) is already installed.$(RESET)"; \
 		else \
-			echo "$(RED)Poetry $(REQUIRED_POETRY_VERSION) or later is required. You can install it by running one of the following commands, then adding Poetry to your PATH if needed:"; \
-			echo "$(RED) uv tool install 'poetry==$(REQUIRED_POETRY_VERSION)'$(RESET)"; \
+			echo "$(RED)Poetry 1.8 or later is required. You can install poetry by running the following command, then adding Poetry to your PATH:"; \
 			echo "$(RED) curl -sSL https://install.python-poetry.org | python$(PYTHON_VERSION) -$(RESET)"; \
 			echo "$(RED)More detail here: https://python-poetry.org/docs/#installing-with-the-official-installer$(RESET)"; \
 			exit 1; \
 		fi; \
 	else \
-		echo "$(RED)Poetry is not installed. You can install it by running one of the following commands, then adding Poetry to your PATH if needed:"; \
-		echo "$(RED) uv tool install 'poetry==$(REQUIRED_POETRY_VERSION)'$(RESET)"; \
+		echo "$(RED)Poetry is not installed. You can install poetry by running the following command, then adding Poetry to your PATH:"; \
 		echo "$(RED) curl -sSL https://install.python-poetry.org | python$(PYTHON_VERSION) -$(RESET)"; \
 		echo "$(RED)More detail here: https://python-poetry.org/docs/#installing-with-the-official-installer$(RESET)"; \
 		exit 1; \

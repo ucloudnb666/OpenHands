@@ -495,6 +495,6 @@ describe("RepoConnector", () => {
     expect(goToSettingsButton).toBeInTheDocument();
 
     await userEvent.click(goToSettingsButton);
-    await screen.findByTestId("settings-screen");
+    await screen.findByTestId("git-settings-screen");
   });
 });

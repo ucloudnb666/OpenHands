@@ -808,34 +808,15 @@ export function ConversationWebSocketProvider({
   // Only attempt WebSocket connection when we have a valid URL
   // This prevents connection attempts during task polling phase
   const websocketUrl = wsUrl;
-  const { socket: mainSocket, sendMessage: sendMainSocketMessage } =
-    useWebSocket(websocketUrl || "", mainWebsocketOptions);
+  const { socket: mainSocket } = useWebSocket(
+    websocketUrl || "",
+    mainWebsocketOptions,
+  );
 
-  const {
-    socket: planningAgentSocket,
-    sendMessage: sendPlanningSocketMessage,
-  } = useWebSocket(planningAgentWsUrl || "", planningWebsocketOptions);
-
-  const mainSocketRef = useRef(mainSocket);
-  const planningAgentSocketRef = useRef(planningAgentSocket);
-  const mainConnectionStateRef = useRef(mainConnectionState);
-  const planningConnectionStateRef = useRef(planningConnectionState);
-
-  React.useEffect(() => {
-    mainSocketRef.current = mainSocket;
-  }, [mainSocket]);
-
-  React.useEffect(() => {
-    planningAgentSocketRef.current = planningAgentSocket;
-  }, [planningAgentSocket]);
-
-  React.useEffect(() => {
-    mainConnectionStateRef.current = mainConnectionState;
-  }, [mainConnectionState]);
-
-  React.useEffect(() => {
-    planningConnectionStateRef.current = planningConnectionState;
-  }, [planningConnectionState]);
+  const { socket: planningAgentSocket } = useWebSocket(
+    planningAgentWsUrl || "",
+    planningWebsocketOptions,
+  );
 
   // V1 send message function via WebSocket
   // Falls back to REST API queue when WebSocket is not connected
@@ -843,22 +824,9 @@ export function ConversationWebSocketProvider({
     async (message: V1SendMessageRequest): Promise<SendMessageResult> => {
       const currentMode = useConversationStore.getState().conversationMode;
       const currentSocket =
-        currentMode === "plan"
-          ? planningAgentSocketRef.current
-          : mainSocketRef.current;
-      const currentConnectionState =
-        currentMode === "plan"
-          ? planningConnectionStateRef.current
-          : mainConnectionStateRef.current;
-      const sendOverSocket =
-        currentMode === "plan"
-          ? sendPlanningSocketMessage
-          : sendMainSocketMessage;
+        currentMode === "plan" ? planningAgentSocket : mainSocket;
 
-      if (
-        currentConnectionState !== "OPEN" &&
-        (!currentSocket || currentSocket.readyState !== WebSocket.OPEN)
-      ) {
+      if (!currentSocket || currentSocket.readyState !== WebSocket.OPEN) {
         // WebSocket not connected - queue message via REST API
         // Message will be delivered automatically when conversation becomes ready
         if (!conversationId) {
@@ -886,9 +854,8 @@ export function ConversationWebSocketProvider({
       }
 
       try {
-        // Send message through WebSocket as JSON using the hook helper so it
-        // always targets the latest socket instance held in the hook ref.
-        sendOverSocket(JSON.stringify(message));
+        // Send message through WebSocket as JSON
+        currentSocket.send(JSON.stringify(message));
         return { queued: false };
       } catch (error) {
         const errorMessage =
@@ -897,12 +864,7 @@ export function ConversationWebSocketProvider({
         throw error;
       }
     },
-    [
-      sendMainSocketMessage,
-      sendPlanningSocketMessage,
-      setErrorMessage,
-      conversationId,
-    ],
+    [mainSocket, planningAgentSocket, setErrorMessage, conversationId],
   );
 
   // Track main socket state changes

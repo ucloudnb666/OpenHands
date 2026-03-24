@@ -1,23 +1,6 @@
 This repository contains the code for OpenHands, an automated AI software engineer. It has a Python backend
 (in the `openhands` directory) and React frontend (in the `frontend` directory).
 
-
-## Repository Memory
-- Legacy `/api/settings` now bridges to the bundled SDK by returning `agent_settings_schema` from `openhands.sdk.settings.AgentSettings.export_schema()`.
-- The legacy settings UI reads/writes the canonical `agent_settings` blob. `sdk_settings_values` is only a compatibility input alias handled by `openhands/storage/data_models/settings.py`.
-- In enterprise mode, persist canonical SDK settings in `agent_settings` on `enterprise/storage/org.py`, `enterprise/storage/org_member.py`, and `enterprise/storage/user_settings.py`. Do not reintroduce flat duplicate org columns for agent/model/condenser/verification defaults.
-- Persisted SaaS `agent_settings` should carry a `schema_version` and canonical dotted keys, but should not duplicate secret SDK values like `llm.api_key` in plaintext JSON. Reconstruct those from encrypted secret columns on load, and backfill/migrate rows on read/write.
-- The frontend settings query still normalizes canonical backend fields (`agent_settings`, `agent_settings_schema`) back into the existing settings screen shape. Strip schema/value blobs from save payloads so redacted GET metadata is never POSTed back.
-- The SDK settings schema uses neutral metadata (`value_type`, `prominence`, `choices`, `depends_on`) instead of legacy UI-only fields like `widget`, `advanced`, or `placeholder`.
-- The SDK is the source of truth for `openhands/*` runtime defaults. Tests and adapters should read SDK-owned settings through `settings.agent_settings`, `get_agent_setting(...)`, `get_secret_agent_setting(...)`, and `set_agent_setting(...)` instead of removed flat `Settings` attributes like `llm_model`, `llm_base_url`, `llm_api_key`, or `agent`.
-- SDK `AgentSettings` sections are `llm`, `condenser`, and `verification`. The `verification` section absorbs the former critic/security split; use `AgentSettings` directly rather than subclassing it in OpenHands.
-- `openhands/storage/data_models/settings.py` stores one canonical flat blob in `raw_agent_settings` (serialized as `agent_settings`) plus one cached in-memory `AgentSettings` model exposed as `settings.agent_settings`. Keep `to_legacy_mcp_config()` only at explicit legacy boundaries.
-- `make build` on this repo now requires Poetry `2.3.2+`. The project dependency also installs Poetry into `.venv`, so an activated venv can shadow a newer global Poetry binary; if build/setup starts failing with a stale lockfile message, check `poetry --version` and prefer `uv tool install 'poetry==2.3.2'` (or newer).
-
-
-
-
-
 ## General Setup:
 To set up the entire repo, including frontend and backend, run `make build`.
 You don't need to do this unless the user asks you to, or if you're trying to run the entire application.

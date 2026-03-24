@@ -22,7 +22,7 @@ ENV POETRY_NO_INTERACTION=1 \
 
 RUN apt-get update -y \
     && apt-get install -y curl make git build-essential jq gettext \
-    && python3 -m pip install "poetry>=2.3.0" --break-system-packages
+    && python3 -m pip install poetry --break-system-packages
 
 COPY pyproject.toml poetry.lock ./
 RUN touch README.md
