@@ -110,7 +110,6 @@ async def test_create_org_success(mock_app):
             'schema_version': 1,
             'llm.model': 'claude-opus-4-5-20251101',
         },
-        enable_default_condenser=True,
         enable_proactive_conversation_starters=True,
     )
 
@@ -432,8 +431,11 @@ async def test_create_org_sensitive_fields_not_exposed(mock_app):
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
-        enable_default_condenser=True,
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+            'condenser.enabled': True,
+        },
         enable_proactive_conversation_starters=True,
     )
 
@@ -512,7 +514,10 @@ async def test_list_user_orgs_success(mock_app_list):
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+        },
     )
     mock_user = MagicMock()
     mock_user.current_org_id = org_id
@@ -931,15 +936,15 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
             'verification.confirmation_mode': True,
             'llm.model': 'claude-opus-4-5-20251101',
             'llm.base_url': 'https://api.example.com',
+            'condenser.enabled': True,
+            'mcp_config': {'key': 'value'},
         },
         remote_runtime_resource_factor=2,
-        enable_default_condenser=True,
         billing_margin=0.15,
         enable_proactive_conversation_starters=True,
         sandbox_base_container_image='test-image',
         sandbox_runtime_container_image='test-runtime',
         org_version=5,
-        mcp_config={'key': 'value'},
         max_budget_per_task=1000.0,
         enable_solvability_analysis=True,
         v1_enabled=True,
@@ -1026,8 +1031,11 @@ async def test_get_org_success(mock_app_with_get_user_id, mock_owner_role):
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
-        enable_default_condenser=True,
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+            'condenser.enabled': True,
+        },
         enable_proactive_conversation_starters=True,
     )
 
@@ -1304,8 +1312,11 @@ async def test_get_org_with_credits_none(mock_app_with_get_user_id, mock_owner_r
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
-        enable_default_condenser=True,
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+            'condenser.enabled': True,
+        },
         enable_proactive_conversation_starters=True,
     )
 
@@ -1351,10 +1362,13 @@ async def test_get_org_sensitive_fields_not_exposed(
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+            'condenser.enabled': True,
+        },
         search_api_key='secret-search-key-123',  # Should not be exposed
         sandbox_api_key='secret-sandbox-key-123',  # Should not be exposed
-        enable_default_condenser=True,
         enable_proactive_conversation_starters=True,
     )
 
@@ -1878,7 +1892,7 @@ async def test_update_org_permission_denied_llm_settings(
     """
     # Arrange
     org_id = uuid.uuid4()
-    update_data = {'default_llm_model': 'claude-opus-4-5-20251101'}
+    update_data = {'agent_settings': {'llm.model': 'claude-opus-4-5-20251101'}}
 
     with (
         patch(
@@ -3294,7 +3308,10 @@ async def test_switch_org_success(mock_app_with_get_user_id):
         contact_name='John Doe',
         contact_email='john@example.com',
         org_version=5,
-        default_llm_model='claude-opus-4-5-20251101',
+        agent_settings={
+            'schema_version': 1,
+            'llm.model': 'claude-opus-4-5-20251101',
+        },
     )
 
     with (

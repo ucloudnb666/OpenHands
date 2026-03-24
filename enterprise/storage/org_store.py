@@ -28,6 +28,20 @@ from storage.user_settings import UserSettings
 from openhands.core.logger import openhands_logger as logger
 from openhands.storage.data_models.settings import Settings
 
+_ORG_SETTINGS_EXCLUDED_FIELDS = {
+    'id',
+    'name',
+    'contact_name',
+    'contact_email',
+    'org_version',
+    'agent_settings',
+}
+_ORG_SETTINGS_FIELDS = {
+    normalized
+    for column in Org.__table__.columns
+    if (normalized := column.name.lstrip('_')) not in _ORG_SETTINGS_EXCLUDED_FIELDS
+}
+
 
 class OrgStore:
     """Store for managing organizations."""
@@ -218,61 +232,28 @@ class OrgStore:
 
     @staticmethod
     def get_kwargs_from_settings(settings: Settings):
-        normalized_agent_settings = settings.normalized_agent_settings(
+        kwargs = {
+            field: getattr(settings, field)
+            for field in _ORG_SETTINGS_FIELDS
+            if hasattr(settings, field)
+        }
+        kwargs['agent_settings'] = settings.normalized_agent_settings(
             strip_secret_values=True
         )
-        return {
-            'remote_runtime_resource_factor': getattr(
-                settings, 'remote_runtime_resource_factor', None
-            ),
-            'billing_margin': getattr(settings, 'billing_margin', None),
-            'enable_proactive_conversation_starters': getattr(
-                settings, 'enable_proactive_conversation_starters', None
-            ),
-            'sandbox_base_container_image': getattr(
-                settings, 'sandbox_base_container_image', None
-            ),
-            'sandbox_runtime_container_image': getattr(
-                settings, 'sandbox_runtime_container_image', None
-            ),
-            'search_api_key': getattr(settings, 'search_api_key', None),
-            'sandbox_api_key': getattr(settings, 'sandbox_api_key', None),
-            'max_budget_per_task': getattr(settings, 'max_budget_per_task', None),
-            'enable_solvability_analysis': getattr(
-                settings, 'enable_solvability_analysis', None
-            ),
-            'v1_enabled': getattr(settings, 'v1_enabled', None),
-            'conversation_expiration': getattr(
-                settings, 'conversation_expiration', None
-            ),
-            'byor_export_enabled': getattr(settings, 'byor_export_enabled', None),
-            'sandbox_grouping_strategy': getattr(
-                settings, 'sandbox_grouping_strategy', None
-            ),
-            'agent_settings': normalized_agent_settings,
-        }
+        return kwargs
 
     @staticmethod
     def get_kwargs_from_user_settings(user_settings: UserSettings):
-        settings = user_settings.to_settings()
-        normalized_agent_settings = settings.normalized_agent_settings(
-            strip_secret_values=True
-        )
-        return {
-            'remote_runtime_resource_factor': user_settings.remote_runtime_resource_factor,
-            'billing_margin': user_settings.billing_margin,
-            'enable_proactive_conversation_starters': user_settings.enable_proactive_conversation_starters,
-            'sandbox_base_container_image': user_settings.sandbox_base_container_image,
-            'sandbox_runtime_container_image': user_settings.sandbox_runtime_container_image,
-            'org_version': user_settings.user_version,
-            'agent_settings': normalized_agent_settings,
-            'search_api_key': user_settings.search_api_key,
-            'sandbox_api_key': user_settings.sandbox_api_key,
-            'max_budget_per_task': user_settings.max_budget_per_task,
-            'enable_solvability_analysis': user_settings.enable_solvability_analysis,
-            'v1_enabled': user_settings.v1_enabled,
-            'sandbox_grouping_strategy': user_settings.sandbox_grouping_strategy,
+        kwargs = {
+            field: getattr(user_settings, field)
+            for field in _ORG_SETTINGS_FIELDS
+            if hasattr(user_settings, field)
         }
+        kwargs['org_version'] = user_settings.user_version
+        kwargs['agent_settings'] = (
+            user_settings.to_settings().normalized_agent_settings(strip_secret_values=True)
+        )
+        return kwargs
 
     @staticmethod
     async def persist_org_with_owner(

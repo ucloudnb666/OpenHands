@@ -786,17 +786,12 @@ def test_create_user_settings_from_entities():
     user.git_user_email = 'test@git.com'
 
     org = MagicMock()
-    org.agent = 'CodeActAgent'
-    org.security_analyzer = 'mock-analyzer'
-    org.confirmation_mode = False
     org.remote_runtime_resource_factor = 1.0
-    org.enable_default_condenser = True
     org.billing_margin = 0.0
     org.enable_proactive_conversation_starters = True
     org.sandbox_base_container_image = None
     org.sandbox_runtime_container_image = None
     org.org_version = 1
-    org.mcp_config = None
     org.agent_settings = {
         'schema_version': 1,
         'agent': 'CodeActAgent',
@@ -807,10 +802,6 @@ def test_create_user_settings_from_entities():
     org.max_budget_per_task = None
     org.enable_solvability_analysis = False
     org.v1_enabled = True
-    org.condenser_max_size = None
-    org.default_llm_model = 'default-model'
-    org.default_llm_base_url = 'https://default.api.com'
-    org.default_max_iterations = 100
 
     result = UserStore._create_user_settings_from_entities(
         user_id, org_member, user, org
@@ -847,17 +838,12 @@ def test_create_user_settings_from_entities_with_org_fallback():
     user.git_user_email = None
 
     org = MagicMock()
-    org.agent = 'CodeActAgent'
-    org.security_analyzer = None
-    org.confirmation_mode = True
     org.remote_runtime_resource_factor = 2.0
-    org.enable_default_condenser = False
     org.billing_margin = 0.1
     org.enable_proactive_conversation_starters = False
     org.sandbox_base_container_image = 'custom-image'
     org.sandbox_runtime_container_image = None
     org.org_version = 2
-    org.mcp_config = {'key': 'value'}
     org.agent_settings = {
         'schema_version': 1,
         'agent': 'CodeActAgent',
@@ -874,11 +860,6 @@ def test_create_user_settings_from_entities_with_org_fallback():
     org.max_budget_per_task = 10.0
     org.enable_solvability_analysis = True
     org.v1_enabled = False
-    org.condenser_max_size = 1000
-    # Org defaults
-    org.default_llm_model = 'default-model'
-    org.default_llm_base_url = 'https://default.api.com'
-    org.default_max_iterations = 100
 
     result = UserStore._create_user_settings_from_entities(
         user_id, org_member, user, org

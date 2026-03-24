@@ -327,7 +327,6 @@ def org_with_multiple_members_fixture(session_maker):
             id=org_id,
             name='test-org',
             org_version=1,
-            enable_default_condenser=True,
             enable_proactive_conversation_starters=True,
         )
         session.add(org)
@@ -498,7 +497,4 @@ async def test_store_does_not_update_org_default_llm_settings(
         org = result.scalars().first()
 
         assert org is not None
-        assert org.default_llm_model is None
-        assert org.default_llm_base_url is None
-        assert org.default_max_iterations is None
         assert org.agent_settings == {}

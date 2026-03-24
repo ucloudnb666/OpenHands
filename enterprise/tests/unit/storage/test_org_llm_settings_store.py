@@ -47,7 +47,10 @@ async def test_get_current_org_by_user_id_success(async_session_maker):
     """
     # Arrange
     async with async_session_maker() as session:
-        org = Org(name='test-org', default_llm_model='claude-3')
+        org = Org(
+            name='test-org',
+            agent_settings={'schema_version': 1, 'llm.model': 'claude-3'},
+        )
         session.add(org)
         await session.flush()
 
@@ -63,7 +66,7 @@ async def test_get_current_org_by_user_id_success(async_session_maker):
     # Assert
     assert result is not None
     assert result.name == 'test-org'
-    assert result.default_llm_model == 'claude-3'
+    assert result.agent_settings['llm.model'] == 'claude-3'
 
 
 @pytest.mark.asyncio

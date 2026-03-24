@@ -97,7 +97,10 @@ async def test_update_org(async_session_maker, mock_litellm_api):
     # Test updating org details
     async with async_session_maker() as session:
         # Create a test org
-        org = Org(name='test-org', agent='CodeActAgent')
+        org = Org(
+            name='test-org',
+            agent_settings={'schema_version': 1, 'agent': 'CodeActAgent'},
+        )
         session.add(org)
         await session.commit()
         await session.refresh(org)
@@ -108,12 +111,16 @@ async def test_update_org(async_session_maker, mock_litellm_api):
         patch('storage.org_store.a_session_maker', async_session_maker),
     ):
         updated_org = await OrgStore.update_org(
-            org_id=org_id, kwargs={'name': 'updated-org', 'agent': 'PlannerAgent'}
+            org_id=org_id,
+            kwargs={
+                'name': 'updated-org',
+                'agent_settings': {'agent': 'PlannerAgent'},
+            },
         )
 
         assert updated_org is not None
         assert updated_org.name == 'updated-org'
-        assert updated_org.agent == 'PlannerAgent'
+        assert updated_org.agent_settings['agent'] == 'PlannerAgent'
 
 
 @pytest.mark.asyncio
@@ -135,12 +142,15 @@ async def test_create_org(async_session_maker, mock_litellm_api):
         patch('storage.org_store.a_session_maker', async_session_maker),
     ):
         org = await OrgStore.create_org(
-            kwargs={'name': 'new-org', 'agent': 'CodeActAgent'}
+            kwargs={
+                'name': 'new-org',
+                'agent_settings': {'schema_version': 1, 'agent': 'CodeActAgent'},
+            }
         )
 
         assert org is not None
         assert org.name == 'new-org'
-        assert org.agent == 'CodeActAgent'
+        assert org.agent_settings['agent'] == 'CodeActAgent'
         assert org.id is not None
 
 
@@ -382,7 +392,7 @@ async def test_persist_org_with_owner_returns_refreshed_org(
         name='Test Org',
         contact_name='Jane Doe',
         contact_email='jane@example.com',
-        agent='CodeActAgent',
+        agent_settings={'schema_version': 1, 'agent': 'CodeActAgent'},
     )
 
     org_member = OrgMember(
@@ -400,7 +410,7 @@ async def test_persist_org_with_owner_returns_refreshed_org(
     # Assert - verify the returned object has database-generated fields
     assert result.id == org_id
     assert result.name == 'Test Org'
-    assert result.agent == 'CodeActAgent'
+    assert result.agent_settings['agent'] == 'CodeActAgent'
     # Verify org_version was set by create_org logic (if applicable)
     assert hasattr(result, 'org_version')
 

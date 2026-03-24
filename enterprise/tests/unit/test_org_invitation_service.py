@@ -100,9 +100,7 @@ class TestAcceptInvitationEmailValidation:
         mock_keycloak_user_info = {'email': 'alice@example.com'}  # Email from Keycloak
 
         mock_org = MagicMock()
-        mock_org.default_llm_model = 'test-model'
-        mock_org.default_llm_base_url = None
-        mock_org.default_max_iterations = None
+        mock_org.agent_settings = {'schema_version': 1, 'llm.model': 'test-model'}
 
         with (
             patch(
@@ -226,9 +224,7 @@ class TestAcceptInvitationEmailValidation:
         mock_invitation.email = 'alice@example.com'  # Lowercase in invitation
 
         mock_org = MagicMock()
-        mock_org.default_llm_model = 'test-model'
-        mock_org.default_llm_base_url = None
-        mock_org.default_max_iterations = None
+        mock_org.agent_settings = {'schema_version': 1, 'llm.model': 'test-model'}
 
         with (
             patch(
@@ -291,9 +287,12 @@ class TestAcceptInvitationEmailValidation:
         mock_user.email = 'alice@example.com'
 
         mock_org = MagicMock()
-        mock_org.default_llm_model = 'claude-sonnet-4'
-        mock_org.default_llm_base_url = 'https://api.anthropic.com'
-        mock_org.default_max_iterations = 100
+        mock_org.agent_settings = {
+            'schema_version': 1,
+            'llm.model': 'claude-sonnet-4',
+            'llm.base_url': 'https://api.anthropic.com',
+            'max_iterations': 100,
+        }
 
         with (
             patch(

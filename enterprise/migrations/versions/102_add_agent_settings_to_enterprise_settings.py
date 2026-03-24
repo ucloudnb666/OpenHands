@@ -92,7 +92,7 @@ def upgrade() -> None:
                     'condenser.max_size', condenser_max_size,
                     'max_iterations', default_max_iterations,
                     'mcp_config', mcp_config
-                )
+                ) || COALESCE(agent_settings::jsonb, '{}'::jsonb)
             )::json
             """
         )
@@ -145,6 +145,15 @@ def upgrade() -> None:
     op.drop_column('org_member', 'llm_model')
     op.drop_column('org_member', '_llm_api_key_for_byor')
     op.drop_column('org_member', 'llm_base_url')
+    op.drop_column('org', 'agent')
+    op.drop_column('org', 'default_max_iterations')
+    op.drop_column('org', 'security_analyzer')
+    op.drop_column('org', 'confirmation_mode')
+    op.drop_column('org', 'default_llm_model')
+    op.drop_column('org', 'default_llm_base_url')
+    op.drop_column('org', 'enable_default_condenser')
+    op.drop_column('org', 'mcp_config')
+    op.drop_column('org', 'condenser_max_size')
 
 
 def downgrade() -> None:
@@ -182,6 +191,25 @@ def downgrade() -> None:
     op.add_column(
         'org_member', sa.Column('max_iterations', sa.Integer(), nullable=True)
     )
+    op.add_column('org', sa.Column('agent', sa.String(), nullable=True))
+    op.add_column(
+        'org', sa.Column('default_max_iterations', sa.Integer(), nullable=True)
+    )
+    op.add_column('org', sa.Column('security_analyzer', sa.String(), nullable=True))
+    op.add_column('org', sa.Column('confirmation_mode', sa.Boolean(), nullable=True))
+    op.add_column('org', sa.Column('default_llm_model', sa.String(), nullable=True))
+    op.add_column('org', sa.Column('default_llm_base_url', sa.String(), nullable=True))
+    op.add_column(
+        'org',
+        sa.Column(
+            'enable_default_condenser',
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.true(),
+        ),
+    )
+    op.add_column('org', sa.Column('mcp_config', sa.JSON(), nullable=True))
+    op.add_column('org', sa.Column('condenser_max_size', sa.Integer(), nullable=True))
 
     op.execute(
         sa.text(
@@ -217,6 +245,34 @@ def downgrade() -> None:
                 llm_model = agent_settings ->> 'llm.model',
                 llm_base_url = agent_settings ->> 'llm.base_url',
                 max_iterations = NULLIF(agent_settings ->> 'max_iterations', '')::integer
+            """
+        )
+    )
+    op.execute(
+        sa.text(
+            """
+            UPDATE org
+            SET
+                agent = agent_settings ->> 'agent',
+                default_max_iterations =
+                    NULLIF(agent_settings ->> 'max_iterations', '')::integer,
+                security_analyzer =
+                    agent_settings ->> 'verification.security_analyzer',
+                confirmation_mode = CASE
+                    WHEN agent_settings::jsonb ? 'verification.confirmation_mode'
+                    THEN (agent_settings ->> 'verification.confirmation_mode')::boolean
+                    ELSE NULL
+                END,
+                default_llm_model = agent_settings ->> 'llm.model',
+                default_llm_base_url = agent_settings ->> 'llm.base_url',
+                enable_default_condenser = CASE
+                    WHEN agent_settings::jsonb ? 'condenser.enabled'
+                    THEN (agent_settings ->> 'condenser.enabled')::boolean
+                    ELSE TRUE
+                END,
+                mcp_config = agent_settings -> 'mcp_config',
+                condenser_max_size =
+                    NULLIF(agent_settings ->> 'condenser.max_size', '')::integer
             """
         )
     )
