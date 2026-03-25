@@ -830,5 +830,6 @@ class TestLoadSkillsWithMarketplaces:
         call_args = mock_client.post.call_args
         payload = call_args[1]['json']
 
-        # Empty list should be passed as None (falsy check in code)
-        assert payload.get('registered_marketplaces') is None
+        # Empty list is now preserved (semantic distinction from None)
+        # Empty list = "explicitly no marketplaces", None = "not specified"
+        assert payload.get('registered_marketplaces') == []

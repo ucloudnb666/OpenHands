@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import Enum
 from typing import Annotated, Literal
 
@@ -18,6 +19,16 @@ from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.utils import load_openhands_config
 from openhands.storage.data_models.secrets import Secrets
+
+# Valid source patterns for MarketplaceRegistration
+# - github:owner/repo format
+_GITHUB_SOURCE_PATTERN = re.compile(r'^github:[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$')
+# - Git URLs (https, git, ssh protocols)
+_GIT_URL_PATTERN = re.compile(
+    r'^(https?://|git@|ssh://|git://)[a-zA-Z0-9_.-]+[:/][a-zA-Z0-9_./-]+$'
+)
+# - Relative local paths (no absolute paths, no parent traversal)
+_LOCAL_PATH_PATTERN = re.compile(r'^[a-zA-Z0-9_][a-zA-Z0-9_./-]*$')
 
 
 class MarketplaceRegistration(BaseModel):
@@ -74,6 +85,47 @@ class MarketplaceRegistration(BaseModel):
             'None = registered for resolution but not auto-loaded.'
         ),
     )
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Validate name is non-empty and contains only valid identifier characters."""
+        if not v or not v.strip():
+            raise ValueError('name cannot be empty')
+        v = v.strip()
+        # Name should be a valid identifier (alphanumeric, hyphens, underscores)
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', v):
+            raise ValueError(
+                'name must start with a letter and contain only '
+                'letters, numbers, hyphens, and underscores'
+            )
+        return v
+
+    @field_validator('source')
+    @classmethod
+    def validate_source(cls, v: str) -> str:
+        """Validate source matches expected patterns (github:owner/repo, git URL, or local path)."""
+        if not v or not v.strip():
+            raise ValueError('source cannot be empty')
+        v = v.strip()
+
+        # Check for valid source patterns
+        if _GITHUB_SOURCE_PATTERN.match(v):
+            return v
+        if _GIT_URL_PATTERN.match(v):
+            return v
+        # Local path: must be relative, no parent traversal
+        if v.startswith('/'):
+            raise ValueError('local path source must be relative, not absolute')
+        if '..' in v:
+            raise ValueError("source cannot contain '..' (parent directory traversal)")
+        if _LOCAL_PATH_PATTERN.match(v):
+            return v
+
+        raise ValueError(
+            "source must be 'github:owner/repo', a git URL "
+            '(https/git/ssh), or a relative local path'
+        )
 
     @field_validator('repo_path')
     @classmethod
@@ -159,6 +211,26 @@ class Settings(BaseModel):
     model_config = ConfigDict(
         validate_assignment=True,
     )
+
+    @field_validator('registered_marketplaces')
+    @classmethod
+    def validate_unique_marketplace_names(
+        cls, v: list[MarketplaceRegistration]
+    ) -> list[MarketplaceRegistration]:
+        """Ensure marketplace names are unique within the list.
+
+        Duplicate names would cause ambiguity in plugin resolution since
+        the marketplace name is part of the lookup key (plugin-name@marketplace-name).
+        """
+        if not v:
+            return v
+        names = [reg.name for reg in v]
+        duplicates = [name for name in names if names.count(name) > 1]
+        if duplicates:
+            raise ValueError(
+                f'duplicate marketplace names are not allowed: {set(duplicates)}'
+            )
+        return v
 
     @field_serializer('llm_api_key', 'search_api_key')
     def api_key_serializer(self, api_key: SecretStr | None, info: SerializationInfo):

@@ -211,6 +211,74 @@ class TestMarketplaceRegistration:
             'auto_load': 'all',
         }
 
+    # --- Name validation tests ---
+
+    def test_name_validation_rejects_empty(self):
+        """Test that empty name is rejected."""
+        with pytest.raises(ValidationError, match='name cannot be empty'):
+            MarketplaceRegistration(name='', source='github:owner/repo')
+
+    def test_name_validation_rejects_whitespace_only(self):
+        """Test that whitespace-only name is rejected."""
+        with pytest.raises(ValidationError, match='name cannot be empty'):
+            MarketplaceRegistration(name='   ', source='github:owner/repo')
+
+    def test_name_validation_rejects_invalid_chars(self):
+        """Test that names with invalid characters are rejected."""
+        with pytest.raises(ValidationError, match='must start with a letter'):
+            MarketplaceRegistration(name='123-invalid', source='github:owner/repo')
+
+    def test_name_validation_rejects_spaces(self):
+        """Test that names with spaces are rejected."""
+        with pytest.raises(ValidationError, match='must start with a letter'):
+            MarketplaceRegistration(name='invalid name', source='github:owner/repo')
+
+    def test_name_validation_strips_whitespace(self):
+        """Test that name whitespace is stripped."""
+        reg = MarketplaceRegistration(name='  valid-name  ', source='github:owner/repo')
+        assert reg.name == 'valid-name'
+
+    # --- Source validation tests ---
+
+    def test_source_validation_github_format(self):
+        """Test valid github:owner/repo source."""
+        reg = MarketplaceRegistration(name='test', source='github:my-org/my-repo')
+        assert reg.source == 'github:my-org/my-repo'
+
+    def test_source_validation_https_url(self):
+        """Test valid HTTPS git URL source."""
+        reg = MarketplaceRegistration(
+            name='test', source='https://github.com/owner/repo'
+        )
+        assert reg.source == 'https://github.com/owner/repo'
+
+    def test_source_validation_ssh_url(self):
+        """Test valid SSH git URL source."""
+        reg = MarketplaceRegistration(
+            name='test', source='git@github.com:owner/repo'
+        )
+        assert reg.source == 'git@github.com:owner/repo'
+
+    def test_source_validation_relative_path(self):
+        """Test valid relative local path source."""
+        reg = MarketplaceRegistration(name='test', source='local/path/to/skills')
+        assert reg.source == 'local/path/to/skills'
+
+    def test_source_validation_rejects_empty(self):
+        """Test that empty source is rejected."""
+        with pytest.raises(ValidationError, match='source cannot be empty'):
+            MarketplaceRegistration(name='test', source='')
+
+    def test_source_validation_rejects_absolute_path(self):
+        """Test that absolute local path is rejected."""
+        with pytest.raises(ValidationError, match='must be relative'):
+            MarketplaceRegistration(name='test', source='/absolute/path')
+
+    def test_source_validation_rejects_parent_traversal(self):
+        """Test that parent directory traversal in source is rejected."""
+        with pytest.raises(ValidationError, match="cannot contain '..'"):
+            MarketplaceRegistration(name='test', source='../escape/path')
+
 
 # --- Tests for Settings.registered_marketplaces ---
 
@@ -278,3 +346,35 @@ class TestSettingsRegisteredMarketplaces:
         assert len(settings.registered_marketplaces) == 1
         assert settings.registered_marketplaces[0].name == 'custom'
         assert settings.registered_marketplaces[0].ref == 'v1.0.0'
+
+    def test_settings_rejects_duplicate_marketplace_names(self):
+        """Test that duplicate marketplace names are rejected."""
+        with pytest.raises(ValidationError, match='duplicate marketplace names'):
+            Settings(
+                registered_marketplaces=[
+                    MarketplaceRegistration(
+                        name='same-name',
+                        source='github:owner/repo1',
+                    ),
+                    MarketplaceRegistration(
+                        name='same-name',
+                        source='github:owner/repo2',
+                    ),
+                ]
+            )
+
+    def test_settings_allows_unique_marketplace_names(self):
+        """Test that unique marketplace names are allowed."""
+        settings = Settings(
+            registered_marketplaces=[
+                MarketplaceRegistration(
+                    name='first',
+                    source='github:owner/repo1',
+                ),
+                MarketplaceRegistration(
+                    name='second',
+                    source='github:owner/repo2',
+                ),
+            ]
+        )
+        assert len(settings.registered_marketplaces) == 2

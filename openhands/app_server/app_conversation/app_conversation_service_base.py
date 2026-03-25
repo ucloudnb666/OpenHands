@@ -10,6 +10,8 @@ from uuid import UUID
 if TYPE_CHECKING:
     import httpx
 
+    from openhands.storage.data_models.settings import MarketplaceRegistration
+
 import base62
 
 from openhands.app_server.app_conversation.app_conversation_models import (
@@ -97,7 +99,7 @@ class AppConversationServiceBase(AppConversationService, ABC):
         selected_repository: str | None,
         project_dir: str,
         agent_server_url: str,
-        registered_marketplaces: list | None = None,
+        registered_marketplaces: list[MarketplaceRegistration] | None = None,
     ) -> list[Skill]:
         """Load skills from all sources via the agent-server.
 

@@ -65,16 +65,6 @@ class SkillInfo(BaseModel):
     is_agentskills_format: bool = False
 
 
-class MarketplaceRegistrationPayload(BaseModel):
-    """Marketplace registration for agent-server API request."""
-
-    name: str
-    source: str
-    ref: str | None = None
-    repo_path: str | None = None
-    auto_load: str | None = None
-
-
 async def _is_gitlab_repository(repo_name: str, user_context: UserContext) -> bool:
     """Check if a repository is hosted on GitLab.
 
@@ -313,18 +303,12 @@ async def load_skills_from_agent_server(
     """
     try:
         # Convert marketplace registrations to API payload format
-        marketplace_payloads = None
-        if registered_marketplaces:
-            marketplace_payloads = [
-                MarketplaceRegistrationPayload(
-                    name=reg.name,
-                    source=reg.source,
-                    ref=reg.ref,
-                    repo_path=reg.repo_path,
-                    auto_load=reg.auto_load,
-                ).model_dump()
-                for reg in registered_marketplaces
-            ]
+        # Preserve semantic distinction: None = not specified, [] = explicitly empty
+        marketplace_payloads = (
+            [reg.model_dump() for reg in registered_marketplaces]
+            if registered_marketplaces is not None
+            else None
+        )
 
         # Build request payload
         payload = {
