@@ -254,7 +254,9 @@ class SaasSettingsStore(SettingsStore):
 
             org.agent_settings = shared_agent_settings
 
-            result = await session.execute(select(OrgMember).filter(OrgMember.org_id == org_id))
+            result = await session.execute(
+                select(OrgMember).filter(OrgMember.org_id == org_id)
+            )
             org_members = list(result.scalars().all())
             for member in org_members:
                 member.agent_settings = dict(shared_agent_settings)

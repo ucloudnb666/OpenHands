@@ -278,7 +278,7 @@ def test_conversation_init_data_default_agent_settings_initializes():
     init_data = ConversationInitData()
 
     assert init_data.raw_agent_settings == {'schema_version': 1}
-    assert init_data.agent_settings.schema_version == 1
+    assert init_data.agent_settings.agent == 'CodeActAgent'
 
 
 def test_conversation_init_data_no_pydantic_frozen_field_warning():

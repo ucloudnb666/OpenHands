@@ -439,13 +439,17 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
             str(member.user_id): member
             for member in session.execute(
                 select(OrgMember).where(OrgMember.org_id == org_id)
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
         assert len(members) == 3
 
         for member in members.values():
             assert member.agent_settings['llm.model'] == 'anthropic/claude-sonnet-4'
-            assert member.agent_settings['llm.base_url'] == 'https://api.anthropic.com/v1'
+            assert (
+                member.agent_settings['llm.base_url'] == 'https://api.anthropic.com/v1'
+            )
             assert member.agent_settings['max_iterations'] == 100
             assert decrypt_value(member._llm_api_key) == 'shared-external-api-key'
 
@@ -493,7 +497,9 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
             str(member.user_id): member
             for member in session.execute(
                 select(OrgMember).where(OrgMember.org_id == org_id)
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
         assert len(members) == 3
 
@@ -506,7 +512,10 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
         assert decrypt_value(member2._llm_api_key) == 'member2-initial-key'
 
         for member in members.values():
-            assert member.agent_settings['llm.model'] == 'openhands/claude-opus-4-5-20251101'
+            assert (
+                member.agent_settings['llm.model']
+                == 'openhands/claude-opus-4-5-20251101'
+            )
             assert member.agent_settings['llm.base_url'] == LITE_LLM_API_URL
             assert member.agent_settings['max_iterations'] == 75
 
@@ -550,7 +559,9 @@ async def test_store_saves_mcp_config_to_current_member_only(
             str(m.user_id): m
             for m in session.execute(
                 select(OrgMember).where(OrgMember.org_id == org_id)
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         }
         assert members[admin_user_id].mcp_config == user_mcp_config
         assert members[member1_user_id].mcp_config is None
@@ -652,18 +663,24 @@ async def test_load_returns_current_member_specific_mcp_config(
             )
         )
 
-    with patch(
-        'storage.saas_settings_store.a_session_maker', async_session_maker
-    ), patch('storage.user_store.a_session_maker', async_session_maker), patch(
-        'storage.org_store.a_session_maker', async_session_maker
+    with (
+        patch('storage.saas_settings_store.a_session_maker', async_session_maker),
+        patch('storage.user_store.a_session_maker', async_session_maker),
+        patch('storage.org_store.a_session_maker', async_session_maker),
     ):
         admin_loaded_settings = await admin_store.load()
         member_loaded_settings = await member_store.load()
 
     assert admin_loaded_settings is not None
     assert admin_loaded_settings.mcp_config is not None
-    assert admin_loaded_settings.mcp_config.sse_servers[0].url == 'https://admin-private-server.com'
+    assert (
+        admin_loaded_settings.mcp_config.sse_servers[0].url
+        == 'https://admin-private-server.com'
+    )
 
     assert member_loaded_settings is not None
     assert member_loaded_settings.mcp_config is not None
-    assert member_loaded_settings.mcp_config.sse_servers[0].url == 'https://member-private-server.com'
+    assert (
+        member_loaded_settings.mcp_config.sse_servers[0].url
+        == 'https://member-private-server.com'
+    )
