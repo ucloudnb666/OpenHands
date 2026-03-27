@@ -16,6 +16,7 @@ import {
   OnboardingQuestion,
   OnboardingAppMode,
 } from "#/constants/onboarding";
+import { DeploymentMode } from "#/api/option-service/option.types";
 
 export const clientLoader = async () => {
   if (!ENABLE_ONBOARDING()) {
@@ -27,9 +28,12 @@ export const clientLoader = async () => {
 
 type OnboardingAnswers = Record<string, string | string[]>;
 
-function getOnboardingAppMode(): OnboardingAppMode {
-  // TODO: query for app mode (saas or self hosted super user)
-  return "saas";
+function getOnboardingAppMode(
+  deploymentMode: DeploymentMode | undefined,
+): OnboardingAppMode {
+  if (deploymentMode === "self_hosted") return "self-hosted";
+  if (deploymentMode === "cloud") return "cloud";
+  return "oss";
 }
 
 function getAnswerAsArray(answers: OnboardingAnswers, key: string): string[] {
@@ -67,7 +71,9 @@ function OnboardingForm() {
   const { mutate: submitOnboarding } = useSubmitOnboarding();
   const { trackOnboardingCompleted } = useTracking();
 
-  const onboardingAppMode: OnboardingAppMode = getOnboardingAppMode();
+  const onboardingAppMode: OnboardingAppMode = getOnboardingAppMode(
+    config.data?.feature_flags?.deployment_mode,
+  );
 
   const steps = React.useMemo(
     () =>

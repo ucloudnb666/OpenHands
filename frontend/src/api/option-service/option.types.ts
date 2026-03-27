@@ -1,5 +1,7 @@
 import { Provider } from "#/types/settings";
 
+export type DeploymentMode = "cloud" | "self_hosted";
+
 export interface WebClientFeatureFlags {
   enable_billing: boolean;
   hide_llm_settings: boolean;
@@ -9,6 +11,7 @@ export interface WebClientFeatureFlags {
   hide_users_page: boolean;
   hide_billing_page: boolean;
   hide_integrations_page: boolean;
+  deployment_mode?: DeploymentMode;
 }
 
 export interface WebClientConfig {

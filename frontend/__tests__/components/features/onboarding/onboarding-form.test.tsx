@@ -42,13 +42,16 @@ const renderOnboardingForm = () => {
   );
 };
 
-describe("OnboardingForm - SaaS Mode", () => {
+describe("OnboardingForm - Cloud Mode", () => {
   beforeEach(() => {
     mockMutate.mockClear();
     mockNavigate.mockClear();
     mockTrackOnboardingCompleted.mockClear();
     mockUseConfig.mockReturnValue({
-      data: { app_mode: "saas" },
+      data: {
+        app_mode: "saas",
+        feature_flags: { deployment_mode: "cloud" },
+      },
       isLoading: false,
     });
   });
@@ -67,7 +70,7 @@ describe("OnboardingForm - SaaS Mode", () => {
     expect(screen.getByTestId("step-actions")).toBeInTheDocument();
   });
 
-  it("should display step progress indicator with 3 bars for saas mode", () => {
+  it("should display step progress indicator with 3 bars for cloud mode", () => {
     renderOnboardingForm();
 
     const stepHeader = screen.getByTestId("step-header");
@@ -146,11 +149,11 @@ describe("OnboardingForm - SaaS Mode", () => {
     });
   });
 
-  it("should track onboarding completion to PostHog in SaaS mode", async () => {
+  it("should track onboarding completion to PostHog in cloud mode", async () => {
     const user = userEvent.setup();
     renderOnboardingForm();
 
-    // Complete the full SaaS onboarding flow
+    // Complete the full cloud onboarding flow
     await user.click(screen.getByTestId("step-option-org_2_10"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
@@ -314,5 +317,144 @@ describe("OnboardingForm - SaaS Mode", () => {
     // Verify we're back on step 1 (1 progress bar filled)
     progressBars = stepHeader.querySelectorAll(".bg-white");
     expect(progressBars).toHaveLength(1);
+  });
+});
+
+describe("OnboardingForm - Self-Hosted Mode", () => {
+  // Self-hosted mode has 3 steps: org_name, org_size, use_case
+  // The role question is saas-only and not shown in self-hosted mode
+
+  beforeEach(() => {
+    mockMutate.mockClear();
+    mockNavigate.mockClear();
+    mockTrackOnboardingCompleted.mockClear();
+    mockUseConfig.mockReturnValue({
+      data: {
+        app_mode: "saas",
+        feature_flags: { deployment_mode: "self_hosted" },
+      },
+      isLoading: false,
+    });
+  });
+
+  it("should render with the correct test id", () => {
+    renderOnboardingForm();
+
+    expect(screen.getByTestId("onboarding-form")).toBeInTheDocument();
+  });
+
+  it("should display step progress indicator with 3 bars for self-hosted mode", () => {
+    renderOnboardingForm();
+
+    // Self-hosted has 3 steps: org_name, org_size, use_case (role is saas-only)
+    const stepHeader = screen.getByTestId("step-header");
+    const progressBars = stepHeader.querySelectorAll(".rounded-full");
+    expect(progressBars).toHaveLength(3);
+  });
+
+  it("should start with org_name question as first step with two input fields", () => {
+    renderOnboardingForm();
+
+    // The first step in self-hosted mode should be org_name with two inputs
+    const orgNameInput = screen.getByTestId("form-input-org_name");
+    const orgDomainInput = screen.getByTestId("form-input-org_domain");
+    expect(orgNameInput).toBeInTheDocument();
+    expect(orgDomainInput).toBeInTheDocument();
+  });
+
+  it("should call submitOnboarding with all selections including org_name when finishing", async () => {
+    const user = userEvent.setup();
+    renderOnboardingForm();
+
+    // Step 1 - enter org name and domain (input fields)
+    const orgNameInput = screen.getByTestId("form-input-org_name");
+    const orgDomainInput = screen.getByTestId("form-input-org_domain");
+    await user.type(orgNameInput, "Acme Corp");
+    await user.type(orgDomainInput, "acme.com");
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 2 - select org size (single select)
+    await user.click(screen.getByTestId("step-option-org_2_10"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 3 - select use case (multi-select) - this is the last step in self-hosted mode
+    await user.click(screen.getByTestId("step-option-new_features"));
+    await user.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockMutate).toHaveBeenCalledWith({
+      selections: {
+        org_name: "Acme Corp",
+        org_domain: "acme.com",
+        org_size: "org_2_10",
+        use_case: ["new_features"],
+      },
+    });
+  });
+
+  it("should track onboarding completion in self-hosted mode", async () => {
+    const user = userEvent.setup();
+    renderOnboardingForm();
+
+    // Complete the full self-hosted onboarding flow (3 steps)
+    const orgNameInput = screen.getByTestId("form-input-org_name");
+    const orgDomainInput = screen.getByTestId("form-input-org_domain");
+    await user.type(orgNameInput, "Test Company");
+    await user.type(orgDomainInput, "test.com");
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    await user.click(screen.getByTestId("step-option-org_2_10"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    await user.click(screen.getByTestId("step-option-new_features"));
+    await user.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(mockTrackOnboardingCompleted).toHaveBeenCalledTimes(1);
+    // Note: role is not included since role question is saas-only
+    expect(mockTrackOnboardingCompleted).toHaveBeenCalledWith({
+      role: undefined,
+      orgSize: "org_2_10",
+      useCase: ["new_features"],
+    });
+  });
+
+  it("should show all 3 progress bars filled on the last step", async () => {
+    const user = userEvent.setup();
+    renderOnboardingForm();
+
+    // Navigate through all 3 steps
+    const orgNameInput = screen.getByTestId("form-input-org_name");
+    const orgDomainInput = screen.getByTestId("form-input-org_domain");
+    await user.type(orgNameInput, "Test Company");
+    await user.type(orgDomainInput, "test.com");
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    await user.click(screen.getByTestId("step-option-org_2_10"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // On step 3, all three progress bars should be filled
+    const stepHeader = screen.getByTestId("step-header");
+    const progressBars = stepHeader.querySelectorAll(".bg-white");
+    expect(progressBars).toHaveLength(3);
+  });
+
+  it("should have Next button disabled when both org_name inputs are empty", () => {
+    renderOnboardingForm();
+
+    const nextButton = screen.getByRole("button", { name: /next/i });
+    expect(nextButton).toBeDisabled();
+  });
+
+  it("should enable Next button when both org_name and org_domain are entered", async () => {
+    const user = userEvent.setup();
+    renderOnboardingForm();
+
+    const orgNameInput = screen.getByTestId("form-input-org_name");
+    const orgDomainInput = screen.getByTestId("form-input-org_domain");
+    await user.type(orgNameInput, "My Company");
+    await user.type(orgDomainInput, "mycompany.com");
+
+    const nextButton = screen.getByRole("button", { name: /next/i });
+    expect(nextButton).not.toBeDisabled();
   });
 });
