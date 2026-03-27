@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from "#/services/settings";
 import SettingsService from "#/api/settings-service/settings-service.api";
 import { Settings } from "#/types/settings";
 import { useSettings } from "../query/use-settings";
+import { useSelectedOrganizationId } from "#/context/use-selected-organization";
 
 const saveSettingsMutationFn = async (settings: Partial<Settings>) => {
   const settingsToSave: Partial<Settings> = {
@@ -28,6 +29,7 @@ const saveSettingsMutationFn = async (settings: Partial<Settings>) => {
 export const useSaveSettings = () => {
   const queryClient = useQueryClient();
   const { data: currentSettings } = useSettings();
+  const { organizationId } = useSelectedOrganizationId();
 
   return useMutation({
     mutationFn: async (settings: Partial<Settings>) => {
@@ -36,7 +38,9 @@ export const useSaveSettings = () => {
       await saveSettingsMutationFn(newSettings);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["settings", organizationId],
+      });
     },
     meta: {
       disableToast: true,

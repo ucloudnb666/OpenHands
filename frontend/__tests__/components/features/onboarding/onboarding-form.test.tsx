@@ -7,7 +7,7 @@ import OnboardingForm from "#/routes/onboarding-form";
 
 const mockMutate = vi.fn();
 const mockNavigate = vi.fn();
-
+const mockUseConfig = vi.fn();
 vi.mock("react-router", async (importOriginal) => {
   const original = await importOriginal<typeof import("react-router")>();
   return {
@@ -22,6 +22,10 @@ vi.mock("#/hooks/mutation/use-submit-onboarding", () => ({
   }),
 }));
 
+vi.mock("#/hooks/query/use-config", () => ({
+  useConfig: () => mockUseConfig(),
+}));
+
 const renderOnboardingForm = () => {
   return renderWithProviders(
     <MemoryRouter>
@@ -30,10 +34,14 @@ const renderOnboardingForm = () => {
   );
 };
 
-describe("OnboardingForm", () => {
+describe("OnboardingForm - SaaS Mode", () => {
   beforeEach(() => {
     mockMutate.mockClear();
     mockNavigate.mockClear();
+    mockUseConfig.mockReturnValue({
+      data: { app_mode: "saas" },
+      isLoading: false,
+    });
   });
 
   it("should render with the correct test id", () => {
@@ -50,7 +58,7 @@ describe("OnboardingForm", () => {
     expect(screen.getByTestId("step-actions")).toBeInTheDocument();
   });
 
-  it("should display step progress indicator with 3 bars", () => {
+  it("should display step progress indicator with 3 bars for saas mode", () => {
     renderOnboardingForm();
 
     const stepHeader = screen.getByTestId("step-header");
@@ -69,7 +77,7 @@ describe("OnboardingForm", () => {
     const user = userEvent.setup();
     renderOnboardingForm();
 
-    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByTestId("step-option-solo"));
 
     const nextButton = screen.getByRole("button", { name: /next/i });
     expect(nextButton).not.toBeDisabled();
@@ -84,7 +92,7 @@ describe("OnboardingForm", () => {
     let progressBars = stepHeader.querySelectorAll(".bg-white");
     expect(progressBars).toHaveLength(1);
 
-    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
     // On step 2, first two progress bars should be filled
@@ -96,7 +104,7 @@ describe("OnboardingForm", () => {
     const user = userEvent.setup();
     renderOnboardingForm();
 
-    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
     const nextButton = screen.getByRole("button", { name: /next/i });
@@ -107,29 +115,29 @@ describe("OnboardingForm", () => {
     const user = userEvent.setup();
     renderOnboardingForm();
 
-    // Step 1 - select role
-    await user.click(screen.getByTestId("step-option-software_engineer"));
-    await user.click(screen.getByRole("button", { name: /next/i }));
-
-    // Step 2 - select org size
+    // Step 1 - select org size (first step in saas mode - single select)
     await user.click(screen.getByTestId("step-option-org_2_10"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
-    // Step 3 - select use case
+    // Step 2 - select use case (multi-select)
     await user.click(screen.getByTestId("step-option-new_features"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 3 - select role (last step in saas mode - single select)
+    await user.click(screen.getByTestId("step-option-software_engineer"));
     await user.click(screen.getByRole("button", { name: /finish/i }));
 
     expect(mockMutate).toHaveBeenCalledTimes(1);
     expect(mockMutate).toHaveBeenCalledWith({
       selections: {
-        step1: "software_engineer",
-        step2: "org_2_10",
-        step3: "new_features",
+        org_size: "org_2_10",
+        use_case: ["new_features"],
+        role: "software_engineer",
       },
     });
   });
 
-  it("should render 6 options on step 1", () => {
+  it("should render 5 options on step 1 (org size question)", () => {
     renderOnboardingForm();
 
     const options = screen
@@ -137,31 +145,86 @@ describe("OnboardingForm", () => {
       .filter((btn) =>
         btn.getAttribute("data-testid")?.startsWith("step-option-"),
       );
-    expect(options).toHaveLength(6);
+    expect(options).toHaveLength(5);
   });
 
   it("should preserve selections when navigating through steps", async () => {
     const user = userEvent.setup();
     renderOnboardingForm();
 
-    // Select role on step 1
-    await user.click(screen.getByTestId("step-option-cto_founder"));
-    await user.click(screen.getByRole("button", { name: /next/i }));
-
-    // Select org size on step 2
+    // Select org size on step 1 (single select)
     await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
-    // Select use case on step 3
+    // Select use case on step 2 (multi-select)
     await user.click(screen.getByTestId("step-option-fixing_bugs"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Select role on step 3 (single select)
+    await user.click(screen.getByTestId("step-option-cto_founder"));
     await user.click(screen.getByRole("button", { name: /finish/i }));
 
     // Verify all selections were preserved
     expect(mockMutate).toHaveBeenCalledWith({
       selections: {
-        step1: "cto_founder",
-        step2: "solo",
-        step3: "fixing_bugs",
+        org_size: "solo",
+        use_case: ["fixing_bugs"],
+        role: "cto_founder",
+      },
+    });
+  });
+
+  it("should allow selecting multiple options on multi-select steps", async () => {
+    const user = userEvent.setup();
+    renderOnboardingForm();
+
+    // Step 1 - select org size (single select)
+    await user.click(screen.getByTestId("step-option-solo"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 2 - select multiple use cases (multi-select)
+    await user.click(screen.getByTestId("step-option-new_features"));
+    await user.click(screen.getByTestId("step-option-fixing_bugs"));
+    await user.click(screen.getByTestId("step-option-refactoring"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 3 - select role (single select)
+    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(mockMutate).toHaveBeenCalledWith({
+      selections: {
+        org_size: "solo",
+        use_case: ["new_features", "fixing_bugs", "refactoring"],
+        role: "software_engineer",
+      },
+    });
+  });
+
+  it("should allow deselecting options on multi-select steps", async () => {
+    const user = userEvent.setup();
+    renderOnboardingForm();
+
+    // Step 1 - select org size
+    await user.click(screen.getByTestId("step-option-solo"));
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 2 - select and deselect use cases
+    await user.click(screen.getByTestId("step-option-new_features"));
+    await user.click(screen.getByTestId("step-option-fixing_bugs"));
+    await user.click(screen.getByTestId("step-option-new_features")); // Deselect
+
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 3 - select role
+    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByRole("button", { name: /finish/i }));
+
+    expect(mockMutate).toHaveBeenCalledWith({
+      selections: {
+        org_size: "solo",
+        use_case: ["fixing_bugs"],
+        role: "software_engineer",
       },
     });
   });
@@ -171,10 +234,10 @@ describe("OnboardingForm", () => {
     renderOnboardingForm();
 
     // Navigate to step 3
-    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
-    await user.click(screen.getByTestId("step-option-solo"));
+    await user.click(screen.getByTestId("step-option-new_features"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
     // On step 3, all three progress bars should be filled
@@ -194,7 +257,7 @@ describe("OnboardingForm", () => {
     const user = userEvent.setup();
     renderOnboardingForm();
 
-    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
     const backButton = screen.getByRole("button", { name: /back/i });
@@ -206,7 +269,7 @@ describe("OnboardingForm", () => {
     renderOnboardingForm();
 
     // Navigate to step 2
-    await user.click(screen.getByTestId("step-option-software_engineer"));
+    await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
 
     // Verify we're on step 2 (2 progress bars filled)

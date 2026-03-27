@@ -4,7 +4,7 @@ import { openHands } from "#/api/open-hands-axios";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 
 type SubmitOnboardingArgs = {
-  selections: Record<string, string>;
+  selections: Record<string, string | string[]>;
 };
 
 interface OnboardingResponse {

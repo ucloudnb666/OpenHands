@@ -21,6 +21,10 @@ vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+  initReactI18next: {
+    type: "3rdParty",
+    init: () => {},
+  },
 }));
 
 const mockSetConversationMode = vi.fn();
@@ -88,6 +92,7 @@ describe("useHandlePlanClick", () => {
       unpinnedTabs: [],
       subConversationTaskId: null,
       conversationMode: "code",
+      draftMessage: null,
     });
   });
 
@@ -117,6 +122,7 @@ describe("useHandlePlanClick", () => {
         unpinnedTabs: [],
         subConversationTaskId: storedTaskId,
         conversationMode: "code",
+        draftMessage: null,
       });
 
       renderHook(() => useHandlePlanClick());
@@ -155,6 +161,7 @@ describe("useHandlePlanClick", () => {
         unpinnedTabs: [],
         subConversationTaskId: storedTaskId,
         conversationMode: "code",
+        draftMessage: null,
       });
 
       renderHook(() => useHandlePlanClick());
