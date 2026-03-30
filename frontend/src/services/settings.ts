@@ -33,7 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   email_verified: true,
   git_user_name: "openhands",
   git_user_email: "openhands@all-hands.dev",
-  v1_enabled: false,
+  v1_enabled: true,
   sandbox_grouping_strategy: "NO_GROUPING",
   agent_settings: {
     schema_version: 1,

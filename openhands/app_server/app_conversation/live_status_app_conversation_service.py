@@ -907,6 +907,17 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         agent_settings = self._get_agent_settings(user, llm_model)
         llm_settings = agent_settings.llm.model_copy(deep=True)
 
+        if llm_settings.model.startswith('litellm_proxy/'):
+            llm_settings = llm_settings.model_copy(
+                update={
+                    'base_url': (
+                        getattr(user, 'llm_base_url', None)
+                        or self.openhands_provider_base_url
+                        or llm_settings.base_url
+                    ),
+                }
+            )
+
         return LLM.model_validate(
             {
                 **llm_settings.model_dump(mode='python'),

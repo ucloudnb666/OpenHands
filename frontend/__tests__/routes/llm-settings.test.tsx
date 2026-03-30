@@ -226,7 +226,6 @@ describe("LlmSettingsScreen", () => {
         expect.objectContaining({
           "llm.model": "anthropic/claude-sonnet-4",
           "llm.base_url": "https://api.openai.com/v1",
-          agent: "CoActAgent",
         }),
       );
     });

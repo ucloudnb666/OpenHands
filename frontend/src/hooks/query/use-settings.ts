@@ -34,7 +34,7 @@ const pickNullableString = (
   return undefined;
 };
 
-const getSettingsQueryFn = async (): Promise<Settings> => {
+export const getSettingsQueryFn = async (): Promise<Settings> => {
   const settings = await SettingsService.getSettings();
   const agentSettings = (settings.agent_settings ?? {}) as Record<
     string,
