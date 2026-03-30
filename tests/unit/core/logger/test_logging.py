@@ -142,7 +142,7 @@ class TestJsonOutput:
         logger.info('Test message')
         output = json.loads(string_io.getvalue())
         assert 'timestamp' in output
-        assert 'correlation_id' in output
+        assert output['correlation_id'] == '-'  # Outside request context
         assert output['message'] == 'Test message'
         assert output[LOG_JSON_LEVEL_KEY] == 'INFO'
 
@@ -152,7 +152,7 @@ class TestJsonOutput:
         logger.error('Test message')
         output = json.loads(string_io.getvalue())
         assert 'timestamp' in output
-        assert 'correlation_id' in output
+        assert output['correlation_id'] == '-'  # Outside request context
         assert output['message'] == 'Test message'
         assert output[LOG_JSON_LEVEL_KEY] == 'ERROR'
 
@@ -162,7 +162,7 @@ class TestJsonOutput:
         logger.info('Test message', extra={'key': '..val..'})
         output = json.loads(string_io.getvalue())
         assert 'timestamp' in output
-        assert 'correlation_id' in output
+        assert output['correlation_id'] == '-'  # Outside request context
         assert output['key'] == '..val..'
         assert output['message'] == 'Test message'
         assert output[LOG_JSON_LEVEL_KEY] == 'INFO'
@@ -173,7 +173,7 @@ class TestJsonOutput:
         subject.info('Test message', extra={'log_fied': '..val..'})
         output = json.loads(string_io.getvalue())
         assert 'timestamp' in output
-        assert 'correlation_id' in output
+        assert output['correlation_id'] == '-'  # Outside request context
         assert output['context_field'] == '..val..'
         assert output['log_fied'] == '..val..'
         assert output['message'] == 'Test message'
@@ -185,7 +185,7 @@ class TestJsonOutput:
         subject.info('Test message', extra={'override': 'b'})
         output = json.loads(string_io.getvalue())
         assert 'timestamp' in output
-        assert 'correlation_id' in output
+        assert output['correlation_id'] == '-'  # Outside request context
         assert output['override'] == 'b'
         assert output['message'] == 'Test message'
         assert output[LOG_JSON_LEVEL_KEY] == 'INFO'
