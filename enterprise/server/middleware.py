@@ -103,14 +103,21 @@ class SetAuthCookieMiddleware:
             set_user_id(None)
 
     async def _set_user_id_context(self, request: Request) -> None:
-        """Set the user_id in the logging context from the request's user_auth."""
+        """Set the user_id in the logging context from the request's user_auth.
+
+        This method calls get_user_auth() to initialize the user_auth on request.state
+        if it hasn't been set yet. This ensures user_id is available in logs for the
+        entire request lifecycle, not just after FastAPI's dependency injection runs.
+        """
         try:
-            user_auth = self._get_user_auth(request)
+            # Call get_user_auth to populate request.state.user_auth if not already set
+            # This is needed because middleware runs before FastAPI's dependency injection
+            user_auth = cast(SaasUserAuth, await get_user_auth(request))
             if user_auth:
                 user_id = await user_auth.get_user_id()
                 set_user_id(user_id)
         except Exception:
-            # Don't fail the request if we can't get the user_id
+            # Don't fail the request if we can't get the user_id (e.g., unauthenticated requests)
             pass
 
     def _get_user_auth(self, request: Request) -> SaasUserAuth | None:
