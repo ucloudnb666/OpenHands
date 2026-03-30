@@ -9,6 +9,7 @@
 import os
 
 import socketio
+from asgi_correlation_id import CorrelationIdMiddleware
 
 from openhands.server.app import app as base_app
 from openhands.server.listen_socket import sio
@@ -31,5 +32,6 @@ base_app.add_middleware(
     RateLimitMiddleware,
     rate_limiter=InMemoryRateLimiter(requests=10, seconds=1),
 )
+base_app.add_middleware(CorrelationIdMiddleware)
 
 app = socketio.ASGIApp(sio, other_asgi_app=base_app)

@@ -16,7 +16,6 @@ from fastapi.routing import Mount
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
 
-from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import (
     FastAPI,
     Request,
@@ -79,8 +78,6 @@ app = FastAPI(
     lifespan=combine_lifespans(*lifespans),
     routes=[Mount(path='/mcp', app=mcp_app)],
 )
-
-app.add_middleware(CorrelationIdMiddleware)
 
 
 @app.exception_handler(AuthenticationError)
