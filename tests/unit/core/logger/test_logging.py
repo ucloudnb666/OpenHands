@@ -143,6 +143,9 @@ class TestJsonOutput:
         output = json.loads(string_io.getvalue())
         assert 'timestamp' in output
         del output['timestamp']
+        # correlation_id is added by CorrelationIdFilter
+        assert 'correlation_id' in output
+        del output['correlation_id']
         assert output == {'message': 'Test message', LOG_JSON_LEVEL_KEY: 'INFO'}
 
     def test_error(self, json_handler):
@@ -151,6 +154,9 @@ class TestJsonOutput:
         logger.error('Test message')
         output = json.loads(string_io.getvalue())
         del output['timestamp']
+        # correlation_id is added by CorrelationIdFilter
+        assert 'correlation_id' in output
+        del output['correlation_id']
         assert output == {'message': 'Test message', LOG_JSON_LEVEL_KEY: 'ERROR'}
 
     def test_extra_fields(self, json_handler):
@@ -159,6 +165,9 @@ class TestJsonOutput:
         logger.info('Test message', extra={'key': '..val..'})
         output = json.loads(string_io.getvalue())
         del output['timestamp']
+        # correlation_id is added by CorrelationIdFilter
+        assert 'correlation_id' in output
+        del output['correlation_id']
         assert output == {
             'key': '..val..',
             'message': 'Test message',
@@ -171,6 +180,9 @@ class TestJsonOutput:
         subject.info('Test message', extra={'log_fied': '..val..'})
         output = json.loads(string_io.getvalue())
         del output['timestamp']
+        # correlation_id is added by CorrelationIdFilter
+        assert 'correlation_id' in output
+        del output['correlation_id']
         assert output == {
             'context_field': '..val..',
             'log_fied': '..val..',
@@ -184,6 +196,9 @@ class TestJsonOutput:
         subject.info('Test message', extra={'override': 'b'})
         output = json.loads(string_io.getvalue())
         del output['timestamp']
+        # correlation_id is added by CorrelationIdFilter
+        assert 'correlation_id' in output
+        del output['correlation_id']
         assert output == {
             'override': 'b',
             'message': 'Test message',
