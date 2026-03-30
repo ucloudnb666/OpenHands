@@ -117,7 +117,6 @@ class SetAuthCookieMiddleware:
                 user_id = await user_auth.get_user_id()
                 set_user_id(user_id)
         except Exception:
-        except Exception:
             # Don't fail the request if we can't get the user_id (e.g., unauthenticated requests)
             logger.debug("Failed to set user_id context", exc_info=True)
             pass
