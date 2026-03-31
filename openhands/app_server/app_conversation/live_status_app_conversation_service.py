@@ -103,6 +103,7 @@ from openhands.tools.preset.planning import (
     format_plan_structure,
     get_planning_tools,
 )
+from openhands.utils.git import ensure_valid_git_branch_name
 
 _conversation_info_type_adapter = TypeAdapter(list[ConversationInfo | None])
 _logger = logging.getLogger(__name__)
@@ -890,7 +891,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         """
         model = llm_model or user.llm_model
         base_url = user.llm_base_url
-        if model and model.startswith('openhands/'):
+        if model and (
+            model.startswith('openhands/') or model.startswith('litellm_proxy/')
+        ):
             base_url = user.llm_base_url or self.openhands_provider_base_url
 
         return LLM(
@@ -1708,9 +1711,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         if 'selected_branch' in request.model_fields_set:
             branch = request.selected_branch
             if branch is not None:
-                # Sanitize: check for dangerous characters
-                if any(c in branch for c in [';', '&', '|', '$', '`', '\n', '\r', ' ']):
-                    raise ValueError(f"Invalid characters in branch name: '{branch}'")
+                ensure_valid_git_branch_name(branch)
 
     async def update_app_conversation(
         self, conversation_id: UUID, request: AppConversationUpdateRequest
