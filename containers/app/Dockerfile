@@ -73,11 +73,9 @@ ENV VIRTUAL_ENV=/app/.venv \
 
 COPY --chown=openhands:openhands --chmod=770 --from=backend-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
-# Pin pip to a known-good version (reproducible builds) and fix CVE-2025-8869.
+# Remove system pip from the image (leave venv pip intact).
 # The runtime uses the venv pip because PATH is prefixed with ${VIRTUAL_ENV}/bin.
-ARG PIP_VERSION=26.0.1
-RUN python -m pip install --no-cache-dir "pip==${PIP_VERSION}" && \
-    sudo /usr/local/bin/python3 - <<'PY'
+RUN sudo /usr/local/bin/python3 - <<'PY'
 import ensurepip
 import shutil
 import sysconfig
