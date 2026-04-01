@@ -44,6 +44,18 @@ export const SAAS_NAV_ITEMS: SettingsNavItem[] = [
     section: "org",
   },
   {
+    icon: <MemoryIcon width={22} height={22} />,
+    to: "/settings/condenser",
+    text: "SETTINGS$NAV_CONDENSER",
+    section: "org",
+  },
+  {
+    icon: <LockIcon width={22} height={22} />,
+    to: "/settings/verification",
+    text: "SETTINGS$NAV_VERIFICATION",
+    section: "org",
+  },
+  {
     icon: <KeyIcon width={22} height={22} />,
     to: "/settings/api-keys",
     text: "SETTINGS$NAV_API_KEYS",
@@ -59,18 +71,6 @@ export const SAAS_NAV_ITEMS: SettingsNavItem[] = [
     icon: <ServerProcessIcon width={22} height={22} />,
     to: "/settings/mcp",
     text: "SETTINGS$NAV_MCP",
-    section: "personal",
-  },
-  {
-    icon: <MemoryIcon width={22} height={22} />,
-    to: "/settings/condenser",
-    text: "SETTINGS$NAV_CONDENSER",
-    section: "personal",
-  },
-  {
-    icon: <LockIcon width={22} height={22} />,
-    to: "/settings/verification",
-    text: "SETTINGS$NAV_VERIFICATION",
     section: "personal",
   },
   {
