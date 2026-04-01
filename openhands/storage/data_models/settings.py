@@ -73,7 +73,6 @@ class Settings(BaseModel):
     sandbox_grouping_strategy: SandboxGroupingStrategy = (
         SandboxGroupingStrategy.NO_GROUPING
     )
-    onboarding_completed: bool = False
 
     model_config = ConfigDict(
         validate_assignment=True,
