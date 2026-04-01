@@ -212,6 +212,11 @@ export const SETTINGS_HANDLERS = [
     return HttpResponse.json(settings);
   }),
 
+  http.get("/api/settings/schema", async () => {
+    await delay();
+    return HttpResponse.json(MOCK_AGENT_SETTINGS_SCHEMA);
+  }),
+
   http.post("/api/settings", async ({ request }) => {
     await delay();
     const body = (await request.json()) as Record<string, unknown> | null;

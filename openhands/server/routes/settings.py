@@ -157,8 +157,7 @@ async def load_settings(
                 if provider_token.token or provider_token.user_id:
                     provider_tokens_set[provider_type] = provider_token.host
 
-        agent_settings_schema = _get_agent_settings_schema()
-        agent_vals = _extract_agent_settings(settings, agent_settings_schema)
+        agent_vals = _extract_agent_settings(settings, _get_agent_settings_schema())
 
         settings_with_token_data = GETSettingsModel(
             **settings.model_dump(exclude={'secrets_store', 'raw_agent_settings'}),
@@ -166,7 +165,6 @@ async def load_settings(
             search_api_key_set=settings.search_api_key is not None
             and bool(settings.search_api_key),
             provider_tokens_set=provider_tokens_set,
-            agent_settings_schema=agent_settings_schema,
             agent_settings=agent_vals,
         )
 

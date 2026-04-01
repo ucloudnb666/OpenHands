@@ -8,7 +8,6 @@ from pydantic import SecretStr
 
 from openhands.integrations.provider import ProviderToken, ProviderType
 from openhands.server.app import app
-from openhands.server.routes import settings as settings_routes
 from openhands.server.user_auth.user_auth import UserAuth
 from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.memory import InMemoryFileStore
@@ -84,9 +83,11 @@ def test_client():
         yield client
 
 
-def test_get_agent_settings_schema_includes_verification_section():
-    schema = settings_routes._get_agent_settings_schema()
-    assert schema is not None
+def test_get_agent_settings_schema_includes_verification_section(test_client):
+    response = test_client.get('/api/settings/schema')
+
+    assert response.status_code == 200
+    schema = response.json()
     section_keys = [s['key'] for s in schema['sections']]
     assert 'verification' in section_keys
     section = next(s for s in schema['sections'] if s['key'] == 'verification')
@@ -214,26 +215,7 @@ async def test_settings_api_endpoints(test_client):
         response = test_client.get('/api/settings')
         assert response.status_code == 200
         response_data = response.json()
-        schema = response_data['agent_settings_schema']
-        assert schema['model_name'] == 'AgentSettings'
-        assert isinstance(schema['sections'], list)
-        assert [section['key'] for section in schema['sections']] == [
-            'llm',
-            'verification',
-        ]
-        llm_section, verification_section = schema['sections']
-        assert llm_section['label'] == 'LLM'
-        assert [field['key'] for field in llm_section['fields']] == [
-            'llm.model',
-            'llm.base_url',
-            'llm.timeout',
-            'llm.litellm_extra_body',
-            'llm.api_key',
-        ]
-        assert llm_section['fields'][-1]['secret'] is True
-        assert llm_section['fields'][2]['value_type'] == 'integer'
-        assert llm_section['fields'][3]['value_type'] == 'object'
-        assert verification_section['label'] == 'Verification'
+        assert 'agent_settings_schema' not in response_data
         vals = response_data['agent_settings']
         assert vals['llm.model'] == 'test-model'
         assert vals['llm.timeout'] == 123
@@ -268,8 +250,8 @@ async def test_settings_api_endpoints(test_client):
 
 @pytest.mark.asyncio
 async def test_saving_settings_with_frozen_secrets_store(test_client):
-    """Regression: POSTing settings must not fail when the payload includes
-    ``secrets_store`` (a frozen field on the Settings model).
+    """Regression: POSTing settings must not fail with `secrets_store`.
+
     See https://github.com/OpenHands/OpenHands/issues/13306.
     """
     settings_data = {

@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   git_user_email: "openhands@all-hands.dev",
   v1_enabled: true,
   sandbox_grouping_strategy: "NO_GROUPING",
+  agent_settings_schema: null,
   agent_settings: {
     schema_version: 1,
     agent: "CodeActAgent",

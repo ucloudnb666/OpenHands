@@ -5,6 +5,7 @@ import { BrandButton } from "#/components/features/settings/brand-button";
 import { LlmSettingsInputsSkeleton } from "#/components/features/settings/llm-settings/llm-settings-inputs-skeleton";
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { usePermission } from "#/hooks/organizations/use-permissions";
+import { useAgentSettingsSchema } from "#/hooks/query/use-agent-settings-schema";
 import { useConfig } from "#/hooks/query/use-config";
 import { useMe } from "#/hooks/query/use-me";
 import { useSettings } from "#/hooks/query/use-settings";
@@ -78,6 +79,9 @@ export function SdkSectionPage({
   const { t } = useTranslation();
   const { mutate: saveSettings, isPending } = useSaveSettings();
   const { data: settings, isLoading, isFetching } = useSettings();
+  const { data: schema, isLoading: isSchemaLoading } = useAgentSettingsSchema(
+    settings?.agent_settings_schema,
+  );
   const { data: config } = useConfig();
   const { data: me } = useMe();
   const { hasPermission } = usePermission(me?.role ?? "member");
@@ -89,24 +93,22 @@ export function SdkSectionPage({
   const [values, setValues] = React.useState<SettingsFormValues>({});
   const [dirty, setDirty] = React.useState<SettingsDirtyState>({});
 
-  const fullSchema = settings?.agent_settings_schema ?? null;
-
   // Build a filtered schema containing only the requested sections
   const filteredSchema = React.useMemo(() => {
-    if (!fullSchema) return null;
+    if (!schema) return null;
     const sectionSet = new Set(sectionKeys);
     return {
-      ...fullSchema,
-      sections: fullSchema.sections.filter((s) => sectionSet.has(s.key)),
+      ...schema,
+      sections: schema.sections.filter((s) => sectionSet.has(s.key)),
     };
-  }, [fullSchema, sectionKeys]);
+  }, [schema, sectionKeys]);
 
   const showAdvanced = hasAdvancedSettings(filteredSchema);
   const showAll = hasMinorSettings(filteredSchema);
 
   React.useEffect(() => {
-    if (!settings?.agent_settings_schema || !filteredSchema) return;
-    setValues(buildInitialSettingsFormValues(settings));
+    if (!settings || !filteredSchema) return;
+    setValues(buildInitialSettingsFormValues(settings, filteredSchema));
     setDirty({});
     setView(
       getInitialView
@@ -173,7 +175,9 @@ export function SdkSectionPage({
     });
   };
 
-  if (isLoading || isFetching) return <LlmSettingsInputsSkeleton />;
+  if (isLoading || isFetching || isSchemaLoading) {
+    return <LlmSettingsInputsSkeleton />;
+  }
 
   if (!filteredSchema || filteredSchema.sections.length === 0) {
     return (

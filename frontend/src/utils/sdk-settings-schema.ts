@@ -140,8 +140,9 @@ function normalizeComparableValue(
 
 export function buildInitialSettingsFormValues(
   settings: Settings,
+  schemaOverride?: SettingsSchema | null,
 ): SettingsFormValues {
-  const schema = settings.agent_settings_schema;
+  const schema = schemaOverride ?? settings.agent_settings_schema;
   if (!schema) {
     return {};
   }

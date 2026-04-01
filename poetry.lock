@@ -6359,15 +6359,13 @@ llama = ["llama-index (>=0.12.29,<0.13.0)", "llama-index-core (>=0.12.29,<0.13.0
 
 [[package]]
 name = "openhands-agent-server"
-version = "1.15.0"
+version = "1.16.0"
 description = "OpenHands Agent Server - REST/WebSocket interface for OpenHands AI Agent"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
-files = [
-    {file = "openhands_agent_server-1.15.0-py3-none-any.whl", hash = "sha256:84f0d130cc2c10044d3dcdfecef1eb8f6793bf05c6633ca645cabd354ed038fa"},
-    {file = "openhands_agent_server-1.15.0.tar.gz", hash = "sha256:faf588900a58ff80575cc499f0aa0eaf9b8648d9448185411041f42e2cb2c612"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 aiosqlite = ">=0.19"
@@ -6381,6 +6379,13 @@ uvicorn = ">=0.31.1"
 websockets = ">=12"
 wsproto = ">=1.2.0"
 
+[package.source]
+type = "git"
+url = "https://github.com/OpenHands/software-agent-sdk.git"
+reference = "openhands/issue-2228-agent-settings-schema-route"
+resolved_reference = "54f7052992c8f85f3a9d2932760cf66e4fcc2764"
+subdirectory = "openhands-agent-server"
+
 [[package]]
 name = "openhands-sdk"
 version = "1.16.0"
@@ -6388,10 +6393,8 @@ description = "OpenHands SDK - Core functionality for building AI agents"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
-files = [
-    {file = "openhands_sdk-1.16.0-py3-none-any.whl", hash = "sha256:53e8be16352946bc80b7349780bfa6edcdbd4d54ea150849c5e79942da23d6d2"},
-    {file = "openhands_sdk-1.16.0.tar.gz", hash = "sha256:770a6906a2fbbfccc4f65451d699df0e3f67928e5bb669fc4a5155b9605c6a7b"},
-]
+files = []
+develop = false
 
 [package.dependencies]
 agent-client-protocol = ">=0.8.1"
@@ -6410,6 +6413,13 @@ websockets = ">=12"
 
 [package.extras]
 boto3 = ["boto3 (>=1.35.0)"]
+
+[package.source]
+type = "git"
+url = "https://github.com/OpenHands/software-agent-sdk.git"
+reference = "openhands/issue-2228-agent-settings-schema-route"
+resolved_reference = "54f7052992c8f85f3a9d2932760cf66e4fcc2764"
+subdirectory = "openhands-sdk"
 
 [[package]]
 name = "openhands-tools"
@@ -14826,4 +14836,4 @@ third-party-runtimes = ["daytona", "e2b-code-interpreter", "modal", "runloop-api
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12,<3.14"
-content-hash = "0520831c706b6bc5dc0a8da77958a92dcdf906afb8ace2c8fd0269fd51f4e316"
+content-hash = "ee8bb2e112dcd278398a938ea7a5ec4353e1a6c86ea3a6e427a85b91840abaf6"

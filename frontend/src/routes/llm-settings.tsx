@@ -5,6 +5,7 @@ import { ModelSelector } from "#/components/shared/modals/settings/model-selecto
 import { createPermissionGuard } from "#/utils/org/permission-guard";
 import { organizeModelsAndProviders } from "#/utils/organize-models-and-providers";
 import { useAIConfigOptions } from "#/hooks/query/use-ai-config-options";
+import { useAgentSettingsSchema } from "#/hooks/query/use-agent-settings-schema";
 import { useSettings } from "#/hooks/query/use-settings";
 import { SettingsInput } from "#/components/features/settings/settings-input";
 import { HelpLink } from "#/ui/help-link";
@@ -89,6 +90,9 @@ function LlmSettingsScreen() {
 
   const { data: resources } = useAIConfigOptions();
   const { data: settings } = useSettings();
+  const { data: schema } = useAgentSettingsSchema(
+    settings?.agent_settings_schema,
+  );
   const { data: config } = useConfig();
   const { data: me } = useMe();
   const { isTeamOrg } = useOrgTypeAndAccess();
@@ -107,10 +111,7 @@ function LlmSettingsScreen() {
   const isSaasMode = config?.app_mode === "saas";
   const isAdminOrOwner = me?.role === "admin" || me?.role === "owner";
   const isV1Enabled = settings?.v1_enabled === true;
-  const hasAgentField = hasSchemaField(
-    settings?.agent_settings_schema,
-    "agent",
-  );
+  const hasAgentField = hasSchemaField(schema, "agent");
 
   React.useEffect(() => {
     if (settings?.llm_model) {

@@ -8,8 +8,6 @@
 # This module belongs to the old V0 web server. The V1 application server lives under openhands/app_server/.
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -43,7 +41,6 @@ class GETSettingsModel(Settings):
     )
     llm_api_key_set: bool
     search_api_key_set: bool = False
-    agent_settings_schema: dict[str, Any] | None = None
 
     model_config = ConfigDict(use_enum_values=True)
 

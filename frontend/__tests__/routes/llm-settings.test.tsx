@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -272,8 +272,9 @@ describe("LlmSettingsScreen", () => {
     renderLlmSettingsScreen({ appMode: "oss" });
 
     const modelInput = await screen.findByTestId("llm-custom-model-input");
-    await userEvent.clear(modelInput);
-    await userEvent.type(modelInput, "anthropic/claude-sonnet-4");
+    fireEvent.change(modelInput, {
+      target: { value: "anthropic/claude-sonnet-4" },
+    });
     await userEvent.click(screen.getByTestId("save-button"));
 
     await waitFor(() => {

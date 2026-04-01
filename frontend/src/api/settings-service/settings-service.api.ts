@@ -1,5 +1,5 @@
 import { openHands } from "../open-hands-axios";
-import { Settings } from "#/types/settings";
+import { Settings, SettingsSchema } from "#/types/settings";
 
 /**
  * Settings service for managing application settings
@@ -10,6 +10,16 @@ class SettingsService {
    */
   static async getSettings(): Promise<Settings> {
     const { data } = await openHands.get<Settings>("/api/settings");
+    return data;
+  }
+
+  /**
+   * Get the AgentSettings schema used to render schema-driven settings pages.
+   */
+  static async getSettingsSchema(): Promise<SettingsSchema> {
+    const { data } = await openHands.get<SettingsSchema>(
+      "/api/settings/schema",
+    );
     return data;
   }
 

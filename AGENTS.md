@@ -116,6 +116,9 @@ Backend:
   - To test new code, run `poetry run pytest tests/unit/test_xxx.py` where `xxx` is the appropriate file for the current functionality
   - Write all tests with pytest
 
+  - Backend tests currently assume Python 3.12; under Python 3.13 some legacy imports (for example `aifc` via `openhands/core/logger.py`) break test collection. Prefer Python 3.12 for backend validation unless that import path is updated.
+
+
 Frontend:
 - Located in the `frontend` directory
 - Prerequisites: A recent version of NodeJS / NPM
