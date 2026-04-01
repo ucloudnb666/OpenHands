@@ -1,12 +1,47 @@
 version: 2
+
+multi-ecosystem-groups:
+  python-consolidated:
+    schedule:
+      interval: "daily"
+
 updates:
+  # Handling Poetry
   - package-ecosystem: "pip"
+    directories:
+      - "/"
+      - "/enterprise"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    multi-ecosystem-group: "python-consolidated"
+    groups:
+      # put packages in their own group if they have a history of breaking the build or needing to be reverted
+      pre-commit:
+        patterns:
+          - "pre-commit"
+      browsergym:
+        patterns:
+          - "browsergym*"
+      mcp-packages:
+        patterns:
+          - "mcp"
+      security-all:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
+      version-all:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"
     open-pull-requests-limit: 5
+    multi-ecosystem-group: "python-consolidated"
     groups:
-      # put packages in their own group if they have a history of breaking the build or needing to be reverted
       pre-commit:
         patterns:
           - "pre-commit"
