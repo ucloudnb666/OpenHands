@@ -29,7 +29,6 @@ from server.auth.user.user_authorizer import (
 from server.config import sign_token
 from server.constants import (
     DEPLOYMENT_MODE,
-    ENABLE_ONBOARDING,
     IS_FEATURE_ENV,
     IS_LOCAL_ENV,
     ROLE_OWNER,
@@ -570,16 +569,16 @@ async def authenticate(request: Request):
 async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     """Check if user should be redirected to onboarding after TOS acceptance.
 
+    Backend always redirects applicable users to /onboarding. The frontend
+    checks the ENABLE_ONBOARDING feature flag (localStorage) and redirects
+    to / if the flag is disabled. This avoids needing helm chart changes.
+
     Returns True if:
-    - ENABLE_ONBOARDING is True
     - User has not completed onboarding
     - Either:
       - Deployment mode is 'cloud' (all users)
       - Deployment mode is 'self_hosted' AND user is an owner
     """
-    if not ENABLE_ONBOARDING:
-        return False
-
     if user.onboarding_completed:
         return False
 

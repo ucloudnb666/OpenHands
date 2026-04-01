@@ -42,9 +42,6 @@ def _get_deployment_mode() -> str:
 
 DEPLOYMENT_MODE = _get_deployment_mode()
 
-# Onboarding feature flag - controls whether users are redirected to /onboarding
-ENABLE_ONBOARDING = os.environ.get('ENABLE_ONBOARDING', 'false').lower() in ('1', 'true')
-
 # Role name constants
 ROLE_OWNER = 'owner'
 ROLE_ADMIN = 'admin'
