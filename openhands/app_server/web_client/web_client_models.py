@@ -10,6 +10,7 @@ from openhands.server.types import AppMode
 
 DeploymentMode = Literal['cloud', 'self_hosted']
 
+
 # This can be removed / replaced when a DeploymentMode (or similar) env var is created.
 def _get_deployment_mode() -> DeploymentMode | None:
     """Get deployment mode based on OH_WEB_HOST environment variable."""
