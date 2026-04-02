@@ -1324,7 +1324,7 @@ class TestResolverOrgIdRouting:
         from enterprise.integrations.resolver_context import ResolverUserContext
 
         # Arrange: user1 is in ORG1, but resolver routes to ORG2
-        # Use spec to avoid MagicMock auto-creating user_auth attribute
+        # Use spec to prevent MagicMock from auto-creating undefined attributes
         mock_context = MagicMock(spec=ResolverUserContext)
         mock_context.get_user_id = AsyncMock(return_value=str(USER1_ID))
         mock_context.resolver_org_id = ORG2_ID
@@ -1371,7 +1371,7 @@ class TestResolverOrgIdRouting:
         from enterprise.integrations.resolver_context import ResolverUserContext
 
         # Arrange: user1 in ORG1 with no resolver override
-        # Use spec to avoid MagicMock auto-creating user_auth attribute
+        # Use spec to prevent MagicMock from auto-creating undefined attributes
         mock_context = MagicMock(spec=ResolverUserContext)
         mock_context.get_user_id = AsyncMock(return_value=str(USER1_ID))
         mock_context.resolver_org_id = None

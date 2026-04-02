@@ -34,24 +34,35 @@ async def resolve_org_for_repo(
     """
     git_org = full_repo_name.split('/')[0].lower()
 
-    claim = await OrgGitClaimStore.get_claim_by_provider_and_git_org(provider, git_org)
-    if not claim:
-        logger.debug(
-            f'[OrgResolver] No claim found for {provider}/{git_org}',
+    try:
+        claim = await OrgGitClaimStore.get_claim_by_provider_and_git_org(
+            provider, git_org
         )
-        return None
+        if not claim:
+            logger.debug(
+                f'[OrgResolver] No claim found for {provider}/{git_org}',
+            )
+            return None
 
-    member = await OrgMemberStore.get_org_member(claim.org_id, UUID(keycloak_user_id))
-    if not member:
+        member = await OrgMemberStore.get_org_member(
+            claim.org_id, UUID(keycloak_user_id)
+        )
+        if not member:
+            logger.debug(
+                f'[OrgResolver] User {keycloak_user_id} is not a member of org '
+                f'{claim.org_id} (claimed {provider}/{git_org}). '
+                f'Falling back to personal workspace.',
+            )
+            return None
+
         logger.info(
-            f'[OrgResolver] User {keycloak_user_id} is not a member of org '
-            f'{claim.org_id} (claimed {provider}/{git_org}). '
-            f'Falling back to personal workspace.',
+            f'[OrgResolver] Routing conversation to org {claim.org_id} '
+            f'for {provider}/{git_org} (user {keycloak_user_id})',
+        )
+        return claim.org_id
+    except Exception as e:
+        logger.error(
+            f'[OrgResolver] Error resolving org for {provider}/{git_org}: {e}',
+            exc_info=True,
         )
         return None
-
-    logger.info(
-        f'[OrgResolver] Routing conversation to org {claim.org_id} '
-        f'for {provider}/{git_org} (user {keycloak_user_id})',
-    )
-    return claim.org_id
