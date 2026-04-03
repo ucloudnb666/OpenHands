@@ -69,6 +69,8 @@ function AppSettingsScreen() {
     React.useState(false);
   const [useMicrovmSwitchHasChanged, setUseMicrovmSwitchHasChanged] =
     React.useState(false);
+  const [runtimeTierHasChanged, setRuntimeTierHasChanged] =
+    React.useState(false);
 
   const formAction = (formData: FormData) => {
     const languageLabel = formData.get("language-input")?.toString();
@@ -109,6 +111,10 @@ function AppSettingsScreen() {
     const useMicrovm =
       formData.get("use-microvm-switch")?.toString() === "on";
 
+    const runtimeTier =
+      (formData.get("runtime-tier-select")?.toString() as "small" | "medium" | "large" | "xlarge") ||
+      DEFAULT_SETTINGS.runtime_tier;
+
     saveSettings(
       {
         language,
@@ -121,6 +127,7 @@ function AppSettingsScreen() {
         git_user_name: gitUserName,
         git_user_email: gitUserEmail,
         use_microvm: useMicrovm,
+        runtime_tier: runtimeTier,
       },
       {
         onSuccess: () => {
@@ -142,6 +149,7 @@ function AppSettingsScreen() {
           setGitUserNameHasChanged(false);
           setGitUserEmailHasChanged(false);
           setUseMicrovmSwitchHasChanged(false);
+          setRuntimeTierHasChanged(false);
         },
       },
     );
@@ -216,6 +224,11 @@ function AppSettingsScreen() {
     setUseMicrovmSwitchHasChanged(checked !== currentUseMicrovm);
   };
 
+  const checkIfRuntimeTierHasChanged = (value: string) => {
+    const currentTier = settings?.runtime_tier || DEFAULT_SETTINGS.runtime_tier;
+    setRuntimeTierHasChanged(value !== currentTier);
+  };
+
   const formIsClean =
     !languageInputHasChanged &&
     !analyticsSwitchHasChanged &&
@@ -226,7 +239,8 @@ function AppSettingsScreen() {
     !maxBudgetPerTaskHasChanged &&
     !gitUserNameHasChanged &&
     !gitUserEmailHasChanged &&
-    !useMicrovmSwitchHasChanged;
+    !useMicrovmSwitchHasChanged &&
+    !runtimeTierHasChanged;
 
   const shouldBeLoading = !settings || isLoading || isPending;
 
@@ -309,14 +323,41 @@ function AppSettingsScreen() {
 
           {/* MicroVM isolation - only shown when feature flag is enabled (staging) */}
           {config?.feature_flags?.enable_microvm && (
-            <SettingsSwitch
-              testId="use-microvm-switch"
-              name="use-microvm-switch"
-              defaultIsToggled={!!settings.use_microvm}
-              onToggle={checkIfUseMicrovmSwitchHasChanged}
-            >
-              {t(I18nKey.SETTINGS$USE_MICROVM)}
-            </SettingsSwitch>
+            <div className="flex flex-col gap-4">
+              <SettingsSwitch
+                testId="use-microvm-switch"
+                name="use-microvm-switch"
+                defaultIsToggled={!!settings.use_microvm}
+                onToggle={checkIfUseMicrovmSwitchHasChanged}
+              >
+                {t(I18nKey.SETTINGS$USE_MICROVM)}
+              </SettingsSwitch>
+
+              {/* Runtime Tier selector - shown alongside MicroVM option */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="runtime-tier-select"
+                  className="text-sm font-medium"
+                >
+                  {t(I18nKey.SETTINGS$RUNTIME_TIER)}
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  {t(I18nKey.SETTINGS$RUNTIME_TIER_DESCRIPTION)}
+                </p>
+                <select
+                  id="runtime-tier-select"
+                  name="runtime-tier-select"
+                  defaultValue={settings.runtime_tier || DEFAULT_SETTINGS.runtime_tier}
+                  onChange={(e) => checkIfRuntimeTierHasChanged(e.target.value)}
+                  className="w-full max-w-[340px] px-3 py-2 text-sm bg-tertiary border border-tertiary rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="small">Small (1 core, 2GB) - Light tasks</option>
+                  <option value="medium">Medium (2 cores, 4GB) - Standard</option>
+                  <option value="large">Large (4 cores, 8GB) - Heavy workloads</option>
+                  <option value="xlarge">Extra Large (8 cores, 16GB) - Intensive</option>
+                </select>
+              </div>
+            </div>
           )}
 
           {!settings?.v1_enabled && (

@@ -3177,6 +3177,38 @@
     "tr": "MicroVM İzolasyonu Kullan (Deneysel)",
     "uk": "Використовувати ізоляцію MicroVM (Експериментально)"
   },
+  "SETTINGS$RUNTIME_TIER": {
+    "en": "Runtime Size",
+    "ja": "ランタイムサイズ",
+    "zh-CN": "运行时大小",
+    "zh-TW": "運行時大小",
+    "ko-KR": "런타임 크기",
+    "de": "Laufzeitgröße",
+    "no": "Kjøretidsstørrelse",
+    "it": "Dimensione runtime",
+    "pt": "Tamanho do runtime",
+    "es": "Tamaño del runtime",
+    "ar": "حجم وقت التشغيل",
+    "fr": "Taille du runtime",
+    "tr": "Çalışma Zamanı Boyutu",
+    "uk": "Розмір середовища виконання"
+  },
+  "SETTINGS$RUNTIME_TIER_DESCRIPTION": {
+    "en": "Choose the compute resources for your runtime environment",
+    "ja": "ランタイム環境のコンピューティングリソースを選択します",
+    "zh-CN": "选择运行时环境的计算资源",
+    "zh-TW": "選擇運行時環境的計算資源",
+    "ko-KR": "런타임 환경의 컴퓨팅 리소스 선택",
+    "de": "Wählen Sie die Rechenressourcen für Ihre Laufzeitumgebung",
+    "no": "Velg dataressurser for kjøretidsmiljøet",
+    "it": "Scegli le risorse di calcolo per il tuo ambiente runtime",
+    "pt": "Escolha os recursos de computação para seu ambiente de runtime",
+    "es": "Elige los recursos de cómputo para tu entorno de ejecución",
+    "ar": "اختر موارد الحوسبة لبيئة التشغيل الخاصة بك",
+    "fr": "Choisissez les ressources de calcul pour votre environnement d'exécution",
+    "tr": "Çalışma zamanı ortamınız için bilgi işlem kaynaklarını seçin",
+    "uk": "Виберіть обчислювальні ресурси для вашого середовища виконання"
+  },
   "SETTINGS$SEARCH_API_KEY": {
     "en": "Search API Key (Tavily)",
     "ja": "検索APIキー (Tavily)",

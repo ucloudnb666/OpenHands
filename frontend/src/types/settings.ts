@@ -89,4 +89,19 @@ export type Settings = {
   sandbox_grouping_strategy?: SandboxGroupingStrategy;
   // Enable microVM isolation via Kata Containers for enhanced security
   use_microvm?: boolean;
+  // Runtime tier for resource allocation (small, medium, large, xlarge)
+  runtime_tier?: "small" | "medium" | "large" | "xlarge";
 };
+
+export type RuntimeTier = "small" | "medium" | "large" | "xlarge";
+
+export const RuntimeTierOptions: {
+  value: RuntimeTier;
+  label: string;
+  description: string;
+}[] = [
+  { value: "small", label: "Small", description: "1 core, 2GB - Light tasks" },
+  { value: "medium", label: "Medium", description: "2 cores, 4GB - Standard" },
+  { value: "large", label: "Large", description: "4 cores, 8GB - Heavy workloads" },
+  { value: "xlarge", label: "Extra Large", description: "8 cores, 16GB - Intensive tasks" },
+];
