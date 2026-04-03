@@ -3,6 +3,7 @@ Tests for Jira view classes and factory.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 from integrations.jira.jira_payload import (
@@ -463,3 +464,63 @@ class TestJiraPayloadParserStagingLabels:
         result = staging_parser.parse(payload)
 
         assert isinstance(result, JiraPayloadSkipped)
+
+
+class TestJiraOrgRouting:
+    """Tests for org routing in Jira resolver conversations."""
+
+    @pytest.mark.asyncio
+    @patch('integrations.jira.jira_view.create_new_conversation')
+    @patch('integrations.jira.jira_view.integration_store')
+    @patch('integrations.jira.jira_view.resolve_org_for_repo')
+    async def test_create_conversation_passes_resolver_org_id(
+        self,
+        mock_resolve_org,
+        mock_store,
+        mock_create_conversation,
+        new_conversation_view,
+        mock_jinja_env,
+        mock_agent_loop_info,
+    ):
+        """When org is resolved, resolver_org_id is passed to create_new_conversation."""
+        resolved_org_id = UUID('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+        mock_resolve_org.return_value = resolved_org_id
+        new_conversation_view._issue_title = 'Test Issue'
+        new_conversation_view._issue_description = 'Test description'
+        mock_create_conversation.return_value = mock_agent_loop_info
+        mock_store.create_conversation = AsyncMock()
+
+        await new_conversation_view.create_or_update_conversation(mock_jinja_env)
+
+        mock_resolve_org.assert_called_once_with(
+            provider=None,
+            full_repo_name='test/repo1',
+            keycloak_user_id='test_keycloak_id',
+        )
+        _, kwargs = mock_create_conversation.call_args
+        assert kwargs['resolver_org_id'] == resolved_org_id
+
+    @pytest.mark.asyncio
+    @patch('integrations.jira.jira_view.create_new_conversation')
+    @patch('integrations.jira.jira_view.integration_store')
+    @patch('integrations.jira.jira_view.resolve_org_for_repo')
+    async def test_create_conversation_no_claim_passes_none(
+        self,
+        mock_resolve_org,
+        mock_store,
+        mock_create_conversation,
+        new_conversation_view,
+        mock_jinja_env,
+        mock_agent_loop_info,
+    ):
+        """When no claim exists, resolver_org_id is None (personal workspace)."""
+        mock_resolve_org.return_value = None
+        new_conversation_view._issue_title = 'Test Issue'
+        new_conversation_view._issue_description = 'Test description'
+        mock_create_conversation.return_value = mock_agent_loop_info
+        mock_store.create_conversation = AsyncMock()
+
+        await new_conversation_view.create_or_update_conversation(mock_jinja_env)
+
+        _, kwargs = mock_create_conversation.call_args
+        assert kwargs['resolver_org_id'] is None

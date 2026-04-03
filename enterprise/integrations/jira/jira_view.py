@@ -15,6 +15,7 @@ from integrations.jira.jira_types import (
     RepositoryNotFoundError,
     StartingConvoException,
 )
+from integrations.resolver_org_router import resolve_org_for_repo
 from integrations.utils import CONVERSATION_URL, infer_repo_from_message
 from jinja2 import Environment
 from storage.jira_conversation import JiraConversation
@@ -165,6 +166,13 @@ class JiraNewConversationView(JiraViewInterface):
         user_secrets = await self.saas_user_auth.get_secrets()
         instructions, user_msg = await self._get_instructions(jinja_env)
 
+        # Resolve target org based on claimed git organizations
+        resolved_org_id = await resolve_org_for_repo(
+            provider=None,
+            full_repo_name=self.selected_repo,
+            keycloak_user_id=self.jira_user.keycloak_user_id,
+        )
+
         try:
             agent_loop_info = await create_new_conversation(
                 user_id=self.jira_user.keycloak_user_id,
@@ -177,6 +185,7 @@ class JiraNewConversationView(JiraViewInterface):
                 replay_json=None,
                 conversation_trigger=ConversationTrigger.JIRA,
                 custom_secrets=user_secrets.custom_secrets if user_secrets else None,
+                resolver_org_id=resolved_org_id,
             )
 
             self.conversation_id = agent_loop_info.conversation_id

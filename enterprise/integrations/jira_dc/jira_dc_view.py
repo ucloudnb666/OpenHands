@@ -5,6 +5,7 @@ from integrations.jira_dc.jira_dc_types import (
     StartingConvoException,
 )
 from integrations.models import JobContext
+from integrations.resolver_org_router import resolve_org_for_repo
 from integrations.utils import CONVERSATION_URL, get_final_agent_observation
 from jinja2 import Environment
 from storage.jira_dc_conversation import JiraDcConversation
@@ -63,6 +64,13 @@ class JiraDcNewConversationView(JiraDcViewInterface):
         user_secrets = await self.saas_user_auth.get_secrets()
         instructions, user_msg = await self._get_instructions(jinja_env)
 
+        # Resolve target org based on claimed git organizations
+        resolved_org_id = await resolve_org_for_repo(
+            provider=None,
+            full_repo_name=self.selected_repo,
+            keycloak_user_id=self.jira_dc_user.keycloak_user_id,
+        )
+
         try:
             agent_loop_info = await create_new_conversation(
                 user_id=self.jira_dc_user.keycloak_user_id,
@@ -75,6 +83,7 @@ class JiraDcNewConversationView(JiraDcViewInterface):
                 replay_json=None,
                 conversation_trigger=ConversationTrigger.JIRA_DC,
                 custom_secrets=user_secrets.custom_secrets if user_secrets else None,
+                resolver_org_id=resolved_org_id,
             )
 
             self.conversation_id = agent_loop_info.conversation_id
