@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   git_user_email: "openhands@all-hands.dev",
   v1_enabled: true,
   sandbox_grouping_strategy: "NO_GROUPING",
+  use_microvm: false, // MicroVM isolation via Kata Containers (disabled by default)
 };
 
 /**

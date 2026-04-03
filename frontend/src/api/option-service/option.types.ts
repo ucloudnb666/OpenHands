@@ -26,6 +26,8 @@ export interface WebClientFeatureFlags {
   hide_users_page: boolean;
   hide_billing_page: boolean;
   hide_integrations_page: boolean;
+  // Enable microVM isolation via Kata Containers (only shown in staging)
+  enable_microvm?: boolean;
 }
 
 export interface WebClientConfig {

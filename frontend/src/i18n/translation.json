@@ -3161,6 +3161,22 @@
     "uk": "Додати до будь-якої (використовувати першу доступну пісочницю)",
     "ca": "Afegeix a qualsevol (usa el primer sandbox disponible)"
   },
+  "SETTINGS$USE_MICROVM": {
+    "en": "Use MicroVM Isolation (Experimental)",
+    "ja": "MicroVM分離を使用する（実験的）",
+    "zh-CN": "使用 MicroVM 隔离（实验性）",
+    "zh-TW": "使用 MicroVM 隔離（實驗性）",
+    "ko-KR": "MicroVM 격리 사용 (실험적)",
+    "de": "MicroVM-Isolation verwenden (Experimentell)",
+    "no": "Bruk MicroVM-isolasjon (Eksperimentell)",
+    "it": "Usa isolamento MicroVM (Sperimentale)",
+    "pt": "Usar isolamento MicroVM (Experimental)",
+    "es": "Usar aislamiento MicroVM (Experimental)",
+    "ar": "استخدام عزل MicroVM (تجريبي)",
+    "fr": "Utiliser l'isolation MicroVM (Expérimental)",
+    "tr": "MicroVM İzolasyonu Kullan (Deneysel)",
+    "uk": "Використовувати ізоляцію MicroVM (Експериментально)"
+  },
   "SETTINGS$SEARCH_API_KEY": {
     "en": "Search API Key (Tavily)",
     "ja": "検索APIキー (Tavily)",

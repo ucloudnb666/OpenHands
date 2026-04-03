@@ -67,6 +67,8 @@ function AppSettingsScreen() {
     React.useState(false);
   const [gitUserEmailHasChanged, setGitUserEmailHasChanged] =
     React.useState(false);
+  const [useMicrovmSwitchHasChanged, setUseMicrovmSwitchHasChanged] =
+    React.useState(false);
 
   const formAction = (formData: FormData) => {
     const languageLabel = formData.get("language-input")?.toString();
@@ -104,6 +106,9 @@ function AppSettingsScreen() {
       formData.get("git-user-email-input")?.toString() ||
       DEFAULT_SETTINGS.git_user_email;
 
+    const useMicrovm =
+      formData.get("use-microvm-switch")?.toString() === "on";
+
     saveSettings(
       {
         language,
@@ -115,6 +120,7 @@ function AppSettingsScreen() {
         max_budget_per_task: maxBudgetPerTask,
         git_user_name: gitUserName,
         git_user_email: gitUserEmail,
+        use_microvm: useMicrovm,
       },
       {
         onSuccess: () => {
@@ -135,6 +141,7 @@ function AppSettingsScreen() {
           setMaxBudgetPerTaskHasChanged(false);
           setGitUserNameHasChanged(false);
           setGitUserEmailHasChanged(false);
+          setUseMicrovmSwitchHasChanged(false);
         },
       },
     );
@@ -204,6 +211,11 @@ function AppSettingsScreen() {
     setGitUserEmailHasChanged(value !== currentValue);
   };
 
+  const checkIfUseMicrovmSwitchHasChanged = (checked: boolean) => {
+    const currentUseMicrovm = !!settings?.use_microvm;
+    setUseMicrovmSwitchHasChanged(checked !== currentUseMicrovm);
+  };
+
   const formIsClean =
     !languageInputHasChanged &&
     !analyticsSwitchHasChanged &&
@@ -213,7 +225,8 @@ function AppSettingsScreen() {
     !sandboxGroupingStrategyHasChanged &&
     !maxBudgetPerTaskHasChanged &&
     !gitUserNameHasChanged &&
-    !gitUserEmailHasChanged;
+    !gitUserEmailHasChanged &&
+    !useMicrovmSwitchHasChanged;
 
   const shouldBeLoading = !settings || isLoading || isPending;
 
@@ -292,6 +305,18 @@ function AppSettingsScreen() {
               onSelectionChange={handleSandboxGroupingStrategyChange}
               wrapperClassName="w-full max-w-[680px]"
             />
+          )}
+
+          {/* MicroVM isolation - only shown when feature flag is enabled (staging) */}
+          {config?.feature_flags?.enable_microvm && (
+            <SettingsSwitch
+              testId="use-microvm-switch"
+              name="use-microvm-switch"
+              defaultIsToggled={!!settings.use_microvm}
+              onToggle={checkIfUseMicrovmSwitchHasChanged}
+            >
+              {t(I18nKey.SETTINGS$USE_MICROVM)}
+            </SettingsSwitch>
           )}
 
           {!settings?.v1_enabled && (
