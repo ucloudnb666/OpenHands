@@ -25,6 +25,7 @@ def middleware():
 def mock_request():
     request = MagicMock(spec=Request)
     request.cookies = {}
+    request.query_params = {}
     return request
 
 
@@ -356,6 +357,7 @@ async def test_middleware_does_not_skip_similar_non_webhook_paths(
         mock_request.url.path = path
         mock_request.headers = MagicMock()
         mock_request.headers.get = MagicMock(side_effect=lambda k: None)
+        mock_request.query_params = {}
 
         # Since these paths start with /api, _should_attach returns True
         # Since there's no auth, middleware catches NoCredentialsError and returns 401

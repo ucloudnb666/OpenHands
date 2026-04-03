@@ -287,7 +287,28 @@ def get_api_key_from_header(request: Request):
         return session_api_key
 
     # Fallback to X-Access-Token header as an additional option
-    return request.headers.get('X-Access-Token')
+    access_token = request.headers.get('X-Access-Token')
+    if access_token:
+        return access_token
+
+    # DEPRECATED: Accept api_key from query parameters for backward compatibility.
+    # Passing API keys as query parameters is a security risk because they are
+    # logged in proxy access logs (e.g. Traefik) and application logs.
+    # Callers should migrate to using the Authorization header instead:
+    #   Authorization: Bearer sk-oh-...
+    # See: https://github.com/OpenHands/evaluation/issues/391
+    query_api_key = request.query_params.get('api_key')
+    if query_api_key:
+        logger.warning(
+            'DEPRECATED: api_key passed as URL query parameter. '
+            'This is a security risk as tokens are logged in proxy/access logs. '
+            'Use the Authorization header instead: Authorization: Bearer <token>. '
+            'Query parameter support will be removed in a future release.',
+            extra={'path': request.url.path},
+        )
+        return query_api_key
+
+    return None
 
 
 async def saas_user_auth_from_bearer(request: Request) -> SaasUserAuth | None:

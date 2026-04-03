@@ -106,12 +106,17 @@ class SetAuthCookieMiddleware:
         auth_header = request.headers.get('Authorization')
         mcp_auth_header = request.headers.get('X-Session-API-Key')
         api_auth_header = request.headers.get('X-Access-Token')
+        # DEPRECATED: Also check for api_key in query params for backward
+        # compatibility. The actual deprecation warning is logged in
+        # get_api_key_from_header() when the key is extracted.
+        query_api_key = request.query_params.get('api_key')
         accepted_tos: bool | None = False
         if (
             keycloak_auth_cookie is None
             and (auth_header is None or not auth_header.startswith('Bearer '))
             and mcp_auth_header is None
             and api_auth_header is None
+            and query_api_key is None
         ):
             raise NoCredentialsError
 

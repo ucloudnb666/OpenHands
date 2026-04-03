@@ -31,6 +31,7 @@ def mock_request():
     request = MagicMock(spec=Request)
     request.headers = {}
     request.cookies = {}
+    request.query_params = {}
     return request
 
 
@@ -511,6 +512,7 @@ async def test_saas_user_auth_from_bearer_no_auth_header():
     """Test that saas_user_auth_from_bearer returns None if no auth header."""
     mock_request = MagicMock()
     mock_request.headers = {}
+    mock_request.query_params = {}
 
     result = await saas_user_auth_from_bearer(mock_request)
 
@@ -633,6 +635,7 @@ def test_get_api_key_from_header_with_authorization_header():
     # Create a mock request with Authorization header
     mock_request = MagicMock(spec=Request)
     mock_request.headers = {'Authorization': 'Bearer test_api_key'}
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -646,6 +649,7 @@ def test_get_api_key_from_header_with_x_session_api_key():
     # Create a mock request with X-Session-API-Key header
     mock_request = MagicMock(spec=Request)
     mock_request.headers = {'X-Session-API-Key': 'session_api_key'}
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -662,6 +666,7 @@ def test_get_api_key_from_header_with_both_headers():
         'Authorization': 'Bearer auth_api_key',
         'X-Session-API-Key': 'session_api_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -671,10 +676,11 @@ def test_get_api_key_from_header_with_both_headers():
 
 
 def test_get_api_key_from_header_with_no_headers():
-    """Test that get_api_key_from_header returns None when no relevant headers are present."""
+    """Test that get_api_key_from_header returns None when no relevant headers or query params are present."""
     # Create a mock request with no relevant headers
     mock_request = MagicMock(spec=Request)
     mock_request.headers = {'Other-Header': 'some_value'}
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -688,6 +694,7 @@ def test_get_api_key_from_header_with_invalid_authorization_format():
     # Create a mock request with incorrectly formatted Authorization header
     mock_request = MagicMock(spec=Request)
     mock_request.headers = {'Authorization': 'InvalidFormat api_key'}
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -701,6 +708,7 @@ def test_get_api_key_from_header_with_x_access_token():
     # Create a mock request with X-Access-Token header
     mock_request = MagicMock(spec=Request)
     mock_request.headers = {'X-Access-Token': 'access_token_key'}
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -717,6 +725,7 @@ def test_get_api_key_from_header_priority_authorization_over_x_access_token():
         'Authorization': 'Bearer auth_api_key',
         'X-Access-Token': 'access_token_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -733,6 +742,7 @@ def test_get_api_key_from_header_priority_x_session_over_x_access_token():
         'X-Session-API-Key': 'session_api_key',
         'X-Access-Token': 'access_token_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -750,6 +760,7 @@ def test_get_api_key_from_header_all_three_headers():
         'X-Session-API-Key': 'session_api_key',
         'X-Access-Token': 'access_token_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -766,6 +777,7 @@ def test_get_api_key_from_header_invalid_authorization_fallback_to_x_access_toke
         'Authorization': 'InvalidFormat api_key',
         'X-Access-Token': 'access_token_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -783,6 +795,7 @@ def test_get_api_key_from_header_empty_headers():
         'X-Session-API-Key': '',
         'X-Access-Token': 'access_token_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -799,6 +812,7 @@ def test_get_api_key_from_header_bearer_with_empty_token():
         'Authorization': 'Bearer ',
         'X-Access-Token': 'access_token_key',
     }
+    mock_request.query_params = {}
 
     # Call the function
     api_key = get_api_key_from_header(mock_request)
@@ -806,6 +820,68 @@ def test_get_api_key_from_header_bearer_with_empty_token():
     # Assert that empty string from Bearer is returned (current behavior)
     # This tests the current implementation behavior
     assert api_key == ''
+
+
+def test_get_api_key_from_query_param_fallback():
+    """Test that get_api_key_from_header falls back to api_key query parameter (deprecated)."""
+    mock_request = MagicMock(spec=Request)
+    mock_request.headers = {}
+    mock_request.query_params = {'api_key': 'sk-oh-query-param-key'}
+    mock_request.url = MagicMock()
+    mock_request.url.path = '/mcp'
+
+    api_key = get_api_key_from_header(mock_request)
+
+    assert api_key == 'sk-oh-query-param-key'
+
+
+def test_get_api_key_from_header_takes_priority_over_query_param():
+    """Test that Authorization header takes priority over api_key query parameter."""
+    mock_request = MagicMock(spec=Request)
+    mock_request.headers = {'Authorization': 'Bearer header_api_key'}
+    mock_request.query_params = {'api_key': 'sk-oh-query-param-key'}
+
+    api_key = get_api_key_from_header(mock_request)
+
+    assert api_key == 'header_api_key'
+
+
+def test_get_api_key_x_session_header_takes_priority_over_query_param():
+    """Test that X-Session-API-Key header takes priority over api_key query parameter."""
+    mock_request = MagicMock(spec=Request)
+    mock_request.headers = {'X-Session-API-Key': 'session_key'}
+    mock_request.query_params = {'api_key': 'sk-oh-query-param-key'}
+
+    api_key = get_api_key_from_header(mock_request)
+
+    assert api_key == 'session_key'
+
+
+def test_get_api_key_x_access_token_takes_priority_over_query_param():
+    """Test that X-Access-Token header takes priority over api_key query parameter."""
+    mock_request = MagicMock(spec=Request)
+    mock_request.headers = {'X-Access-Token': 'access_token_key'}
+    mock_request.query_params = {'api_key': 'sk-oh-query-param-key'}
+
+    api_key = get_api_key_from_header(mock_request)
+
+    assert api_key == 'access_token_key'
+
+
+def test_get_api_key_from_query_param_logs_deprecation_warning(caplog):
+    """Test that using api_key query parameter logs a deprecation warning."""
+    import logging
+
+    mock_request = MagicMock(spec=Request)
+    mock_request.headers = {}
+    mock_request.query_params = {'api_key': 'sk-oh-query-param-key'}
+    mock_request.url = MagicMock()
+    mock_request.url.path = '/api/v1/auth/github'
+
+    with caplog.at_level(logging.WARNING):
+        api_key = get_api_key_from_header(mock_request)
+
+    assert api_key == 'sk-oh-query-param-key'
 
 
 @pytest.mark.asyncio
