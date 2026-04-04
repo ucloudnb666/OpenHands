@@ -8,10 +8,53 @@
 
 import copy
 import re
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from openhands.sdk.utils.redact import sanitize_dict
+try:
+    from openhands.sdk.utils.redact import sanitize_dict
+except ModuleNotFoundError:
+    _SECRET_KEY_PATTERNS = frozenset(
+        {
+            'AUTHORIZATION',
+            'COOKIE',
+            'CREDENTIAL',
+            'KEY',
+            'PASSWORD',
+            'SECRET',
+            'SESSION',
+            'TOKEN',
+        }
+    )
+    _REDACT_ALL_VALUES_KEYS = frozenset({'environment', 'env', 'headers', 'acp_env'})
+
+    def _sdk_is_secret_key(key: str) -> bool:
+        key_upper = key.upper()
+        return any(pattern in key_upper for pattern in _SECRET_KEY_PATTERNS)
+
+    def _redact_all_values(value: Any) -> Any:
+        if isinstance(value, Mapping):
+            return {k: _redact_all_values(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [_redact_all_values(item) for item in value]
+        return '<redacted>'
+
+    def sanitize_dict(content: Any) -> Any:
+        if isinstance(content, Mapping):
+            sanitized = {}
+            for key, value in content.items():
+                key_str = str(key)
+                if key_str.lower() in _REDACT_ALL_VALUES_KEYS:
+                    sanitized[key] = _redact_all_values(value)
+                elif _sdk_is_secret_key(key_str):
+                    sanitized[key] = '<redacted>'
+                else:
+                    sanitized[key] = sanitize_dict(value)
+            return sanitized
+        if isinstance(content, list):
+            return [sanitize_dict(item) for item in content]
+        return content
 
 # ---------------------------------------------------------------------------
 # URL param redaction

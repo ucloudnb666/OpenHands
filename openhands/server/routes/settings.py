@@ -11,12 +11,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
+from openhands.app_server.utils.dependencies import get_dependencies
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
-    ProviderType,
 )
-from openhands.app_server.utils.dependencies import get_dependencies
 from openhands.sdk.settings import AgentSettings
 from openhands.server.routes.secrets import invalidate_legacy_secrets_store
 from openhands.server.settings import (
@@ -73,8 +72,9 @@ def _extract_agent_settings(
     """
     values = settings.agent_settings_values()
     for field_key in _get_schema_secret_field_keys(schema):
+        secret_value = settings.get_secret_agent_setting(field_key)
         raw = values.get(field_key)
-        values[field_key] = _SECRET_REDACTED if raw else None
+        values[field_key] = _SECRET_REDACTED if secret_value or raw else None
     return values
 
 
@@ -125,7 +125,6 @@ async def load_settings_schema() -> dict[str, Any]:
     return _get_agent_settings_schema()
 
 
-
 @app.get(
     '/settings',
     response_model=GETSettingsModel,
@@ -158,28 +157,29 @@ async def load_settings(
             user_secrets.provider_tokens if user_secrets else provider_tokens
         )
 
-        provider_tokens_set: dict[ProviderType, str | None] = {}
+        provider_tokens_set: dict[str, str | None] = {}
         if git_providers:
             for provider_type, provider_token in git_providers.items():
                 if provider_token.token or provider_token.user_id:
-                    provider_tokens_set[provider_type] = provider_token.host
+                    provider_tokens_set[provider_type.value] = provider_token.host
 
         agent_vals = _extract_agent_settings(settings, _get_agent_settings_schema())
-
-        settings_with_token_data = GETSettingsModel(
-            **settings.model_dump(exclude={'secrets_store', 'raw_agent_settings'}),
-            llm_api_key_set=settings.llm_api_key_is_set,
-            search_api_key_set=settings.search_api_key is not None
-            and bool(settings.search_api_key),
-            provider_tokens_set=provider_tokens_set,
-            agent_settings=agent_vals,
+        settings_payload = settings.model_dump(
+            mode='json', exclude={'raw_agent_settings'}
         )
-
-        # Redact secrets from the response.
-        settings_with_token_data.llm_api_key = None
-        settings_with_token_data.search_api_key = None
-        settings_with_token_data.sandbox_api_key = None
-        return settings_with_token_data
+        settings_payload.update(
+            {
+                'llm_api_key_set': settings.llm_api_key_is_set,
+                'search_api_key_set': settings.search_api_key is not None
+                and bool(settings.search_api_key),
+                'provider_tokens_set': provider_tokens_set,
+                'agent_settings': agent_vals,
+                'llm_api_key': None,
+                'search_api_key': None,
+                'sandbox_api_key': None,
+            }
+        )
+        return JSONResponse(status_code=status.HTTP_200_OK, content=settings_payload)
     except Exception as e:
         logger.warning(f'Invalid token: {e}')
         user_id = getattr(settings, 'user_id', 'unknown') if settings else 'unknown'

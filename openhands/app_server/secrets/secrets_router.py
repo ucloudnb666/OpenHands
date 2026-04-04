@@ -122,9 +122,9 @@ async def store_provider_tokens(
                 if existing_token and existing_token.token:
                     merged_provider_tokens[provider] = existing_token
 
-            merged_provider_tokens[provider] = merged_provider_tokens[provider].model_copy(
-                update={'host': token_value.host}
-            )
+            merged_provider_tokens[provider] = merged_provider_tokens[
+                provider
+            ].model_copy(update={'host': token_value.host})
 
     updated_secrets = user_secrets.model_copy(
         update={'provider_tokens': merged_provider_tokens}
