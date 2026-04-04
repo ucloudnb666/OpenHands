@@ -26,9 +26,10 @@ function makeConversation(version: "V0" | "V1"): Conversation {
   };
 }
 
-function makeEvent(): OpenHandsEvent {
+function makeEvent(timestamp?: string): OpenHandsEvent {
   return {
     id: "evt-1",
+    timestamp: timestamp ?? "2026-01-15T10:00:00Z",
   } as OpenHandsEvent;
 }
 
@@ -60,7 +61,7 @@ describe("useConversationHistory", () => {
     vi.clearAllMocks();
   });
 
-  it("calls V1 REST endpoint for V1 conversations", async () => {
+  it("calls V1 REST endpoint for V1 conversations with TIMESTAMP_DESC", async () => {
     const v1SearchEventsSpy = vi.spyOn(EventService, "searchEventsV1");
 
     vi.mocked(useUserConversation).mockReturnValue({
@@ -72,7 +73,10 @@ describe("useConversationHistory", () => {
       refetch: vi.fn(),
     } as any);
 
-    v1SearchEventsSpy.mockResolvedValue([makeEvent()]);
+    v1SearchEventsSpy.mockResolvedValue({
+      items: [makeEvent("2026-01-15T12:00:00Z"), makeEvent("2026-01-15T10:00:00Z")],
+      next_page_id: undefined,
+    });
 
     const { result } = renderHook(() => useConversationHistory("conv-123"), {
       wrapper,
@@ -82,8 +86,45 @@ describe("useConversationHistory", () => {
       expect(result.current.data).toBeDefined();
     });
 
-    expect(EventService.searchEventsV1).toHaveBeenCalledWith("conv-123");
+    // Should call with TIMESTAMP_DESC for bi-directional loading (newest first)
+    expect(EventService.searchEventsV1).toHaveBeenCalledWith("conv-123", {
+      sort_order: "TIMESTAMP_DESC",
+      limit: 100,
+    });
     expect(EventService.searchEventsV0).not.toHaveBeenCalled();
+
+    // Should return events and oldest timestamp for WebSocket handoff
+    expect(result.current.data?.events).toHaveLength(2);
+    expect(result.current.data?.oldestTimestamp).toBe("2026-01-15T10:00:00Z");
+  });
+
+  it("returns null oldestTimestamp when no events", async () => {
+    const v1SearchEventsSpy = vi.spyOn(EventService, "searchEventsV1");
+
+    vi.mocked(useUserConversation).mockReturnValue({
+      data: makeConversation("V1"),
+      isLoading: false,
+      isPending: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    } as any);
+
+    v1SearchEventsSpy.mockResolvedValue({
+      items: [],
+      next_page_id: undefined,
+    });
+
+    const { result } = renderHook(() => useConversationHistory("conv-empty"), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.data).toBeDefined();
+    });
+
+    expect(result.current.data?.events).toHaveLength(0);
+    expect(result.current.data?.oldestTimestamp).toBeNull();
   });
 
   it("calls V0 REST endpoint for V0 conversations", async () => {
@@ -110,6 +151,10 @@ describe("useConversationHistory", () => {
 
     expect(EventService.searchEventsV0).toHaveBeenCalledWith("conv-456");
     expect(EventService.searchEventsV1).not.toHaveBeenCalled();
+
+    // V0 returns events but null oldestTimestamp (no bi-directional loading)
+    expect(result.current.data?.events).toHaveLength(1);
+    expect(result.current.data?.oldestTimestamp).toBeNull();
   });
 });
 
@@ -144,7 +189,7 @@ describe("useConversationHistory cache key stability", () => {
 
   it("does not refetch when conversation object changes but version stays the same", async () => {
     const v1Spy = vi.spyOn(EventService, "searchEventsV1");
-    v1Spy.mockResolvedValue([makeEvent()]);
+    v1Spy.mockResolvedValue({ items: [makeEvent()], next_page_id: undefined });
 
     const conv1 = makeConversation("V1");
     vi.mocked(useUserConversation).mockReturnValue({
@@ -200,7 +245,7 @@ describe("useConversationHistory cache key stability", () => {
     const v0Spy = vi.spyOn(EventService, "searchEventsV0");
     const v1Spy = vi.spyOn(EventService, "searchEventsV1");
     v0Spy.mockResolvedValue([makeEvent()]);
-    v1Spy.mockResolvedValue([makeEvent()]);
+    v1Spy.mockResolvedValue({ items: [makeEvent()], next_page_id: undefined });
 
     // Start with V0
     vi.mocked(useUserConversation).mockReturnValue({
@@ -242,7 +287,7 @@ describe("useConversationHistory cache key stability", () => {
 
   it("treats cached history as never stale (staleTime is Infinity)", async () => {
     const v1Spy = vi.spyOn(EventService, "searchEventsV1");
-    v1Spy.mockResolvedValue([makeEvent()]);
+    v1Spy.mockResolvedValue({ items: [makeEvent()], next_page_id: undefined });
 
     vi.mocked(useUserConversation).mockReturnValue({
       data: makeConversation("V1"),
@@ -274,7 +319,7 @@ describe("useConversationHistory cache key stability", () => {
 
   it("has gcTime of at least 30 minutes for navigation resilience", async () => {
     const v1Spy = vi.spyOn(EventService, "searchEventsV1");
-    v1Spy.mockResolvedValue([makeEvent()]);
+    v1Spy.mockResolvedValue({ items: [makeEvent()], next_page_id: undefined });
 
     vi.mocked(useUserConversation).mockReturnValue({
       data: makeConversation("V1"),

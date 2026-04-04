@@ -65,14 +65,26 @@ class EventService {
   }
 
   // V1 conversations — App Server REST endpoint
-  static async searchEventsV1(conversationId: string, limit = 100) {
+  static async searchEventsV1(
+    conversationId: string,
+    options?: {
+      limit?: number;
+      sort_order?: "TIMESTAMP_ASC" | "TIMESTAMP_DESC";
+      cursor?: string;
+    },
+  ) {
     const { data } = await openHands.get<{
       items: OpenHandsEvent[];
+      next_page_id?: string;
     }>(`/api/v1/conversation/${conversationId}/events/search`, {
-      params: { limit },
+      params: {
+        limit: options?.limit ?? 100,
+        sort_order: options?.sort_order,
+        cursor: options?.cursor,
+      },
     });
 
-    return data.items;
+    return data;
   }
 
   // V0 conversations — Legacy REST endpoint
