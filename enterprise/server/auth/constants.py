@@ -56,6 +56,12 @@ RECAPTCHA_SITE_KEY = os.getenv('RECAPTCHA_SITE_KEY', '').strip()
 RECAPTCHA_HMAC_SECRET = os.getenv('RECAPTCHA_HMAC_SECRET', '').strip()
 RECAPTCHA_BLOCK_THRESHOLD = float(os.getenv('RECAPTCHA_BLOCK_THRESHOLD', '0.3'))
 
+# Automation Service
+AUTOMATION_SERVICE_URL = os.getenv('AUTOMATION_SERVICE_URL', '').strip()
+AUTOMATION_EVENT_FORWARDING_ENABLED = os.getenv(
+    'AUTOMATION_EVENT_FORWARDING_ENABLED', 'false'
+) in ('1', 'true')
+
 # Account Defender labels that indicate suspicious activity
 SUSPICIOUS_LABELS = {
     'SUSPICIOUS_LOGIN_ACTIVITY',
