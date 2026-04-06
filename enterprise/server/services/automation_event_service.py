@@ -204,7 +204,11 @@ class AutomationEventService:
             with Github(auth=Auth.Token(token)) as github_client:
                 org = github_client.get_organization(org_name)
                 # Check if user is a member of the organization
-                return org.has_in_members(github_client.get_user(username))
+                user = github_client.get_user(username)
+                # has_in_members expects NamedUser, but get_user can return AuthenticatedUser
+                # when querying the authenticated user. For org membership checks, we use
+                # get_user(username) which returns NamedUser for other users.
+                return org.has_in_members(user)  # type: ignore[arg-type]
         except Exception as e:
             logger.debug(
                 f'[AutomationEventService] Failed to check GitHub org membership for {username}: {e}'
