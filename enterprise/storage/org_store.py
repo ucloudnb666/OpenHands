@@ -35,6 +35,7 @@ _ORG_SETTINGS_EXCLUDED_FIELDS = {
     'contact_email',
     'org_version',
     'agent_settings',
+    'llm_api_key',
 }
 _ORG_SETTINGS_FIELDS = {
     normalized
