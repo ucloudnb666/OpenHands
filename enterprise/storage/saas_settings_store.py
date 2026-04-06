@@ -7,12 +7,10 @@ from pydantic import SecretStr
 from server.auth.token_manager import TokenManager
 from server.constants import LITE_LLM_API_URL
 from server.logger import logger
+from server.routes.org_models import OrgMemberLLMSettings
 from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
-from storage.agent_settings_utils import (
-    compute_agent_settings_overrides,
-    merge_agent_settings,
-)
+from storage.agent_settings_utils import merge_agent_settings
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager, get_openhands_cloud_key_alias
 from storage.org import Org
@@ -236,9 +234,8 @@ class SaasSettingsStore(SettingsStore):
                 for key, value in normalized_agent_settings.items()
                 if key not in {'llm.api_key', 'mcp_config'}
             }
-            org.agent_settings = OrgStore.get_agent_settings_from_org(org)
-            org_member.agent_settings = compute_agent_settings_overrides(
-                org.agent_settings,
+            org.agent_settings = merge_agent_settings(
+                OrgStore.get_agent_settings_from_org(org),
                 effective_agent_settings,
             )
 
@@ -255,10 +252,15 @@ class SaasSettingsStore(SettingsStore):
                     setattr(user, key, value)
                 if key == 'mcp_config' and hasattr(org_member, key):
                     setattr(org_member, key, value)
-                if key != 'mcp_config' and hasattr(org, key) and key not in {
-                    'llm_api_key',
-                    'agent_settings',
-                }:
+                if (
+                    key != 'mcp_config'
+                    and hasattr(org, key)
+                    and key
+                    not in {
+                        'llm_api_key',
+                        'agent_settings',
+                    }
+                ):
                     setattr(org, key, value)
 
             current_member_llm_api_key = item.get_secret_agent_setting('llm.api_key')
@@ -274,18 +276,24 @@ class SaasSettingsStore(SettingsStore):
                 else None
             )
 
+            await OrgMemberStore.update_all_members_llm_settings_async(
+                session,
+                org_id,
+                OrgMemberLLMSettings(
+                    agent_settings=effective_agent_settings,
+                    llm_api_key=(
+                        current_member_llm_api_key_raw
+                        if not uses_managed_llm_key
+                        else None
+                    ),
+                ),
+            )
+
             if uses_managed_llm_key and current_member_llm_api_key is not None:
                 org_member.llm_api_key = current_member_llm_api_key
                 org_member.has_custom_llm_api_key = False
             elif current_member_llm_api_key_raw is not None:
-                if (
-                    org_default_llm_api_key_raw
-                    and current_member_llm_api_key_raw == org_default_llm_api_key_raw
-                ):
-                    org_member.has_custom_llm_api_key = False
-                else:
-                    org_member.llm_api_key = current_member_llm_api_key
-                    org_member.has_custom_llm_api_key = True
+                org_member.has_custom_llm_api_key = False
             elif org_default_llm_api_key_raw is not None:
                 org_member.has_custom_llm_api_key = False
 

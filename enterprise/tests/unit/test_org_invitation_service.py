@@ -10,7 +10,6 @@ from server.routes.org_invitation_models import (
 )
 from server.services.org_invitation_service import OrgInvitationService
 from storage.org_invitation import OrgInvitation
-from storage.org_store import OrgStore
 
 
 class TestAcceptInvitationEmailValidation:

@@ -51,7 +51,6 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
     )
 
 
-
 def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides():
     settings = Settings(
         llm_api_key='member-secret',
@@ -66,7 +65,6 @@ def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides
 
     assert kwargs['llm_api_key'].get_secret_value() == 'member-secret'
     assert kwargs['agent_settings'] == {}
-
 
 
 def test_get_agent_settings_from_org_member_uses_canonical_snapshot_json():
