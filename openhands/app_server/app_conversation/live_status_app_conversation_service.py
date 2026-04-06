@@ -94,6 +94,7 @@ from openhands.sdk.plugin import PluginSource
 from openhands.sdk.secret import LookupSecret, SecretValue, StaticSecret
 from openhands.sdk.settings import AgentSettings
 from openhands.sdk.utils.paging import page_iterator
+from openhands.utils._redact_compat import sanitize_dict
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 from openhands.server.types import AppMode
 from openhands.storage.data_models.conversation_metadata import ConversationTrigger
@@ -325,10 +326,15 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 f'Sending StartConversationRequest with hook_config: '
                 f'{hook_config_in_request}'
             )
+            headers = (
+                {'X-Session-API-Key': sandbox.session_api_key}
+                if sandbox.session_api_key
+                else {}
+            )
             response = await self.httpx_client.post(
                 f'{agent_server_url}/api/conversations',
                 json=body_json,
-                headers={'X-Session-API-Key': sandbox.session_api_key},
+                headers=headers,
                 timeout=self.sandbox_startup_timeout,
             )
 
@@ -877,7 +883,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 static_token = await self.user_context.get_latest_token(provider_type)
                 if static_token:
                     secrets[secret_name] = StaticSecret(
-                        value=static_token, description=description
+                        value=SecretStr(static_token), description=description
                     )
 
         return secrets
@@ -907,6 +913,17 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         """
         agent_settings = self._get_agent_settings(user, llm_model)
         llm_settings = agent_settings.llm.model_copy(deep=True)
+
+        if llm_settings.model.startswith(('openhands/', 'litellm_proxy/')):
+            llm_settings = llm_settings.model_copy(
+                update={
+                    'base_url': (
+                        llm_settings.base_url
+                        or getattr(user, 'llm_base_url', None)
+                        or self.openhands_provider_base_url
+                    ),
+                }
+            )
 
         if llm_settings.model.startswith('litellm_proxy/'):
             llm_settings = llm_settings.model_copy(
@@ -1173,7 +1190,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         # Wrap in the mcpServers structure required by the SDK
         mcp_config = {'mcpServers': mcp_servers} if mcp_servers else {}
-        _logger.info(f'Final MCP configuration: {mcp_config}')
+        _logger.info(f'Final MCP configuration: {sanitize_dict(mcp_config)}')
 
         return llm, mcp_config
 

@@ -43,7 +43,12 @@ from openhands.server.user_auth import (
 app = APIRouter(prefix='/api/user', dependencies=get_dependencies())
 
 
-@app.get('/installations', response_model=list[str])
+@app.get(
+    '/installations',
+    response_model=list[str],
+    deprecated=True,
+    description='Deprecated: Use `/api/v1/git/installations` instead.',
+)
 async def get_user_installations(
     provider: ProviderType,
     provider_tokens: PROVIDER_TOKEN_TYPE | None = Depends(get_provider_tokens),
@@ -74,7 +79,12 @@ async def get_user_installations(
     raise AuthenticationError('Git provider token required. (such as GitHub).')
 
 
-@app.get('/repositories', response_model=list[Repository])
+@app.get(
+    '/repositories',
+    response_model=list[Repository],
+    deprecated=True,
+    description='Deprecated: Use `/api/v1/git/repositories` instead.',
+)
 async def get_user_repositories(
     sort: str = 'pushed',
     selected_provider: Annotated[ProviderType | None, Query()] = None,
@@ -113,12 +123,13 @@ async def get_user_repositories(
     raise AuthenticationError('Git provider token required. (such as GitHub).')
 
 
-@app.get('/info', response_model=User)
+@app.get('/info', response_model=User, deprecated=True)
 async def get_user(
     provider_tokens: PROVIDER_TOKEN_TYPE | None = Depends(get_provider_tokens),
     access_token: SecretStr | None = Depends(get_access_token),
     user_id: str | None = Depends(get_user_id),
 ) -> User | JSONResponse:
+    """Get the current user git info. Use GET /api/v1/users/git-info instead"""
     if provider_tokens:
         client = ProviderHandler(
             provider_tokens=provider_tokens, external_auth_token=access_token

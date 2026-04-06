@@ -217,9 +217,17 @@ class SaasSettingsStore(SettingsStore):
                 )
                 return None
 
-            llm_model = item.get_agent_setting('llm.model')
-            llm_base_url = item.get_agent_setting('llm.base_url')
-            uses_managed_llm_key = not llm_base_url or llm_base_url == LITE_LLM_API_URL
+            llm_model = item.llm_model
+            llm_base_url = item.llm_base_url
+            normalized_llm_base_url = llm_base_url.rstrip('/') if llm_base_url else None
+            normalized_managed_base_url = LITE_LLM_API_URL.rstrip('/')
+            uses_managed_llm_key = (
+                normalized_llm_base_url == normalized_managed_base_url
+                or (
+                    normalized_llm_base_url is None
+                    and is_openhands_model(llm_model)
+                )
+            )
 
             if uses_managed_llm_key:
                 await self._ensure_api_key(

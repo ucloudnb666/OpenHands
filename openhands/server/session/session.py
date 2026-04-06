@@ -37,6 +37,7 @@ from openhands.events.serialization import event_from_dict, event_to_dict
 from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.runtime_status import RuntimeStatus
+from openhands.utils._redact_compat import sanitize_dict
 from openhands.server.constants import ROOM_KEY
 from openhands.server.services.conversation_stats import ConversationStats
 from openhands.server.session.agent_session import AgentSession
@@ -180,13 +181,15 @@ class WebSession:
 
         # NOTE: this need to happen AFTER the config is updated with the search_api_key
         self.logger.debug(
-            f'MCP configuration before setup - self.config.mcp_config: {self.config.mcp}'
+            f'MCP configuration before setup - self.config.mcp_config: {sanitize_dict(self.config.mcp.model_dump())}'
         )
 
         custom_mcp_config = settings.to_legacy_mcp_config()
         if custom_mcp_config:
             self.config.mcp = self.config.mcp.merge(custom_mcp_config)
-            self.logger.debug(f'Merged custom MCP Config: {custom_mcp_config}')
+            self.logger.debug(
+                f'Merged custom MCP Config: {sanitize_dict(custom_mcp_config.model_dump())}'
+            )
 
         # Add OpenHands' MCP server by default
         (
@@ -203,7 +206,7 @@ class WebSession:
             self.config.mcp.stdio_servers.extend(openhands_mcp_stdio_servers)
 
         self.logger.debug(
-            f'MCP configuration after setup - self.config.mcp: {self.config.mcp}'
+            f'MCP configuration after setup - self.config.mcp: {sanitize_dict(self.config.mcp.model_dump())}'
         )
 
         # TODO: override other LLM config & agent config groups (#2075)
