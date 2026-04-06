@@ -113,8 +113,8 @@ async def summarize_issue_solvability(
 
     try:
         llm_config = LLMConfig(
-            model=user_settings.llm_model,
-            api_key=user_settings.llm_api_key.get_secret_value(),
+            model=user_settings.llm_model or LLMConfig.model_fields['model'].default,
+            api_key=user_settings.llm_api_key,
             base_url=user_settings.llm_base_url,
         )
     except ValidationError as e:
@@ -154,7 +154,7 @@ async def summarize_issue_solvability(
             f'[Solvability] Generated report for {github_view.conversation_id}',
             extra={
                 'conversation_id': github_view.conversation_id,
-                'report': solvability_report.model_dump(exclude=['issue']),
+                'report': solvability_report.model_dump(exclude={'issue'}),
             },
         )
 

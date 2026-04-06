@@ -37,7 +37,7 @@ class LocAgent(CodeActAgent):
 
         self.tools = locagent_function_calling.get_tools()
         logger.debug(
-            f'TOOLS loaded for LocAgent: {", ".join([tool.get("function").get("name") for tool in self.tools])}'
+            f'TOOLS loaded for LocAgent: {", ".join([tool.get("function").get("name") for tool in self.tools])}'  # type: ignore[misc,union-attr]
         )
 
     def response_to_actions(self, response: 'ModelResponse') -> list['Action']:

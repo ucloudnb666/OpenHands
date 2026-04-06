@@ -388,7 +388,7 @@ class AgentController:
                 f'Error while running the agent (session ID: {self.id}): {e}',
                 exc_info=True,
             )
-            reported = RuntimeError(
+            reported: Exception = RuntimeError(
                 f'There was an unexpected error while running the agent: {e.__class__.__name__}. You can refresh the page or ask the agent to try again.'
             )
             if (
