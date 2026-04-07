@@ -410,11 +410,7 @@ class AutomationEventService:
                     timeout=aiohttp.ClientTimeout(total=AUTOMATION_SERVICE_TIMEOUT),
                 ) as resp:
                     if resp.status >= 400:
-                        # Try JSON first, fall back to text for error body
-                        try:
-                            body = await resp.json()
-                        except Exception:
-                            body = await resp.text()
+                        body = await resp.json()
                         logger.warning(
                             f'[AutomationEventService] Automation service returned '
                             f'{resp.status}: {body}'
