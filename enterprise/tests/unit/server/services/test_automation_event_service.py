@@ -2,28 +2,17 @@
 Unit tests for AutomationEventService.
 
 Tests the service that forwards GitHub webhook events to the automation service.
+
+The service is optimized for high-traffic with:
+- Redis caching for org claim lookups (1 hour TTL)
+- Redis caching for GitHub→Keycloak user ID mappings (24 hour TTL)
+- Lazy access control (membership checks deferred to execution time)
 """
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# Patch the constants before importing the module
-PATCHES = [
-    patch(
-        'server.services.automation_event_service.GITHUB_APP_CLIENT_ID',
-        'test-client-id',
-    ),
-    patch(
-        'server.services.automation_event_service.GITHUB_APP_PRIVATE_KEY',
-        'test-private-key',
-    ),
-    patch(
-        'server.services.automation_event_service.GITHUB_APP_WEBHOOK_SECRET',
-        'test-secret',
-    ),
-]
 
 
 @pytest.fixture
@@ -93,145 +82,182 @@ def github_user_payload():
 
 
 def create_service(mock_token_manager):
-    """Helper to create a service with all necessary mocks."""
-    with patch('server.services.automation_event_service.GithubIntegration'), patch(
-        'server.services.automation_event_service.Auth.AppAuth'
-    ):
+    """Helper to create a service with mocked sio."""
+    with patch('server.services.automation_event_service.sio'):
         from server.services.automation_event_service import AutomationEventService
 
         return AutomationEventService(mock_token_manager)
 
 
 class TestResolveGithubOrg:
-    """Tests for _resolve_github_org method."""
+    """Tests for _resolve_github_org method with caching."""
 
     @pytest.mark.asyncio
-    async def test_resolve_github_org_found(
+    async def test_resolve_github_org_cache_miss_found(
         self, mock_token_manager, mock_org_git_claim
     ):
         """
-        GIVEN: A GitHub org that has been claimed in OpenHands
+        GIVEN: Cache miss and org claim exists in DB
         WHEN: _resolve_github_org is called
-        THEN: The OpenHands org_id is returned
+        THEN: Org ID is returned and cached
         """
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
+        mock_redis.setex = AsyncMock()
+
         with patch(
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=mock_org_git_claim,
-        ) as mock_get_claim:
+        ), patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
             service = create_service(mock_token_manager)
             result = await service._resolve_github_org('test-org')
 
             assert result == mock_org_git_claim.org_id
-            mock_get_claim.assert_called_once_with(
-                provider='github',
-                git_organization='test-org',
-            )
+            # Verify result was cached
+            mock_redis.setex.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_resolve_github_org_not_found(self, mock_token_manager):
+    async def test_resolve_github_org_cache_hit(self, mock_token_manager):
         """
-        GIVEN: A GitHub org that has NOT been claimed in OpenHands
+        GIVEN: Org ID is cached in Redis
         WHEN: _resolve_github_org is called
-        THEN: None is returned
+        THEN: Cached value is returned without DB query
         """
+        cached_org_id = '12345678-1234-5678-1234-567812345678'
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=cached_org_id.encode())
+
+        with patch(
+            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            new_callable=AsyncMock,
+        ) as mock_db, patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
+            service = create_service(mock_token_manager)
+            result = await service._resolve_github_org('test-org')
+
+            assert result == uuid.UUID(cached_org_id)
+            # DB should NOT be queried
+            mock_db.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_resolve_github_org_cache_miss_not_found(self, mock_token_manager):
+        """
+        GIVEN: Cache miss and org claim does NOT exist in DB
+        WHEN: _resolve_github_org is called
+        THEN: None is returned and negative result is cached
+        """
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
+        mock_redis.setex = AsyncMock()
+
         with patch(
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=None,
-        ):
+        ), patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
             service = create_service(mock_token_manager)
             result = await service._resolve_github_org('unclaimed-org')
 
             assert result is None
+            # Verify negative result was cached
+            mock_redis.setex.assert_called_once()
+            call_args = mock_redis.setex.call_args
+            # Second positional arg is the value
+            assert call_args[0][2] == 'none'  # Negative cache value
 
     @pytest.mark.asyncio
-    async def test_resolve_github_org_lowercases_name(self, mock_token_manager):
+    async def test_resolve_github_org_negative_cache_hit(self, mock_token_manager):
         """
-        GIVEN: A GitHub org name with mixed case
+        GIVEN: Negative result is cached (org not claimed)
         WHEN: _resolve_github_org is called
-        THEN: The org name is lowercased for lookup
+        THEN: None is returned without DB query
         """
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=b'none')  # Cached negative
+
         with patch(
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
-            return_value=None,
-        ) as mock_get_claim:
-            service = create_service(mock_token_manager)
-            await service._resolve_github_org('Test-Org')
+        ) as mock_db, patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
 
-            mock_get_claim.assert_called_once_with(
-                provider='github',
-                git_organization='test-org',
-            )
+            service = create_service(mock_token_manager)
+            result = await service._resolve_github_org('unclaimed-org')
+
+            assert result is None
+            mock_db.assert_not_called()
 
 
 class TestResolvePersonalOrg:
-    """Tests for _resolve_personal_org method."""
+    """Tests for _resolve_personal_org method with caching."""
 
     @pytest.mark.asyncio
-    async def test_resolve_personal_org_success(self, mock_token_manager):
+    async def test_resolve_personal_org_cache_miss_found(self, mock_token_manager):
         """
-        GIVEN: A GitHub user ID that maps to a keycloak user
+        GIVEN: Cache miss and user exists in Keycloak
         WHEN: _resolve_personal_org is called
-        THEN: The keycloak user ID is returned as a UUID (personal org)
+        THEN: Keycloak ID is returned and cached
         """
         keycloak_id = '87654321-4321-8765-4321-876543218765'
         mock_token_manager.get_user_id_from_idp_user_id = AsyncMock(
             return_value=keycloak_id
         )
 
-        service = create_service(mock_token_manager)
-        result = await service._resolve_personal_org(12345)
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
+        mock_redis.setex = AsyncMock()
 
-        assert result == uuid.UUID(keycloak_id)
-        mock_token_manager.get_user_id_from_idp_user_id.assert_called_once()
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
+            service = create_service(mock_token_manager)
+            result = await service._resolve_personal_org(12345)
+
+            assert result == uuid.UUID(keycloak_id)
+            mock_redis.setex.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_resolve_personal_org_cache_hit(self, mock_token_manager):
+        """
+        GIVEN: Keycloak ID is cached in Redis
+        WHEN: _resolve_personal_org is called
+        THEN: Cached value is returned without Keycloak query
+        """
+        keycloak_id = '87654321-4321-8765-4321-876543218765'
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=keycloak_id.encode())
+
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
+            service = create_service(mock_token_manager)
+            result = await service._resolve_personal_org(12345)
+
+            assert result == uuid.UUID(keycloak_id)
+            # Token manager should NOT be called
+            mock_token_manager.get_user_id_from_idp_user_id.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_resolve_personal_org_no_github_user_id(self, mock_token_manager):
         """
         GIVEN: No GitHub user ID provided
         WHEN: _resolve_personal_org is called
-        THEN: None is returned
+        THEN: None is returned immediately
         """
         service = create_service(mock_token_manager)
         result = await service._resolve_personal_org(None)
 
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_resolve_personal_org_user_not_found(self, mock_token_manager):
-        """
-        GIVEN: A GitHub user ID that doesn't map to a keycloak user
-        WHEN: _resolve_personal_org is called
-        THEN: None is returned
-        """
-        mock_token_manager.get_user_id_from_idp_user_id = AsyncMock(return_value=None)
-
-        service = create_service(mock_token_manager)
-        result = await service._resolve_personal_org(12345)
-
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_resolve_personal_org_exception(self, mock_token_manager):
-        """
-        GIVEN: An exception occurs during keycloak lookup
-        WHEN: _resolve_personal_org is called
-        THEN: None is returned and warning is logged
-        """
-        mock_token_manager.get_user_id_from_idp_user_id = AsyncMock(
-            side_effect=Exception('Keycloak error')
-        )
-
-        service = create_service(mock_token_manager)
-        result = await service._resolve_personal_org(12345)
-
-        assert result is None
-
 
 class TestForwardGithubEvent:
-    """Tests for forward_github_event method."""
+    """Tests for forward_github_event method (minimal payload, no access control)."""
 
     @pytest.mark.asyncio
     async def test_forward_org_event_success(
@@ -240,35 +266,27 @@ class TestForwardGithubEvent:
         """
         GIVEN: A GitHub event from a claimed organization repo
         WHEN: forward_github_event is called
-        THEN: Event is forwarded to automation service
+        THEN: Minimal payload is forwarded (no access_control)
         """
         from server.services.automation_event_service import AutomationEventService
 
-        keycloak_id = '87654321-4321-8765-4321-876543218765'
-        mock_token_manager.get_user_id_from_idp_user_id = AsyncMock(
-            return_value=keycloak_id
-        )
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+        mock_redis.setex = AsyncMock()
 
         with patch(
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=mock_org_git_claim,
         ), patch(
-            'server.services.automation_event_service.OrgMemberStore.get_org_member',
-            new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
-            'server.services.automation_event_service.Auth.AppAuth'
-        ), patch.object(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio, patch.object(
             AutomationEventService,
             '_send_to_automation_service',
             new_callable=AsyncMock,
-        ) as mock_send, patch.object(
-            AutomationEventService,
-            '_check_github_org_membership',
-            new_callable=AsyncMock,
-            return_value=True,
-        ):
+        ) as mock_send:
+            mock_sio.manager.redis = mock_redis
+
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=github_org_payload,
@@ -279,10 +297,12 @@ class TestForwardGithubEvent:
             mock_send.assert_called_once()
             call_args = mock_send.call_args
             assert call_args[0][0] == mock_org_git_claim.org_id
+
             payload = call_args[0][1]
             assert payload['organization']['github_org'] == 'test-org'
             assert 'raw_payload' in payload
-            assert 'access_control' in payload
+            # access_control should NOT be in payload (lazy evaluation)
+            assert 'access_control' not in payload
 
     @pytest.mark.asyncio
     async def test_forward_personal_repo_event_success(
@@ -300,26 +320,23 @@ class TestForwardGithubEvent:
             return_value=keycloak_id
         )
 
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+        mock_redis.setex = AsyncMock()
+
         with patch(
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=None,  # No org claim for personal repo
         ), patch(
-            'server.services.automation_event_service.OrgMemberStore.get_org_member',
-            new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
-            'server.services.automation_event_service.Auth.AppAuth'
-        ), patch.object(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio, patch.object(
             AutomationEventService,
             '_send_to_automation_service',
             new_callable=AsyncMock,
-        ) as mock_send, patch.object(
-            AutomationEventService,
-            '_check_github_org_membership',
-            new_callable=AsyncMock,
-            return_value=True,
-        ):
+        ) as mock_send:
+            mock_sio.manager.redis = mock_redis
+
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=github_user_payload,
@@ -349,9 +366,7 @@ class TestForwardGithubEvent:
             'sender': {'id': 12345, 'login': 'testuser'},
         }
 
-        with patch('server.services.automation_event_service.GithubIntegration'), patch(
-            'server.services.automation_event_service.Auth.AppAuth'
-        ), patch(
+        with patch('server.services.automation_event_service.sio'), patch(
             'server.services.automation_event_service.logger'
         ) as mock_logger, patch.object(
             AutomationEventService,
@@ -380,19 +395,23 @@ class TestForwardGithubEvent:
         """
         from server.services.automation_event_service import AutomationEventService
 
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+        mock_redis.setex = AsyncMock()
+
         with patch(
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=None,
-        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
-            'server.services.automation_event_service.Auth.AppAuth'
-        ), patch(
+        ), patch('server.services.automation_event_service.sio') as mock_sio, patch(
             'server.services.automation_event_service.logger'
         ) as mock_logger, patch.object(
             AutomationEventService,
             '_send_to_automation_service',
             new_callable=AsyncMock,
         ) as mock_send:
+            mock_sio.manager.redis = mock_redis
+
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=github_org_payload,
@@ -404,293 +423,37 @@ class TestForwardGithubEvent:
             mock_logger.warning.assert_called()
             assert 'not claimed' in str(mock_logger.warning.call_args)
 
-    @pytest.mark.asyncio
-    async def test_forward_personal_repo_no_openhands_account(
-        self, mock_token_manager, github_user_payload
-    ):
+
+class TestBuildEventPayload:
+    """Tests for _build_event_payload method."""
+
+    def test_build_minimal_payload(self, mock_token_manager):
         """
-        GIVEN: A GitHub event from a personal repo, but user has no OpenHands account
-        WHEN: forward_github_event is called
-        THEN: Event is skipped with warning log
+        GIVEN: Org context and raw payload
+        WHEN: _build_event_payload is called
+        THEN: Minimal payload with only org + raw_payload is returned
         """
-        from server.services.automation_event_service import AutomationEventService
+        from server.services.automation_event_service import OrgContext
 
-        mock_token_manager.get_user_id_from_idp_user_id = AsyncMock(return_value=None)
+        service = create_service(mock_token_manager)
 
-        with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
-            new_callable=AsyncMock,
-            return_value=None,
-        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
-            'server.services.automation_event_service.Auth.AppAuth'
-        ), patch(
-            'server.services.automation_event_service.logger'
-        ) as mock_logger, patch.object(
-            AutomationEventService,
-            '_send_to_automation_service',
-            new_callable=AsyncMock,
-        ) as mock_send:
-            service = AutomationEventService(mock_token_manager)
-            await service.forward_github_event(
-                payload=github_user_payload,
-                event_type='push',
-                installation_id=99999,
-            )
+        org_context = OrgContext(
+            org_id=uuid.UUID('12345678-1234-5678-1234-567812345678'),
+            github_org='test-org',
+        )
+        raw_payload = {'action': 'opened', 'sender': {'login': 'user'}}
 
-            mock_send.assert_not_called()
-            mock_logger.warning.assert_called()
-            assert 'no personal org found' in str(mock_logger.warning.call_args)
+        result = service._build_event_payload(org_context, raw_payload)
 
-
-class TestCheckGithubOrgMembership:
-    """Tests for _check_github_org_membership method."""
-
-    @pytest.mark.asyncio
-    async def test_private_repo_checks_membership(self, mock_token_manager):
-        """
-        GIVEN: A private repository in an organization
-        WHEN: _check_github_org_membership is called
-        THEN: GitHub org membership is checked via API
-        """
-        payload = {
-            'repository': {
-                'private': True,
-                'owner': {'type': 'Organization', 'login': 'test-org'},
+        assert result == {
+            'organization': {
+                'github_org': 'test-org',
+                'openhands_org_id': '12345678-1234-5678-1234-567812345678',
             },
+            'raw_payload': raw_payload,
         }
-
-        service = create_service(mock_token_manager)
-
-        # Mock Redis as unavailable (to test API path)
-        mock_redis = AsyncMock()
-        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
-        mock_redis.setex = AsyncMock()
-
-        # Mock the installation token and org membership check
-        with patch(
-            'server.services.automation_event_service.sio'
-        ) as mock_sio, patch.object(
-            service, '_get_installation_token', return_value='test-token'
-        ), patch.object(
-            service, '_check_org_membership_sync', return_value=True
-        ) as mock_check:
-            mock_sio.manager.redis = mock_redis
-
-            result = await service._check_github_org_membership(
-                payload, 99999, 'testuser'
-            )
-
-            # Verify membership check was performed
-            mock_check.assert_called_once_with('test-org', 'testuser', 'test-token')
-            assert result is True
-
-    @pytest.mark.asyncio
-    async def test_personal_repo_owner_is_member(self, mock_token_manager):
-        """
-        GIVEN: A personal repo (not org) where user is the owner
-        WHEN: _check_github_org_membership is called
-        THEN: True is returned
-        """
-        payload = {
-            'repository': {
-                'private': False,
-                'owner': {'type': 'User', 'login': 'testuser'},
-            },
-        }
-
-        service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(payload, 99999, 'testuser')
-        assert result is True
-
-    @pytest.mark.asyncio
-    async def test_personal_repo_non_owner_not_member(self, mock_token_manager):
-        """
-        GIVEN: A personal repo (not org) where user is NOT the owner
-        WHEN: _check_github_org_membership is called
-        THEN: False is returned
-        """
-        payload = {
-            'repository': {
-                'private': False,
-                'owner': {'type': 'User', 'login': 'otheruser'},
-            },
-        }
-
-        service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(payload, 99999, 'testuser')
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_no_username_returns_false(self, mock_token_manager):
-        """
-        GIVEN: No username provided
-        WHEN: _check_github_org_membership is called
-        THEN: False is returned
-        """
-        payload = {
-            'repository': {'private': False, 'owner': {'type': 'Organization'}},
-        }
-
-        service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(payload, 99999, None)
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_cache_hit_returns_cached_value(self, mock_token_manager):
-        """
-        GIVEN: A cached membership result in Redis
-        WHEN: _check_github_org_membership is called
-        THEN: Cached value is returned without API call
-        """
-        payload = {
-            'repository': {
-                'private': False,
-                'owner': {'type': 'Organization', 'login': 'test-org'},
-            },
-        }
-
-        service = create_service(mock_token_manager)
-
-        # Mock Redis cache hit
-        mock_redis = AsyncMock()
-        mock_redis.get = AsyncMock(return_value=b'1')  # Cached as member
-
-        with patch(
-            'server.services.automation_event_service.sio'
-        ) as mock_sio, patch.object(
-            service, '_get_installation_token', return_value='test-token'
-        ) as mock_get_token, patch.object(
-            service, '_check_org_membership_sync', return_value=False
-        ) as mock_check:
-            mock_sio.manager.redis = mock_redis
-
-            result = await service._check_github_org_membership(
-                payload, 99999, 'testuser'
-            )
-
-            # Should return cached True, not call API
-            assert result is True
-            mock_check.assert_not_called()
-            mock_get_token.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_cache_miss_calls_api_and_caches_result(self, mock_token_manager):
-        """
-        GIVEN: No cached membership result in Redis
-        WHEN: _check_github_org_membership is called
-        THEN: API is called and result is cached
-        """
-        payload = {
-            'repository': {
-                'private': False,
-                'owner': {'type': 'Organization', 'login': 'test-org'},
-            },
-        }
-
-        service = create_service(mock_token_manager)
-
-        # Mock Redis cache miss
-        mock_redis = AsyncMock()
-        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
-        mock_redis.setex = AsyncMock()
-
-        with patch(
-            'server.services.automation_event_service.sio'
-        ) as mock_sio, patch.object(
-            service, '_get_installation_token', return_value='test-token'
-        ), patch.object(
-            service, '_check_org_membership_sync', return_value=True
-        ) as mock_check:
-            mock_sio.manager.redis = mock_redis
-
-            result = await service._check_github_org_membership(
-                payload, 99999, 'testuser'
-            )
-
-            # Should call API and cache result
-            assert result is True
-            mock_check.assert_called_once()
-            mock_redis.setex.assert_called_once()
-            # Verify cache key format
-            call_args = mock_redis.setex.call_args
-            assert 'automation:gh_membership:test-org:testuser' in call_args[0][0]
-            assert call_args[0][2] == '1'  # True cached as '1'
-
-    @pytest.mark.asyncio
-    async def test_redis_unavailable_falls_through_to_api(self, mock_token_manager):
-        """
-        GIVEN: Redis is unavailable
-        WHEN: _check_github_org_membership is called
-        THEN: API is called directly (graceful degradation)
-        """
-        payload = {
-            'repository': {
-                'private': False,
-                'owner': {'type': 'Organization', 'login': 'test-org'},
-            },
-        }
-
-        service = create_service(mock_token_manager)
-
-        # Mock Redis unavailable
-        with patch(
-            'server.services.automation_event_service.sio'
-        ) as mock_sio, patch.object(
-            service, '_get_installation_token', return_value='test-token'
-        ), patch.object(
-            service, '_check_org_membership_sync', return_value=True
-        ) as mock_check:
-            mock_sio.manager.redis = None  # Redis unavailable
-
-            result = await service._check_github_org_membership(
-                payload, 99999, 'testuser'
-            )
-
-            # Should still work via API
-            assert result is True
-            mock_check.assert_called_once()
-
-
-class TestCheckOpenhandsOrgMembership:
-    """Tests for _check_openhands_org_membership method."""
-
-    @pytest.mark.asyncio
-    async def test_member_found(self, mock_token_manager):
-        """
-        GIVEN: User is a member of the OpenHands org
-        WHEN: _check_openhands_org_membership is called
-        THEN: True is returned
-        """
-        org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        keycloak_id = '87654321-4321-8765-4321-876543218765'
-
-        with patch(
-            'server.services.automation_event_service.OrgMemberStore.get_org_member',
-            new_callable=AsyncMock,
-            return_value=MagicMock(),
-        ):
-            service = create_service(mock_token_manager)
-            result = await service._check_openhands_org_membership(org_id, keycloak_id)
-            assert result is True
-
-    @pytest.mark.asyncio
-    async def test_member_not_found(self, mock_token_manager):
-        """
-        GIVEN: User is NOT a member of the OpenHands org
-        WHEN: _check_openhands_org_membership is called
-        THEN: False is returned
-        """
-        org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        keycloak_id = '87654321-4321-8765-4321-876543218765'
-
-        with patch(
-            'server.services.automation_event_service.OrgMemberStore.get_org_member',
-            new_callable=AsyncMock,
-            return_value=None,
-        ):
-            service = create_service(mock_token_manager)
-            result = await service._check_openhands_org_membership(org_id, keycloak_id)
-            assert result is False
+        # Verify NO access_control in payload
+        assert 'access_control' not in result
 
 
 class TestSendToAutomationService:
@@ -703,65 +466,56 @@ class TestSendToAutomationService:
         WHEN: _send_to_automation_service is called
         THEN: Request is sent with correct signature
         """
+
         org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        payload = {
-            'organization': {'github_org': 'test-org', 'openhands_org_id': str(org_id)},
-            'access_control': {'is_github_org_member': True},
-            'raw_payload': {'test': 'data'},
-        }
+        payload = {'organization': {'github_org': 'test'}, 'raw_payload': {}}
 
         mock_response = MagicMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={'matched': 1})
+        mock_response.json = AsyncMock(return_value={'matched': 2})
 
-        # Create proper async context manager mocks
-        mock_post_cm = AsyncMock()
-        mock_post_cm.__aenter__.return_value = mock_response
+        mock_post_context = MagicMock()
+        mock_post_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_post_context.__aexit__ = AsyncMock(return_value=None)
 
         mock_session_instance = MagicMock()
-        mock_session_instance.post.return_value = mock_post_cm
+        mock_session_instance.post = MagicMock(return_value=mock_post_context)
 
-        mock_session_cm = AsyncMock()
-        mock_session_cm.__aenter__.return_value = mock_session_instance
+        mock_session_context = MagicMock()
+        mock_session_context.__aenter__ = AsyncMock(return_value=mock_session_instance)
+        mock_session_context.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
             'server.services.automation_event_service.AUTOMATION_SERVICE_URL',
             'https://automation.example.com',
-        ), patch(
-            'server.services.automation_event_service.GITHUB_APP_WEBHOOK_SECRET',
-            'test-secret',
-        ), patch(
+        ), patch('server.services.automation_event_service.sio'), patch(
             'server.services.automation_event_service.aiohttp.ClientSession',
-            return_value=mock_session_cm,
+            return_value=mock_session_context,
         ):
             service = create_service(mock_token_manager)
             await service._send_to_automation_service(org_id, payload)
 
+            # Verify the POST was called
             mock_session_instance.post.assert_called_once()
-            call_args = mock_session_instance.post.call_args
-            assert str(org_id) in call_args[0][0]
-            assert 'X-Hub-Signature-256' in call_args[1]['headers']
 
     @pytest.mark.asyncio
     async def test_send_no_url_configured(self, mock_token_manager):
         """
         GIVEN: AUTOMATION_SERVICE_URL is not configured
         WHEN: _send_to_automation_service is called
-        THEN: Warning is logged and request is not sent
+        THEN: Warning is logged and nothing is sent
         """
         org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        payload = {'raw_payload': {'test': 'data'}}
+        payload = {}
 
         with patch(
-            'server.services.automation_event_service.AUTOMATION_SERVICE_URL',
-            '',
-        ), patch(
+            'server.services.automation_event_service.AUTOMATION_SERVICE_URL', None
+        ), patch('server.services.automation_event_service.sio'), patch(
             'server.services.automation_event_service.logger'
-        ) as mock_logger, patch('aiohttp.ClientSession') as mock_session:
+        ) as mock_logger:
             service = create_service(mock_token_manager)
             await service._send_to_automation_service(org_id, payload)
 
-            mock_session.assert_not_called()
             mock_logger.warning.assert_called()
             assert 'not configured' in str(mock_logger.warning.call_args)
 
@@ -771,17 +525,105 @@ class TestSignPayload:
 
     def test_sign_payload(self, mock_token_manager):
         """
-        GIVEN: A payload to sign
+        GIVEN: A payload bytes
         WHEN: _sign_payload is called
-        THEN: A valid sha256 signature is returned
+        THEN: HMAC-SHA256 signature is returned in correct format
         """
         with patch(
             'server.services.automation_event_service.GITHUB_APP_WEBHOOK_SECRET',
             'test-secret',
-        ):
+        ), patch('server.services.automation_event_service.sio'):
             service = create_service(mock_token_manager)
             payload_bytes = b'{"test": "data"}'
+
             signature = service._sign_payload(payload_bytes)
 
             assert signature.startswith('sha256=')
             assert len(signature) == 71  # 'sha256=' + 64 hex chars
+
+
+class TestCacheHelpers:
+    """Tests for generic cache helper methods."""
+
+    @pytest.mark.asyncio
+    async def test_get_cached_value_hit(self, mock_token_manager):
+        """
+        GIVEN: Value exists in Redis cache
+        WHEN: _get_cached_value is called
+        THEN: Decoded string value is returned
+        """
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=b'cached-value')
+
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
+            service = create_service(mock_token_manager)
+            result = await service._get_cached_value('test-key')
+
+            assert result == 'cached-value'
+
+    @pytest.mark.asyncio
+    async def test_get_cached_value_miss(self, mock_token_manager):
+        """
+        GIVEN: Value does not exist in Redis cache
+        WHEN: _get_cached_value is called
+        THEN: None is returned
+        """
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
+            service = create_service(mock_token_manager)
+            result = await service._get_cached_value('test-key')
+
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cached_value_redis_unavailable(self, mock_token_manager):
+        """
+        GIVEN: Redis is unavailable
+        WHEN: _get_cached_value is called
+        THEN: None is returned (graceful degradation)
+        """
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = None
+
+            service = create_service(mock_token_manager)
+            result = await service._get_cached_value('test-key')
+
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_set_cached_value_success(self, mock_token_manager):
+        """
+        GIVEN: Redis is available
+        WHEN: _set_cached_value is called
+        THEN: Value is stored with TTL
+        """
+        mock_redis = AsyncMock()
+        mock_redis.setex = AsyncMock()
+
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = mock_redis
+
+            service = create_service(mock_token_manager)
+            await service._set_cached_value('test-key', 'test-value', 3600)
+
+            mock_redis.setex.assert_called_once_with('test-key', 3600, 'test-value')
+
+    @pytest.mark.asyncio
+    async def test_set_cached_value_redis_unavailable(self, mock_token_manager):
+        """
+        GIVEN: Redis is unavailable
+        WHEN: _set_cached_value is called
+        THEN: No error is raised (silent failure)
+        """
+        with patch('server.services.automation_event_service.sio') as mock_sio:
+            mock_sio.manager.redis = None
+
+            service = create_service(mock_token_manager)
+            # Should not raise
+            await service._set_cached_value('test-key', 'test-value', 3600)

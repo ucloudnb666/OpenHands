@@ -1,15 +1,15 @@
 """
 Service for forwarding GitHub webhook events to the automation service.
 
-This service handles:
-1. Resolving GitHub org → OpenHands org_id (via OrgGitClaim)
-2. For personal repos (owner type 'User'), resolving to personal OpenHands org
-   (keycloak user ID)
-3. Converting GitHub user ID → Keycloak user ID
-4. Access control checks:
-   - GitHub org membership (for both public and private repos)
-   - OpenHands org membership (Keycloak user must be member of OpenHands org)
-5. Forwarding payloads to the automation service
+This service is optimized for high-traffic scenarios:
+1. Resolves GitHub org → OpenHands org_id (via cached OrgGitClaim lookup)
+2. For personal repos, resolves to personal org (via cached GitHub→Keycloak mapping)
+3. Forwards minimal payload to automation service (just org_id + raw_payload)
+4. Access control checks are deferred to automation execution time
+
+The lazy access control approach means:
+- Most webhooks only do cached lookups + HTTP forward
+- Membership checks only happen when an automation actually matches
 """
 
 import asyncio
@@ -21,24 +21,24 @@ from typing import Any
 from uuid import UUID
 
 import aiohttp
-from github import Auth, Github, GithubIntegration
 from server.auth.constants import (
     AUTOMATION_SERVICE_URL,
-    GITHUB_APP_CLIENT_ID,
-    GITHUB_APP_PRIVATE_KEY,
     GITHUB_APP_WEBHOOK_SECRET,
 )
 from server.auth.token_manager import TokenManager
 from storage.org_git_claim_store import OrgGitClaimStore
-from storage.org_member_store import OrgMemberStore
 
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderType
 from openhands.server.shared import sio
 
-# Cache TTL for GitHub org membership checks (5 minutes)
-MEMBERSHIP_CACHE_TTL_SECONDS = 300
-MEMBERSHIP_CACHE_PREFIX = 'automation:gh_membership'
+# Cache TTL constants
+ORG_CLAIM_CACHE_TTL_SECONDS = 3600  # 1 hour for org claims (rarely change)
+USER_ID_CACHE_TTL_SECONDS = 86400  # 24 hours for user ID mappings (never change)
+
+# Cache key prefixes
+ORG_CLAIM_CACHE_PREFIX = 'automation:org_claim'
+USER_ID_CACHE_PREFIX = 'automation:gh_to_kc_user'
 
 
 @dataclass
@@ -49,25 +49,20 @@ class OrgContext:
     github_org: str
 
 
-@dataclass
-class AccessControl:
-    """Access control metadata for the event sender."""
-
-    is_github_org_member: bool
-    is_openhands_org_member: bool
-    has_openhands_account: bool
-
-
 class AutomationEventService:
-    """Service for forwarding webhook events to the automation service."""
+    """
+    Service for forwarding webhook events to the automation service.
+
+    Optimized for high traffic with:
+    - Redis caching for org claim lookups (1 hour TTL)
+    - Redis caching for GitHub→Keycloak user ID mappings (24 hour TTL)
+    - Lazy access control (membership checks deferred to execution time)
+    """
 
     def __init__(self, token_manager: TokenManager):
         from server.auth.constants import AUTOMATION_EVENT_FORWARDING_ENABLED
 
         self.token_manager = token_manager
-        self.github_integration = GithubIntegration(
-            auth=Auth.AppAuth(GITHUB_APP_CLIENT_ID, GITHUB_APP_PRIVATE_KEY)
-        )
 
         # Fail fast if forwarding is enabled but misconfigured
         if AUTOMATION_EVENT_FORWARDING_ENABLED:
@@ -87,6 +82,8 @@ class AutomationEventService:
         Forward a GitHub webhook event to the automation service.
 
         This is designed to be called as a fire-and-forget background task.
+        The forward path is optimized for speed - only org resolution is done here.
+        Access control checks are deferred to automation execution time.
 
         Args:
             payload: The raw GitHub webhook payload
@@ -95,22 +92,16 @@ class AutomationEventService:
         """
         org_id: UUID | None = None
         try:
-            # Resolve org context (org_id and github_org name)
+            # Resolve org context (org_id and github_org name) - uses Redis cache
             org_context = await self._resolve_org_context(payload)
             if not org_context:
                 return
 
             org_id = org_context.org_id
 
-            # Build access control metadata
-            access_control = await self._build_access_control(
-                payload, installation_id, org_context
-            )
-
-            # Build and send the event payload
-            event_payload = self._build_event_payload(
-                org_context, access_control, payload
-            )
+            # Build minimal payload and forward immediately
+            # Access control is NOT computed here - it's deferred to execution time
+            event_payload = self._build_event_payload(org_context, payload)
             await self._send_to_automation_service(org_id, event_payload)
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
@@ -121,8 +112,6 @@ class AutomationEventService:
                 exc_info=True,
                 extra={'installation_id': installation_id},
             )
-            # TODO: Add metrics tracking for failed forwards
-            # TODO: Consider retry mechanism for transient failures
         except Exception as e:
             # Log unexpected errors but re-raise to surface bugs
             logger.error(
@@ -137,6 +126,7 @@ class AutomationEventService:
         """
         Resolve the organization context from the webhook payload.
 
+        Uses Redis caching for both org claims and user ID mappings.
         Returns None if the org cannot be resolved (not claimed, no personal org).
         """
         repo = payload.get('repository', {})
@@ -171,74 +161,67 @@ class AutomationEventService:
 
         return OrgContext(org_id=org_id, github_org=git_org_name)
 
-    async def _build_access_control(
-        self,
-        payload: dict[str, Any],
-        installation_id: int,
-        org_context: OrgContext,
-    ) -> AccessControl:
-        """Build access control metadata for the event sender."""
-        sender = payload.get('sender', {})
-        github_user_id = sender.get('id')
-        github_username = sender.get('login')
-
-        # Resolve Keycloak user ID
-        keycloak_user_id = None
-        if github_user_id:
-            keycloak_user_id = await self._get_keycloak_user_id(github_user_id)
-
-        # Check GitHub org membership (cached in Redis for 5 minutes)
-        is_github_org_member = await self._check_github_org_membership(
-            payload, installation_id, github_username
-        )
-
-        # Check OpenHands org membership
-        is_openhands_org_member = False
-        if keycloak_user_id:
-            is_openhands_org_member = await self._check_openhands_org_membership(
-                org_context.org_id, keycloak_user_id
-            )
-
-        return AccessControl(
-            is_github_org_member=is_github_org_member,
-            is_openhands_org_member=is_openhands_org_member,
-            has_openhands_account=keycloak_user_id is not None,
-        )
-
     def _build_event_payload(
         self,
         org_context: OrgContext,
-        access_control: AccessControl,
         raw_payload: dict[str, Any],
     ) -> dict[str, Any]:
-        """Build the event payload to forward to the automation service."""
+        """
+        Build the minimal event payload to forward to the automation service.
+
+        Access control is NOT included here - it's deferred to execution time.
+        This keeps the forward path fast for high-traffic scenarios.
+        """
         return {
             'organization': {
                 'github_org': org_context.github_org,
                 'openhands_org_id': str(org_context.org_id),
             },
-            'access_control': {
-                'is_github_org_member': access_control.is_github_org_member,
-                'is_openhands_org_member': access_control.is_openhands_org_member,
-                'has_openhands_account': access_control.has_openhands_account,
-            },
             'raw_payload': raw_payload,
         }
+
+    # =========================================================================
+    # Cached Org Resolution Methods
+    # =========================================================================
 
     async def _resolve_github_org(self, git_org_name: str) -> UUID | None:
         """
         Resolve a GitHub organization name to an OpenHands org_id.
 
-        Uses the existing OrgGitClaim system.
+        Uses Redis caching with 1-hour TTL. Caches both positive and negative
+        results to avoid repeated DB queries for unclaimed orgs.
         """
+        cache_key = f'{ORG_CLAIM_CACHE_PREFIX}:{git_org_name.lower()}'
+
+        # Check cache first
+        cached = await self._get_cached_value(cache_key)
+        if cached is not None:
+            if cached == 'none':
+                logger.debug(
+                    f'[AutomationEventService] Cache hit (negative): org {git_org_name} not claimed'
+                )
+                return None
+            logger.debug(
+                f'[AutomationEventService] Cache hit: org {git_org_name} -> {cached}'
+            )
+            return UUID(cached)
+
+        # Cache miss - query DB
         claim = await OrgGitClaimStore.get_claim_by_provider_and_git_org(
             provider='github',
             git_organization=git_org_name.lower(),
         )
 
+        # Cache the result (including negative results)
         if claim:
+            await self._set_cached_value(
+                cache_key, str(claim.org_id), ORG_CLAIM_CACHE_TTL_SECONDS
+            )
             return claim.org_id
-        return None
+        else:
+            # Cache negative result to avoid repeated DB queries
+            await self._set_cached_value(cache_key, 'none', ORG_CLAIM_CACHE_TTL_SECONDS)
+            return None
 
     async def _resolve_personal_org(self, github_user_id: int | None) -> UUID | None:
         """
@@ -247,12 +230,14 @@ class AutomationEventService:
         For personal repos (owner type is 'User'), the OpenHands org_id
         is the user's keycloak user ID. This allows users to set up
         automations on their personal repos without needing an OrgGitClaim.
+
+        Uses Redis caching for the GitHub→Keycloak user ID mapping (24h TTL).
         """
         if not github_user_id:
             return None
 
         try:
-            keycloak_id = await self._get_keycloak_user_id(github_user_id)
+            keycloak_id = await self._get_keycloak_user_id_cached(github_user_id)
             if keycloak_id:
                 return UUID(keycloak_id)
         except Exception as e:
@@ -262,16 +247,44 @@ class AutomationEventService:
             )
         return None
 
-    async def _get_keycloak_user_id(self, github_user_id: int) -> str | None:
+    async def _get_keycloak_user_id_cached(self, github_user_id: int) -> str | None:
         """
         Convert a GitHub user ID to a Keycloak user ID.
 
-        Uses TokenManager.get_user_id_from_idp_user_id().
+        Uses Redis caching with 24-hour TTL since this mapping never changes.
+        Caches negative results to avoid repeated Keycloak queries.
         """
+        cache_key = f'{USER_ID_CACHE_PREFIX}:{github_user_id}'
+
+        # Check cache first
+        cached = await self._get_cached_value(cache_key)
+        if cached is not None:
+            if cached == 'none':
+                logger.debug(
+                    f'[AutomationEventService] Cache hit (negative): GitHub user {github_user_id} not in Keycloak'
+                )
+                return None
+            logger.debug(
+                f'[AutomationEventService] Cache hit: GitHub user {github_user_id} -> Keycloak {cached}'
+            )
+            return cached
+
+        # Cache miss - query Keycloak
         try:
             keycloak_id = await self.token_manager.get_user_id_from_idp_user_id(
                 str(github_user_id), ProviderType.GITHUB
             )
+
+            # Cache the result (including negative results)
+            if keycloak_id:
+                await self._set_cached_value(
+                    cache_key, keycloak_id, USER_ID_CACHE_TTL_SECONDS
+                )
+            else:
+                await self._set_cached_value(
+                    cache_key, 'none', USER_ID_CACHE_TTL_SECONDS
+                )
+
             return keycloak_id
         except Exception as e:
             logger.debug(
@@ -279,96 +292,36 @@ class AutomationEventService:
             )
             return None
 
-    async def _check_github_org_membership(
-        self,
-        payload: dict[str, Any],
-        installation_id: int,
-        username: str | None,
-    ) -> bool:
+    # =========================================================================
+    # Generic Redis Cache Helpers
+    # =========================================================================
+
+    async def _get_cached_value(self, cache_key: str) -> str | None:
         """
-        Check if the event sender is a member of the GitHub org.
+        Get a cached value from Redis.
 
-        This check is performed for both public and private repos to ensure
-        proper access control. For org repos, we verify org membership.
-        For personal repos, the owner is the only "member".
-
-        Results are cached in Redis for 5 minutes to reduce GitHub API calls.
-        """
-        if not username:
-            return False
-
-        repo = payload.get('repository', {})
-        owner = repo.get('owner', {})
-
-        # For personal repos (not org), owner is the only "member"
-        if owner.get('type') != 'Organization':
-            return username == owner.get('login')
-
-        # For org repos (both public and private), check org membership via GitHub API
-        org_name = owner.get('login')
-        if not org_name:
-            return False
-
-        # Check cache first
-        cached_result = await self._get_cached_membership(org_name, username)
-        if cached_result is not None:
-            logger.debug(
-                f'[AutomationEventService] Cache hit for membership check: '
-                f'{username} in {org_name} = {cached_result}'
-            )
-            return cached_result
-
-        # Cache miss - check via GitHub API
-        try:
-            token = self._get_installation_token(installation_id)
-
-            # Run blocking GitHub API calls in a thread pool to avoid blocking
-            # the event loop
-            is_member = await asyncio.to_thread(
-                self._check_org_membership_sync, org_name, username, token
-            )
-
-            # Cache the result
-            await self._cache_membership_result(org_name, username, is_member)
-
-            return is_member
-        except Exception as e:
-            logger.debug(
-                f'[AutomationEventService] Failed to check GitHub org membership for {username}: {e}'
-            )
-            # Fail closed - assume not a member if we can't verify
-            return False
-
-    async def _get_cached_membership(self, org_name: str, username: str) -> bool | None:
-        """
-        Get cached membership result from Redis.
-
-        Returns True/False if cached, None if not cached or Redis unavailable.
+        Returns the cached string value, or None if not cached or Redis unavailable.
         """
         try:
             redis = getattr(sio.manager, 'redis', None)
             if not redis:
                 return None
 
-            cache_key = (
-                f'{MEMBERSHIP_CACHE_PREFIX}:{org_name.lower()}:{username.lower()}'
-            )
             cached = await redis.get(cache_key)
-
             if cached is None:
                 return None
 
-            # Redis returns bytes
-            return cached == b'1'
+            # Redis returns bytes, decode to string
+            return cached.decode('utf-8') if isinstance(cached, bytes) else cached
         except Exception as e:
             logger.debug(f'[AutomationEventService] Redis cache read error: {e}')
             return None
 
-    async def _cache_membership_result(
-        self, org_name: str, username: str, is_member: bool
+    async def _set_cached_value(
+        self, cache_key: str, value: str, ttl_seconds: int
     ) -> None:
         """
-        Cache membership result in Redis with TTL.
+        Set a cached value in Redis with TTL.
 
         Fails silently if Redis is unavailable.
         """
@@ -377,65 +330,9 @@ class AutomationEventService:
             if not redis:
                 return
 
-            cache_key = (
-                f'{MEMBERSHIP_CACHE_PREFIX}:{org_name.lower()}:{username.lower()}'
-            )
-            value = '1' if is_member else '0'
-            await redis.setex(cache_key, MEMBERSHIP_CACHE_TTL_SECONDS, value)
-
-            logger.debug(
-                f'[AutomationEventService] Cached membership: {username} in {org_name} = {is_member}'
-            )
+            await redis.setex(cache_key, ttl_seconds, value)
         except Exception as e:
             logger.debug(f'[AutomationEventService] Redis cache write error: {e}')
-
-    async def _check_openhands_org_membership(
-        self,
-        org_id: UUID,
-        keycloak_user_id: str,
-    ) -> bool:
-        """
-        Check if the user is a member of the OpenHands organization.
-
-        This ensures that only users who are part of the OpenHands org
-        can trigger automations, even if they have GitHub org access.
-        """
-        try:
-            member = await OrgMemberStore.get_org_member(
-                org_id=org_id,
-                user_id=UUID(keycloak_user_id),
-            )
-            return member is not None
-        except Exception as e:
-            logger.debug(
-                f'[AutomationEventService] Failed to check OpenHands org membership '
-                f'for user {keycloak_user_id} in org {org_id}: {e}'
-            )
-            # Fail closed - assume not a member if we can't verify
-            return False
-
-    def _get_installation_token(self, installation_id: int) -> str:
-        """Get a GitHub installation access token."""
-        token_data = self.github_integration.get_access_token(installation_id)
-        return token_data.token
-
-    def _check_org_membership_sync(
-        self, org_name: str, username: str, token: str
-    ) -> bool:
-        """
-        Synchronously check if a user is a member of a GitHub organization.
-
-        This method is designed to be called via asyncio.to_thread() to avoid
-        blocking the event loop with synchronous PyGithub API calls.
-        """
-        with Github(auth=Auth.Token(token)) as github_client:
-            org = github_client.get_organization(org_name)
-            user = github_client.get_user(username)
-            # For org membership, we need NamedUser. The API guarantees
-            # get_user(username) returns NamedUser for other users.
-            if not hasattr(user, 'login'):
-                raise TypeError(f'Expected NamedUser, got {type(user)}')
-            return org.has_in_members(user)  # type: ignore[arg-type]
 
     def _sign_payload(self, payload_bytes: bytes) -> str:
         """
