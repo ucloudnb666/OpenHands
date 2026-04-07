@@ -605,9 +605,7 @@ async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     return False
 
 
-async def _get_post_auth_redirect(
-    user_id: str, default_url: str, web_url: str
-) -> str:
+async def _get_post_auth_redirect(user_id: str, default_url: str, web_url: str) -> str:
     """Determine where to redirect user after authentication completes.
 
     Called after offline token is stored to determine final redirect destination.

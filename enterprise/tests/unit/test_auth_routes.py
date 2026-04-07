@@ -545,6 +545,7 @@ async def test_keycloak_callback_early_return_when_offline_token_invalid(
         # Call with an invitation token to verify it's NOT processed
         import base64
         import json
+
         state_data = {
             'redirect_url': 'https://example.com/original-page',
             'invitation_token': 'inv-test-token-123',
@@ -2211,7 +2212,9 @@ async def test_accept_tos_preserves_offline_flow_redirect(mock_request):
 
     mock_request.json = AsyncMock(return_value={'redirect_url': offline_redirect_url})
 
-    mock_get_post_auth_redirect = AsyncMock(return_value='http://example.com/onboarding')
+    mock_get_post_auth_redirect = AsyncMock(
+        return_value='http://example.com/onboarding'
+    )
 
     with (
         patch(
@@ -2236,5 +2239,6 @@ async def test_accept_tos_preserves_offline_flow_redirect(mock_request):
 
         # The redirect_url should be preserved (not overridden to onboarding)
         import json
+
         response_body = json.loads(result.body.decode())
         assert response_body['redirect_url'] == offline_redirect_url
