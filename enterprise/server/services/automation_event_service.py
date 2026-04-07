@@ -10,6 +10,10 @@ This service is optimized for high-traffic scenarios:
 The lazy access control approach means:
 - Most webhooks only do cached lookups + HTTP forward
 - Membership checks only happen when an automation actually matches
+
+Security notes:
+- Uses AUTOMATION_SHARED_SECRET (not GitHub webhook secret) for internal service signing
+- Negative results are cached to prevent DoS via repeated lookups for unclaimed orgs
 """
 
 import asyncio
@@ -22,8 +26,9 @@ from uuid import UUID
 
 import aiohttp
 from server.auth.constants import (
+    AUTOMATION_SERVICE_TIMEOUT,
     AUTOMATION_SERVICE_URL,
-    GITHUB_APP_WEBHOOK_SECRET,
+    AUTOMATION_SHARED_SECRET,
 )
 from server.auth.token_manager import TokenManager
 from storage.org_git_claim_store import OrgGitClaimStore
@@ -71,6 +76,11 @@ class AutomationEventService:
                     'AUTOMATION_EVENT_FORWARDING_ENABLED=true but '
                     'AUTOMATION_SERVICE_URL is not configured'
                 )
+            if not AUTOMATION_SHARED_SECRET:
+                raise ValueError(
+                    'AUTOMATION_EVENT_FORWARDING_ENABLED=true but '
+                    'AUTOMATION_SHARED_SECRET is not configured'
+                )
 
     async def forward_github_event(
         self,
@@ -113,14 +123,15 @@ class AutomationEventService:
                 extra={'installation_id': installation_id},
             )
         except Exception as e:
-            # Log unexpected errors but re-raise to surface bugs
+            # Log unexpected errors. Note: This is a background task, so exceptions
+            # won't surface to the HTTP caller - they're logged for debugging only.
             logger.error(
                 f'[AutomationEventService] Unexpected error forwarding event '
                 f'(org_id={org_id}, event_type={event_type}): {e}',
                 exc_info=True,
                 extra={'installation_id': installation_id},
             )
-            raise
+            # Don't re-raise in background task - just log for debugging
 
     async def _resolve_org_context(self, payload: dict[str, Any]) -> OrgContext | None:
         """
@@ -191,6 +202,7 @@ class AutomationEventService:
         Uses Redis caching with 1-hour TTL. Caches both positive and negative
         results to avoid repeated DB queries for unclaimed orgs.
         """
+        # GitHub org names are case-insensitive, normalize to lowercase for cache key
         cache_key = f'{ORG_CLAIM_CACHE_PREFIX}:{git_org_name.lower()}'
 
         # Check cache first
@@ -281,6 +293,7 @@ class AutomationEventService:
                     cache_key, keycloak_id, USER_ID_CACHE_TTL_SECONDS
                 )
             else:
+                # Cache negative result to prevent repeated Keycloak queries (DoS mitigation)
                 await self._set_cached_value(
                     cache_key, 'none', USER_ID_CACHE_TTL_SECONDS
                 )
@@ -301,10 +314,16 @@ class AutomationEventService:
         Get a cached value from Redis.
 
         Returns the cached string value, or None if not cached or Redis unavailable.
+        Falls back to DB/API queries if Redis is unavailable (graceful degradation).
         """
         try:
             redis = getattr(sio.manager, 'redis', None)
             if not redis:
+                # TODO: Add metric for Redis unavailability to enable alerting
+                logger.warning(
+                    '[AutomationEventService] Redis unavailable for cache read, '
+                    'falling back to direct queries'
+                )
                 return None
 
             cached = await redis.get(cache_key)
@@ -314,7 +333,8 @@ class AutomationEventService:
             # Redis returns bytes, decode to string
             return cached.decode('utf-8') if isinstance(cached, bytes) else cached
         except Exception as e:
-            logger.debug(f'[AutomationEventService] Redis cache read error: {e}')
+            # TODO: Add metric for cache errors to enable alerting
+            logger.warning(f'[AutomationEventService] Redis cache read error: {e}')
             return None
 
     async def _set_cached_value(
@@ -323,25 +343,30 @@ class AutomationEventService:
         """
         Set a cached value in Redis with TTL.
 
-        Fails silently if Redis is unavailable.
+        Fails silently if Redis is unavailable (graceful degradation).
         """
         try:
             redis = getattr(sio.manager, 'redis', None)
             if not redis:
+                # TODO: Add metric for Redis unavailability to enable alerting
                 return
 
             await redis.setex(cache_key, ttl_seconds, value)
         except Exception as e:
-            logger.debug(f'[AutomationEventService] Redis cache write error: {e}')
+            # TODO: Add metric for cache errors to enable alerting
+            logger.warning(f'[AutomationEventService] Redis cache write error: {e}')
 
     def _sign_payload(self, payload_bytes: bytes) -> str:
         """
-        Sign a payload using the GitHub webhook secret.
+        Sign a payload using the dedicated automation shared secret.
+
+        Uses AUTOMATION_SHARED_SECRET (not GitHub webhook secret) to maintain
+        separate trust boundaries between GitHub webhooks and internal services.
 
         Returns the signature in the format 'sha256=<hex_digest>'.
         """
         signature = hmac.new(
-            GITHUB_APP_WEBHOOK_SECRET.encode('utf-8'),
+            AUTOMATION_SHARED_SECRET.encode('utf-8'),
             msg=payload_bytes,
             digestmod=hashlib.sha256,
         ).hexdigest()
@@ -355,7 +380,7 @@ class AutomationEventService:
         """
         Send the normalized payload to the automation service.
 
-        The payload is signed using the GitHub webhook secret so the
+        The payload is signed using AUTOMATION_SHARED_SECRET so the
         automation service can verify it came from the OpenHands server.
         """
         if not AUTOMATION_SERVICE_URL:
@@ -382,10 +407,14 @@ class AutomationEventService:
                     url,
                     data=payload_bytes,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
+                    timeout=aiohttp.ClientTimeout(total=AUTOMATION_SERVICE_TIMEOUT),
                 ) as resp:
                     if resp.status >= 400:
-                        body = await resp.text()
+                        # Try JSON first, fall back to text for error body
+                        try:
+                            body = await resp.json()
+                        except Exception:
+                            body = await resp.text()
                         logger.warning(
                             f'[AutomationEventService] Automation service returned '
                             f'{resp.status}: {body}'
@@ -399,7 +428,8 @@ class AutomationEventService:
                         )
         except asyncio.TimeoutError:
             logger.warning(
-                '[AutomationEventService] Timeout forwarding to automation service'
+                f'[AutomationEventService] Timeout ({AUTOMATION_SERVICE_TIMEOUT}s) '
+                'forwarding to automation service'
             )
         except aiohttp.ClientError as e:
             logger.warning(

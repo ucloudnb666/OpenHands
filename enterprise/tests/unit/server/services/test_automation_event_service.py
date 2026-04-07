@@ -7,12 +7,19 @@ The service is optimized for high-traffic with:
 - Redis caching for org claim lookups (1 hour TTL)
 - Redis caching for GitHub→Keycloak user ID mappings (24 hour TTL)
 - Lazy access control (membership checks deferred to execution time)
+- Separate AUTOMATION_SHARED_SECRET for internal service communication
 """
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# Default patches for constants
+CONSTANT_PATCHES = {
+    'server.services.automation_event_service.AUTOMATION_SHARED_SECRET': 'test-shared-secret',
+    'server.services.automation_event_service.AUTOMATION_SERVICE_TIMEOUT': 30,
+}
 
 
 @pytest.fixture
@@ -82,8 +89,13 @@ def github_user_payload():
 
 
 def create_service(mock_token_manager):
-    """Helper to create a service with mocked sio."""
-    with patch('server.services.automation_event_service.sio'):
+    """Helper to create a service with mocked sio and constants."""
+    with patch('server.services.automation_event_service.sio'), patch.dict(
+        'os.environ', {}, clear=False
+    ):
+        for key, value in CONSTANT_PATCHES.items():
+            patch(key, value).start()
+
         from server.services.automation_event_service import AutomationEventService
 
         return AutomationEventService(mock_token_manager)
@@ -530,8 +542,8 @@ class TestSignPayload:
         THEN: HMAC-SHA256 signature is returned in correct format
         """
         with patch(
-            'server.services.automation_event_service.GITHUB_APP_WEBHOOK_SECRET',
-            'test-secret',
+            'server.services.automation_event_service.AUTOMATION_SHARED_SECRET',
+            'test-shared-secret',
         ), patch('server.services.automation_event_service.sio'):
             service = create_service(mock_token_manager)
             payload_bytes = b'{"test": "data"}'
@@ -540,6 +552,35 @@ class TestSignPayload:
 
             assert signature.startswith('sha256=')
             assert len(signature) == 71  # 'sha256=' + 64 hex chars
+
+    def test_sign_payload_uses_dedicated_secret(self, mock_token_manager):
+        """
+        GIVEN: AUTOMATION_SHARED_SECRET is configured
+        WHEN: _sign_payload is called
+        THEN: The dedicated secret is used (not GitHub webhook secret)
+        """
+        import hashlib
+        import hmac
+
+        # Use the default test secret from CONSTANT_PATCHES
+        shared_secret = 'test-shared-secret'
+        payload_bytes = b'{"test": "data"}'
+
+        # Calculate expected signature with the shared secret
+        expected_sig = hmac.new(
+            shared_secret.encode('utf-8'),
+            msg=payload_bytes,
+            digestmod=hashlib.sha256,
+        ).hexdigest()
+
+        with patch(
+            'server.services.automation_event_service.AUTOMATION_SHARED_SECRET',
+            shared_secret,
+        ), patch('server.services.automation_event_service.sio'):
+            service = create_service(mock_token_manager)
+            signature = service._sign_payload(payload_bytes)
+
+            assert signature == f'sha256={expected_sig}'
 
 
 class TestCacheHelpers:
