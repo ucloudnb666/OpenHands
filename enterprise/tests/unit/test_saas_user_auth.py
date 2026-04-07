@@ -5,16 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import jwt
 import pytest
 from fastapi import Request
-from pydantic import SecretStr
 from keycloak.exceptions import KeycloakPostError
+from pydantic import SecretStr
 from server.auth.auth_error import (
     AuthError,
     BearerTokenError,
     CookieError,
     NoCredentialsError,
 )
-
-from openhands.server.types import SessionExpiredError
 from server.auth.saas_user_auth import (
     SaasUserAuth,
     get_api_key_from_header,
@@ -26,6 +24,7 @@ from storage.api_key_store import ApiKeyValidationResult
 from storage.user_authorization import UserAuthorizationType
 
 from openhands.integrations.provider import ProviderToken, ProviderType
+from openhands.server.types import SessionExpiredError
 from openhands.storage.data_models.secrets import Secrets
 
 
@@ -919,21 +918,21 @@ async def test_saas_user_auth_from_signed_token_domain_blocking_inactive(mock_co
 async def test_saas_user_auth_from_bearer_session_expired():
     """Test that saas_user_auth_from_bearer raises SessionExpiredError on Keycloak session expiration."""
     mock_request = MagicMock()
-    mock_request.headers = {"Authorization": "Bearer test_api_key"}
+    mock_request.headers = {'Authorization': 'Bearer test_api_key'}
 
-    with patch("server.auth.saas_user_auth.ApiKeyStore") as mock_api_key_store_cls:
+    with patch('server.auth.saas_user_auth.ApiKeyStore') as mock_api_key_store_cls:
         mock_api_key_store = MagicMock()
         mock_api_key_store_cls.get_instance.return_value = mock_api_key_store
         mock_api_key_store.validate_api_key = AsyncMock(
             return_value=ApiKeyValidationResult(
-                user_id="test_user_id",
+                user_id='test_user_id',
                 org_id=uuid.uuid4(),
                 key_id=1,
-                key_name="test_key",
+                key_name='test_key',
             )
         )
 
-        with patch("server.auth.saas_user_auth.token_manager") as mock_token_manager:
+        with patch('server.auth.saas_user_auth.token_manager') as mock_token_manager:
             # Simulate Keycloak session expired error
             mock_token_manager.load_offline_token = AsyncMock(
                 side_effect=KeycloakPostError(
@@ -944,29 +943,29 @@ async def test_saas_user_auth_from_bearer_session_expired():
             with pytest.raises(SessionExpiredError) as exc_info:
                 await saas_user_auth_from_bearer(mock_request)
 
-            assert "session has expired" in str(exc_info.value).lower()
-            assert "https://app.all-hands.dev" in str(exc_info.value)
+            assert 'session has expired' in str(exc_info.value).lower()
+            assert 'https://app.all-hands.dev' in str(exc_info.value)
 
 
 @pytest.mark.asyncio
 async def test_saas_user_auth_from_bearer_other_keycloak_error():
     """Test that saas_user_auth_from_bearer raises BearerTokenError on other Keycloak errors."""
     mock_request = MagicMock()
-    mock_request.headers = {"Authorization": "Bearer test_api_key"}
+    mock_request.headers = {'Authorization': 'Bearer test_api_key'}
 
-    with patch("server.auth.saas_user_auth.ApiKeyStore") as mock_api_key_store_cls:
+    with patch('server.auth.saas_user_auth.ApiKeyStore') as mock_api_key_store_cls:
         mock_api_key_store = MagicMock()
         mock_api_key_store_cls.get_instance.return_value = mock_api_key_store
         mock_api_key_store.validate_api_key = AsyncMock(
             return_value=ApiKeyValidationResult(
-                user_id="test_user_id",
+                user_id='test_user_id',
                 org_id=uuid.uuid4(),
                 key_id=1,
-                key_name="test_key",
+                key_name='test_key',
             )
         )
 
-        with patch("server.auth.saas_user_auth.token_manager") as mock_token_manager:
+        with patch('server.auth.saas_user_auth.token_manager') as mock_token_manager:
             # Simulate a different Keycloak error (not session expired)
             mock_token_manager.load_offline_token = AsyncMock(
                 side_effect=KeycloakPostError(
@@ -976,4 +975,3 @@ async def test_saas_user_auth_from_bearer_other_keycloak_error():
 
             with pytest.raises(BearerTokenError):
                 await saas_user_auth_from_bearer(mock_request)
-
