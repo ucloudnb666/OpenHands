@@ -7,7 +7,7 @@ The service is optimized for high-traffic with:
 - Redis caching for org claim lookups (1 hour TTL)
 - Redis caching for GitHub→Keycloak user ID mappings (24 hour TTL)
 - Lazy access control (membership checks deferred to execution time)
-- Separate AUTOMATION_SHARED_SECRET for internal service communication
+- Separate AUTOMATION_WEBHOOK_SECRET for internal service communication
 """
 
 import uuid
@@ -17,7 +17,7 @@ import pytest
 
 # Default patches for constants
 CONSTANT_PATCHES = {
-    'server.services.automation_event_service.AUTOMATION_SHARED_SECRET': 'test-shared-secret',
+    'server.services.automation_event_service.AUTOMATION_WEBHOOK_SECRET': 'test-shared-secret',
     'server.services.automation_event_service.AUTOMATION_SERVICE_TIMEOUT': 30,
 }
 
@@ -542,7 +542,7 @@ class TestSignPayload:
         THEN: HMAC-SHA256 signature is returned in correct format
         """
         with patch(
-            'server.services.automation_event_service.AUTOMATION_SHARED_SECRET',
+            'server.services.automation_event_service.AUTOMATION_WEBHOOK_SECRET',
             'test-shared-secret',
         ), patch('server.services.automation_event_service.sio'):
             service = create_service(mock_token_manager)
@@ -555,7 +555,7 @@ class TestSignPayload:
 
     def test_sign_payload_uses_dedicated_secret(self, mock_token_manager):
         """
-        GIVEN: AUTOMATION_SHARED_SECRET is configured
+        GIVEN: AUTOMATION_WEBHOOK_SECRET is configured
         WHEN: _sign_payload is called
         THEN: The dedicated secret is used (not GitHub webhook secret)
         """
@@ -574,7 +574,7 @@ class TestSignPayload:
         ).hexdigest()
 
         with patch(
-            'server.services.automation_event_service.AUTOMATION_SHARED_SECRET',
+            'server.services.automation_event_service.AUTOMATION_WEBHOOK_SECRET',
             shared_secret,
         ), patch('server.services.automation_event_service.sio'):
             service = create_service(mock_token_manager)

@@ -69,7 +69,7 @@ AUTOMATION_EVENT_FORWARDING_ENABLED = os.getenv(
     'AUTOMATION_EVENT_FORWARDING_ENABLED', 'false'
 ) in ('1', 'true')
 # Shared secret for signing payloads sent to automation service (separate from GitHub webhook secret)
-AUTOMATION_SHARED_SECRET = os.getenv('AUTOMATION_SHARED_SECRET', '').strip()
+AUTOMATION_WEBHOOK_SECRET = os.getenv('AUTOMATION_WEBHOOK_SECRET', '').strip()
 # Default HTTP timeout for automation service requests (seconds)
 AUTOMATION_SERVICE_TIMEOUT = int(os.getenv('AUTOMATION_SERVICE_TIMEOUT', '30'))
 

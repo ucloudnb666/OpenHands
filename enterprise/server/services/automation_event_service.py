@@ -12,7 +12,7 @@ The lazy access control approach means:
 - Membership checks only happen when an automation actually matches
 
 Security notes:
-- Uses AUTOMATION_SHARED_SECRET (not GitHub webhook secret) for internal service signing
+- Uses AUTOMATION_WEBHOOK_SECRET (not GitHub webhook secret) for internal service signing
 - Negative results are cached to prevent DoS via repeated lookups for unclaimed orgs
 """
 
@@ -28,7 +28,7 @@ import aiohttp
 from server.auth.constants import (
     AUTOMATION_SERVICE_TIMEOUT,
     AUTOMATION_SERVICE_URL,
-    AUTOMATION_SHARED_SECRET,
+    AUTOMATION_WEBHOOK_SECRET,
 )
 from server.auth.token_manager import TokenManager
 from storage.org_git_claim_store import OrgGitClaimStore
@@ -76,10 +76,10 @@ class AutomationEventService:
                     'AUTOMATION_EVENT_FORWARDING_ENABLED=true but '
                     'AUTOMATION_SERVICE_URL is not configured'
                 )
-            if not AUTOMATION_SHARED_SECRET:
+            if not AUTOMATION_WEBHOOK_SECRET:
                 raise ValueError(
                     'AUTOMATION_EVENT_FORWARDING_ENABLED=true but '
-                    'AUTOMATION_SHARED_SECRET is not configured'
+                    'AUTOMATION_WEBHOOK_SECRET is not configured'
                 )
 
     async def forward_github_event(
@@ -360,13 +360,13 @@ class AutomationEventService:
         """
         Sign a payload using the dedicated automation shared secret.
 
-        Uses AUTOMATION_SHARED_SECRET (not GitHub webhook secret) to maintain
+        Uses AUTOMATION_WEBHOOK_SECRET (not GitHub webhook secret) to maintain
         separate trust boundaries between GitHub webhooks and internal services.
 
         Returns the signature in the format 'sha256=<hex_digest>'.
         """
         signature = hmac.new(
-            AUTOMATION_SHARED_SECRET.encode('utf-8'),
+            AUTOMATION_WEBHOOK_SECRET.encode('utf-8'),
             msg=payload_bytes,
             digestmod=hashlib.sha256,
         ).hexdigest()
@@ -380,7 +380,7 @@ class AutomationEventService:
         """
         Send the normalized payload to the automation service.
 
-        The payload is signed using AUTOMATION_SHARED_SECRET so the
+        The payload is signed using AUTOMATION_WEBHOOK_SECRET so the
         automation service can verify it came from the OpenHands server.
         """
         if not AUTOMATION_SERVICE_URL:
