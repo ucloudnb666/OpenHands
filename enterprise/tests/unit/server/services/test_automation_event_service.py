@@ -302,7 +302,6 @@ class TestForwardGithubEvent:
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=github_org_payload,
-                event_type='push',
                 installation_id=99999,
             )
 
@@ -352,7 +351,6 @@ class TestForwardGithubEvent:
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=github_user_payload,
-                event_type='push',
                 installation_id=99999,
             )
 
@@ -388,7 +386,6 @@ class TestForwardGithubEvent:
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=payload,
-                event_type='push',
                 installation_id=99999,
             )
 
@@ -427,7 +424,6 @@ class TestForwardGithubEvent:
             service = AutomationEventService(mock_token_manager)
             await service.forward_github_event(
                 payload=github_org_payload,
-                event_type='push',
                 installation_id=99999,
             )
 

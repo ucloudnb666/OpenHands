@@ -84,7 +84,6 @@ async def github_events(
             background_tasks.add_task(
                 automation_event_service.forward_github_event,
                 payload=payload_data,
-                event_type=x_github_event or '<unknown>',
                 installation_id=installation_id,
             )
 

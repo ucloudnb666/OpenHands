@@ -85,7 +85,6 @@ class AutomationEventService:
     async def forward_github_event(
         self,
         payload: dict[str, Any],
-        event_type: str | None,
         installation_id: int,
     ) -> None:
         """
@@ -97,7 +96,6 @@ class AutomationEventService:
 
         Args:
             payload: The raw GitHub webhook payload
-            event_type: The X-GitHub-Event header value (used for logging only)
             installation_id: The GitHub App installation ID
         """
         org_id: UUID | None = None
@@ -118,7 +116,7 @@ class AutomationEventService:
             # Network errors are expected and recoverable
             logger.error(
                 f'[AutomationEventService] Network error forwarding event '
-                f'(org_id={org_id}, event_type={event_type}): {e}',
+                f'(org_id={org_id}): {e}',
                 exc_info=True,
                 extra={'installation_id': installation_id},
             )
@@ -127,7 +125,7 @@ class AutomationEventService:
             # won't surface to the HTTP caller - they're logged for debugging only.
             logger.error(
                 f'[AutomationEventService] Unexpected error forwarding event '
-                f'(org_id={org_id}, event_type={event_type}): {e}',
+                f'(org_id={org_id}): {e}',
                 exc_info=True,
                 extra={'installation_id': installation_id},
             )
