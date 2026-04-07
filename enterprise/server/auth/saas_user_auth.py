@@ -35,6 +35,7 @@ from openhands.integrations.provider import (
     ProviderType,
 )
 from openhands.server.settings import Settings
+from openhands.server.types import SessionExpiredError
 from openhands.server.user_auth.user_auth import AuthType, UserAuth
 from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.settings.settings_store import SettingsStore
@@ -313,6 +314,18 @@ async def saas_user_auth_from_bearer(request: Request) -> SaasUserAuth | None:
         )
         await saas_user_auth.refresh()
         return saas_user_auth
+    except KeycloakError as exc:
+        # Check for session expiration errors from Keycloak
+        error_str = str(exc)
+        if 'invalid_grant' in error_str or 'session not found' in error_str.lower():
+            logger.warning(
+                'API key authentication failed due to expired session',
+                extra={'error': error_str},
+            )
+            raise SessionExpiredError(
+                'Your session has expired. Please log in at https://app.all-hands.dev to re-authenticate, then retry your request.'
+            ) from exc
+        raise BearerTokenError from exc
     except Exception as exc:
         raise BearerTokenError from exc
 

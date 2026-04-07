@@ -10,6 +10,8 @@ from server.auth.auth_error import (
     NoCredentialsError,
     TosNotAcceptedError,
 )
+
+from openhands.server.types import SessionExpiredError
 from server.auth.gitlab_sync import schedule_gitlab_repo_sync
 from server.auth.saas_user_auth import SaasUserAuth, token_manager
 from server.routes.auth import set_response_cookie
@@ -75,6 +77,16 @@ class SetAuthCookieMiddleware:
             # The user is trying to use an expired token or has not logged in. No special event handling is required
             return JSONResponse(
                 {'error': str(e) or e.__class__.__name__}, status.HTTP_401_UNAUTHORIZED
+            )
+        except SessionExpiredError as e:
+            logger.info('session_expired', extra={'message': str(e)})
+            # Return a helpful error message explaining how to fix the issue
+            return JSONResponse(
+                {
+                    'error': 'SessionExpired',
+                    'message': str(e),
+                },
+                status.HTTP_401_UNAUTHORIZED,
             )
         except AuthError as e:
             logger.warning('auth_error', exc_info=True)
