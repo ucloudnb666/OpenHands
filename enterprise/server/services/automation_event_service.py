@@ -230,8 +230,9 @@ class AutomationEventService:
         """
         Check if the event sender is a member of the GitHub org.
 
-        This is critical for public repos where anyone can open PRs.
-        For private repos, having access implies membership.
+        This check is performed for both public and private repos to ensure
+        proper access control. For org repos, we verify org membership.
+        For personal repos, the owner is the only "member".
         """
         if not username:
             return False
@@ -239,20 +240,11 @@ class AutomationEventService:
         repo = payload.get('repository', {})
         owner = repo.get('owner', {})
 
-        # Private repo - if they can trigger a webhook event, they have repo access.
-        # Note: This is an intentional trade-off. For private repos, we assume that
-        # webhook event access implies sufficient permissions to trigger automations.
-        # This covers collaborators with any access level (read, write, admin).
-        # The automation service can implement additional permission checks if needed
-        # based on the access_control metadata in the forwarded payload.
-        if repo.get('private'):
-            return True
-
         # For personal repos (not org), owner is the only "member"
         if owner.get('type') != 'Organization':
             return username == owner.get('login')
 
-        # For public org repos, check org membership via GitHub API
+        # For org repos (both public and private), check org membership via GitHub API
         try:
             org_name = owner.get('login')
             token = self._get_installation_token(installation_id)

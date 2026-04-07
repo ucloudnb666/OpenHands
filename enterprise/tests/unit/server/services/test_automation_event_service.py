@@ -484,19 +484,34 @@ class TestCheckGithubOrgMembership:
     """Tests for _check_github_org_membership method."""
 
     @pytest.mark.asyncio
-    async def test_private_repo_returns_true(self, mock_token_manager):
+    async def test_private_repo_checks_membership(self, mock_token_manager):
         """
-        GIVEN: A private repository
+        GIVEN: A private repository in an organization
         WHEN: _check_github_org_membership is called
-        THEN: True is returned (access implies membership)
+        THEN: GitHub org membership is checked via API
         """
         payload = {
-            'repository': {'private': True, 'owner': {'type': 'Organization'}},
+            'repository': {
+                'private': True,
+                'owner': {'type': 'Organization', 'login': 'test-org'},
+            },
         }
 
         service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(payload, 99999, 'testuser')
-        assert result is True
+
+        # Mock the installation token and org membership check
+        with patch.object(
+            service, '_get_installation_token', return_value='test-token'
+        ), patch.object(
+            service, '_check_org_membership_sync', return_value=True
+        ) as mock_check:
+            result = await service._check_github_org_membership(
+                payload, 99999, 'testuser'
+            )
+
+            # Verify membership check was performed
+            mock_check.assert_called_once_with('test-org', 'testuser', 'test-token')
+            assert result is True
 
     @pytest.mark.asyncio
     async def test_personal_repo_owner_is_member(self, mock_token_manager):
