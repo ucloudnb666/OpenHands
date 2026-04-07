@@ -251,15 +251,9 @@ class AutomationEventService:
         if not github_user_id:
             return None
 
-        try:
-            keycloak_id = await self._get_keycloak_user_id_cached(github_user_id)
-            if keycloak_id:
-                return UUID(keycloak_id)
-        except Exception as e:
-            logger.warning(
-                f'[AutomationEventService] Failed to resolve personal org for '
-                f'GitHub user {github_user_id}: {e}'
-            )
+        keycloak_id = await self._get_keycloak_user_id_cached(github_user_id)
+        if keycloak_id:
+            return UUID(keycloak_id)
         return None
 
     async def _get_keycloak_user_id_cached(self, github_user_id: int) -> str | None:
@@ -303,7 +297,8 @@ class AutomationEventService:
 
             return keycloak_id
         except Exception as e:
-            logger.debug(
+            # Log at warning level to surface programmer errors and API issues
+            logger.warning(
                 f'[AutomationEventService] Failed to get keycloak ID for GitHub user {github_user_id}: {e}'
             )
             return None
@@ -398,7 +393,9 @@ class AutomationEventService:
             )
             return
 
-        # Endpoint: /v1/events/{org_id}/github
+        # Build endpoint URL. AUTOMATION_SERVICE_URL may include path segments
+        # (e.g., https://example.com/api/automation), so we strip trailing slash
+        # and append our path.
         url = f'{AUTOMATION_SERVICE_URL.rstrip("/")}/v1/events/{org_id}/github'
 
         # Serialize payload to JSON bytes for signing
@@ -427,7 +424,7 @@ class AutomationEventService:
                             body = await resp.text()
                         logger.warning(
                             f'[AutomationEventService] Automation service returned '
-                            f'{resp.status}: {body}'
+                            f'{resp.status} for org {org_id}: {body}'
                         )
                     else:
                         data = await resp.json()
