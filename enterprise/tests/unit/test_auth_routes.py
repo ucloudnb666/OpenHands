@@ -485,16 +485,92 @@ async def test_keycloak_callback_success_without_offline_token(
             ProviderType.GITHUB, 'test_user_id', 'test_access_token'
         )
         # When redirecting to Keycloak for offline token, redirect_url becomes https://keycloak...
-        # so secure=True is expected
+        # so secure=True is expected, and accepted_tos=False since we're in the offline flow
         mock_set_cookie.assert_called_once_with(
             request=mock_request,
             response=result,
             keycloak_access_token='test_access_token',
             keycloak_refresh_token='test_refresh_token',
             secure=True,
-            accepted_tos=True,
+            accepted_tos=False,
         )
         mock_posthog.set.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_keycloak_callback_early_return_when_offline_token_invalid(
+    mock_request, create_keycloak_user_info
+):
+    """Test that keycloak_callback returns early when offline token is invalid.
+
+    This ensures that invitation processing and TOS checks don't happen
+    when the user needs to go through the offline token flow first.
+    """
+    with (
+        patch('server.routes.auth.token_manager') as mock_token_manager,
+        patch('server.routes.auth.set_response_cookie') as mock_set_cookie,
+        patch(
+            'server.routes.auth.KEYCLOAK_SERVER_URL_EXT', 'https://keycloak.example.com'
+        ),
+        patch('server.routes.auth.KEYCLOAK_REALM_NAME', 'test-realm'),
+        patch('server.routes.auth.KEYCLOAK_CLIENT_ID', 'test-client'),
+        patch('server.routes.auth.UserStore') as mock_user_store,
+        patch('server.routes.auth.posthog'),
+        patch('server.routes.auth.OrgInvitationService') as mock_invitation_service,
+    ):
+        # Mock user with accepted_tos
+        mock_user = MagicMock()
+        mock_user.id = 'test_user_id'
+        mock_user.current_org_id = 'test_org_id'
+        mock_user.accepted_tos = '2025-01-01'
+
+        mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
+        mock_user_store.backfill_contact_name = AsyncMock()
+        mock_user_store.backfill_user_email = AsyncMock()
+
+        mock_token_manager.get_keycloak_tokens = AsyncMock(
+            return_value=('test_access_token', 'test_refresh_token')
+        )
+        mock_token_manager.get_user_info = AsyncMock(
+            return_value=create_keycloak_user_info(
+                sub='test_user_id',
+                preferred_username='test_user',
+                identity_provider='github',
+                email_verified=True,
+            )
+        )
+        mock_token_manager.store_idp_tokens = AsyncMock()
+        mock_token_manager.validate_offline_token = AsyncMock(return_value=False)
+
+        # Call with an invitation token to verify it's NOT processed
+        import base64
+        import json
+        state_data = {
+            'redirect_url': 'https://example.com/original-page',
+            'invitation_token': 'inv-test-token-123',
+        }
+        encoded_state = base64.urlsafe_b64encode(
+            json.dumps(state_data).encode()
+        ).decode()
+
+        result = await keycloak_callback(
+            code='test_code',
+            state=encoded_state,
+            request=mock_request,
+            user_authorizer=create_mock_user_authorizer(),
+        )
+
+        # Should redirect to Keycloak for offline token
+        assert isinstance(result, RedirectResponse)
+        assert 'keycloak.example.com' in result.headers['location']
+        assert 'offline_access' in result.headers['location']
+
+        # Cookie should be set with accepted_tos=False
+        mock_set_cookie.assert_called_once()
+        assert mock_set_cookie.call_args[1]['accepted_tos'] is False
+
+        # Invitation service should NOT be called (early return before invitation processing)
+        mock_invitation_service.accept_invitation.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -575,7 +651,14 @@ async def test_keycloak_offline_callback_success(
     mock_request, create_keycloak_user_info
 ):
     """Test successful keycloak_offline_callback."""
-    with patch('server.routes.auth.token_manager') as mock_token_manager:
+    with (
+        patch('server.routes.auth.token_manager') as mock_token_manager,
+        patch(
+            'server.routes.auth._get_post_auth_redirect',
+            new_callable=AsyncMock,
+            return_value='test_state',
+        ),
+    ):
         mock_token_manager.get_keycloak_tokens = AsyncMock(
             return_value=('test_access_token', 'test_refresh_token')
         )
@@ -596,6 +679,36 @@ async def test_keycloak_offline_callback_success(
         mock_token_manager.store_offline_token.assert_called_once_with(
             user_id='test_user_id', offline_token='test_refresh_token'
         )
+
+
+@pytest.mark.asyncio
+async def test_keycloak_offline_callback_redirects_to_onboarding(
+    mock_request, create_keycloak_user_info
+):
+    """Test keycloak_offline_callback redirects to onboarding when needed."""
+    with (
+        patch('server.routes.auth.token_manager') as mock_token_manager,
+        patch(
+            'server.routes.auth._get_post_auth_redirect',
+            new_callable=AsyncMock,
+            return_value='http://localhost:8000/onboarding',
+        ),
+    ):
+        mock_token_manager.get_keycloak_tokens = AsyncMock(
+            return_value=('test_access_token', 'test_refresh_token')
+        )
+        mock_token_manager.get_user_info = AsyncMock(
+            return_value=create_keycloak_user_info(sub='test_user_id')
+        )
+        mock_token_manager.store_offline_token = AsyncMock()
+
+        result = await keycloak_offline_callback(
+            'test_code', 'test_state', mock_request
+        )
+
+        assert isinstance(result, RedirectResponse)
+        assert result.status_code == 302
+        assert result.headers['location'] == 'http://localhost:8000/onboarding'
 
 
 @pytest.mark.asyncio
@@ -2053,8 +2166,8 @@ async def test_accept_tos_stores_timezone_naive_datetime(mock_request):
         patch('server.routes.auth.a_session_maker', return_value=mock_session_context),
         patch('server.routes.auth.set_response_cookie'),
         patch(
-            'server.routes.auth.UserStore.get_user_by_id',
-            AsyncMock(return_value=mock_user_for_onboarding),
+            'server.routes.auth._get_post_auth_redirect',
+            AsyncMock(return_value='http://example.com'),
         ),
     ):
         # Act
@@ -2066,3 +2179,62 @@ async def test_accept_tos_stores_timezone_naive_datetime(mock_request):
         # The datetime assigned to user.accepted_tos must be timezone-naive
         # (compatible with TIMESTAMP WITHOUT TIME ZONE database column)
         assert mock_user.accepted_tos.tzinfo is None
+
+
+@pytest.mark.asyncio
+async def test_accept_tos_preserves_offline_flow_redirect(mock_request):
+    """Test that accept_tos does not override redirect_url when it's the offline token flow."""
+    # Arrange
+    test_user_id = '12345678-1234-5678-1234-567812345678'
+    offline_redirect_url = 'https://auth.example.com/realms/test/protocol/openid-connect/auth?redirect_uri=https://example.com/oauth/keycloak/offline/callback'
+
+    mock_user = MagicMock()
+    mock_user.id = test_user_id
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_user
+
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_result
+    mock_session.commit = AsyncMock()
+
+    mock_session_context = AsyncMock()
+    mock_session_context.__aenter__.return_value = mock_session
+    mock_session_context.__aexit__.return_value = None
+
+    mock_user_auth = MagicMock(spec=SaasUserAuth)
+    mock_user_auth.get_access_token = AsyncMock(
+        return_value=SecretStr('test_access_token')
+    )
+    mock_user_auth.refresh_token = SecretStr('test_refresh_token')
+    mock_user_auth.get_user_id = AsyncMock(return_value=test_user_id)
+
+    mock_request.json = AsyncMock(return_value={'redirect_url': offline_redirect_url})
+
+    mock_get_post_auth_redirect = AsyncMock(return_value='http://example.com/onboarding')
+
+    with (
+        patch(
+            'server.routes.auth.get_user_auth', AsyncMock(return_value=mock_user_auth)
+        ),
+        patch('server.routes.auth.a_session_maker', return_value=mock_session_context),
+        patch('server.routes.auth.set_response_cookie'),
+        patch(
+            'server.routes.auth._get_post_auth_redirect',
+            mock_get_post_auth_redirect,
+        ),
+    ):
+        # Act
+        result = await accept_tos(mock_request)
+
+        # Assert
+        assert isinstance(result, JSONResponse)
+        assert result.status_code == status.HTTP_200_OK
+
+        # _get_post_auth_redirect should NOT be called for offline flow
+        mock_get_post_auth_redirect.assert_not_called()
+
+        # The redirect_url should be preserved (not overridden to onboarding)
+        import json
+        response_body = json.loads(result.body.decode())
+        assert response_body['redirect_url'] == offline_redirect_url

@@ -384,6 +384,16 @@ async def keycloak_callback(
             f'{KEYCLOAK_SERVER_URL_EXT}/realms/{KEYCLOAK_REALM_NAME}/protocol/openid-connect/auth'
             f'?{param_str}'
         )
+        response = RedirectResponse(redirect_url, status_code=302)
+        set_response_cookie(
+            request=request,
+            response=response,
+            keycloak_access_token=keycloak_access_token,
+            keycloak_refresh_token=keycloak_refresh_token,
+            secure=True if redirect_url.startswith('https') else False,
+            accepted_tos=False,
+        )
+        return response
 
     has_accepted_tos = user.accepted_tos is not None
 
@@ -527,7 +537,9 @@ async def keycloak_offline_callback(code: str, state: str, request: Request):
     )
 
     redirect_url, _, _ = _extract_oauth_state(state)
-    return RedirectResponse(redirect_url if redirect_url else web_url, status_code=302)
+    default_url = redirect_url if redirect_url else web_url
+    final_url = await _get_post_auth_redirect(user_info.sub, default_url, web_url)
+    return RedirectResponse(final_url, status_code=302)
 
 
 @oauth_router.get('/github/callback')
@@ -593,6 +605,32 @@ async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     return False
 
 
+async def _get_post_auth_redirect(
+    user_id: str, default_url: str, web_url: str
+) -> str:
+    """Determine where to redirect user after authentication completes.
+
+    Called after offline token is stored to determine final redirect destination.
+    Checks for pending user flows (e.g., onboarding) before falling back to default.
+
+    Args:
+        user_id: The user's ID.
+        default_url: The default URL to redirect to if no special flow is needed.
+        web_url: The base web URL for constructing absolute paths.
+
+    Returns:
+        The URL to redirect the user to.
+    """
+    user = await UserStore.get_user_by_id(user_id)
+    if user and await _should_redirect_to_onboarding(user_id, user):
+        logger.info(
+            'Redirecting user to onboarding',
+            extra={'user_id': user_id, 'deployment_mode': DEPLOYMENT_MODE},
+        )
+        return f'{web_url}/onboarding'
+    return default_url
+
+
 @api_router.post('/accept_tos')
 async def accept_tos(request: Request):
     user_auth = cast(SaasUserAuth, await get_user_auth(request))
@@ -633,14 +671,11 @@ async def accept_tos(request: Request):
 
         logger.info(f'User {user_id} accepted TOS')
 
-    # Check if user should be redirected to onboarding
-    user = await UserStore.get_user_by_id(user_id)
-    if user and await _should_redirect_to_onboarding(user_id, user):
-        redirect_url = f'{web_url}/onboarding'
-        logger.info(
-            'Redirecting user to onboarding after TOS acceptance',
-            extra={'user_id': user_id, 'deployment_mode': DEPLOYMENT_MODE},
-        )
+    # Determine final redirect - but don't override if it's the offline token flow
+    # (the offline callback will handle post-auth redirect after storing the token)
+    is_offline_flow = '/offline' in redirect_url
+    if not is_offline_flow:
+        redirect_url = await _get_post_auth_redirect(user_id, redirect_url, web_url)
 
     response = JSONResponse(
         status_code=status.HTTP_200_OK, content={'redirect_url': redirect_url}

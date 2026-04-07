@@ -2,6 +2,7 @@
 
 Tests for:
 - _should_redirect_to_onboarding() function
+- _get_post_auth_redirect() function
 - /complete_onboarding endpoint
 """
 
@@ -13,6 +14,7 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from server.auth.saas_user_auth import SaasUserAuth
 from server.routes.auth import (
+    _get_post_auth_redirect,
     _should_redirect_to_onboarding,
     complete_onboarding,
 )
@@ -148,6 +150,88 @@ class TestShouldRedirectToOnboarding:
             await _should_redirect_to_onboarding(user_id, mock_user)
 
         mock_get_first_owner.assert_called_once_with(mock_user.current_org_id)
+
+
+# --- Tests for _get_post_auth_redirect ---
+
+
+class TestGetPostAuthRedirect:
+    """Tests for the _get_post_auth_redirect function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_onboarding_url_when_onboarding_needed(self, mock_user):
+        """Test that onboarding URL is returned when user needs onboarding."""
+        mock_user.onboarding_completed = False
+        user_id = str(mock_user.id)
+
+        with (
+            patch('server.routes.auth.DEPLOYMENT_MODE', 'cloud'),
+            patch(
+                'server.routes.auth.UserStore.get_user_by_id',
+                new_callable=AsyncMock,
+                return_value=mock_user,
+            ),
+        ):
+            result = await _get_post_auth_redirect(
+                user_id, 'https://example.com/', 'https://example.com'
+            )
+
+        assert result == 'https://example.com/onboarding'
+
+    @pytest.mark.asyncio
+    async def test_returns_default_url_when_onboarding_completed(self, mock_user):
+        """Test that default URL is returned when user has completed onboarding."""
+        mock_user.onboarding_completed = True
+        user_id = str(mock_user.id)
+
+        with patch(
+            'server.routes.auth.UserStore.get_user_by_id',
+            new_callable=AsyncMock,
+            return_value=mock_user,
+        ):
+            result = await _get_post_auth_redirect(
+                user_id, 'https://example.com/dashboard', 'https://example.com'
+            )
+
+        assert result == 'https://example.com/dashboard'
+
+    @pytest.mark.asyncio
+    async def test_returns_default_url_when_user_not_found(self):
+        """Test that default URL is returned when user is not found."""
+        with patch(
+            'server.routes.auth.UserStore.get_user_by_id',
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await _get_post_auth_redirect(
+                'nonexistent-user', 'https://example.com/', 'https://example.com'
+            )
+
+        assert result == 'https://example.com/'
+
+    @pytest.mark.asyncio
+    async def test_logs_when_redirecting_to_onboarding(self, mock_user):
+        """Test that a log message is emitted when redirecting to onboarding."""
+        mock_user.onboarding_completed = False
+        user_id = str(mock_user.id)
+
+        with (
+            patch('server.routes.auth.DEPLOYMENT_MODE', 'cloud'),
+            patch(
+                'server.routes.auth.UserStore.get_user_by_id',
+                new_callable=AsyncMock,
+                return_value=mock_user,
+            ),
+            patch('server.routes.auth.logger') as mock_logger,
+        ):
+            await _get_post_auth_redirect(
+                user_id, 'https://example.com/', 'https://example.com'
+            )
+
+        mock_logger.info.assert_called_once()
+        call_args = mock_logger.info.call_args
+        assert call_args[0][0] == 'Redirecting user to onboarding'
+        assert call_args[1]['extra']['user_id'] == user_id
 
 
 # --- Tests for /complete_onboarding endpoint ---
