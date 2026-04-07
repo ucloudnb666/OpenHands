@@ -11,9 +11,18 @@ import pytest
 
 # Patch the constants before importing the module
 PATCHES = [
-    patch('server.services.automation_event_service.GITHUB_APP_CLIENT_ID', 'test-client-id'),
-    patch('server.services.automation_event_service.GITHUB_APP_PRIVATE_KEY', 'test-private-key'),
-    patch('server.services.automation_event_service.GITHUB_APP_WEBHOOK_SECRET', 'test-secret'),
+    patch(
+        'server.services.automation_event_service.GITHUB_APP_CLIENT_ID',
+        'test-client-id',
+    ),
+    patch(
+        'server.services.automation_event_service.GITHUB_APP_PRIVATE_KEY',
+        'test-private-key',
+    ),
+    patch(
+        'server.services.automation_event_service.GITHUB_APP_WEBHOOK_SECRET',
+        'test-secret',
+    ),
 ]
 
 
@@ -85,9 +94,11 @@ def github_user_payload():
 
 def create_service(mock_token_manager):
     """Helper to create a service with all necessary mocks."""
-    with patch('server.services.automation_event_service.GithubIntegration'), \
-         patch('server.services.automation_event_service.Auth.AppAuth'):
+    with patch('server.services.automation_event_service.GithubIntegration'), patch(
+        'server.services.automation_event_service.Auth.AppAuth'
+    ):
         from server.services.automation_event_service import AutomationEventService
+
         return AutomationEventService(mock_token_manager)
 
 
@@ -95,7 +106,9 @@ class TestResolveGithubOrg:
     """Tests for _resolve_github_org method."""
 
     @pytest.mark.asyncio
-    async def test_resolve_github_org_found(self, mock_token_manager, mock_org_git_claim):
+    async def test_resolve_github_org_found(
+        self, mock_token_manager, mock_org_git_claim
+    ):
         """
         GIVEN: A GitHub org that has been claimed in OpenHands
         WHEN: _resolve_github_org is called
@@ -244,9 +257,7 @@ class TestForwardGithubEvent:
             'server.services.automation_event_service.OrgMemberStore.get_org_member',
             new_callable=AsyncMock,
             return_value=MagicMock(),
-        ), patch(
-            'server.services.automation_event_service.GithubIntegration'
-        ), patch(
+        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
             'server.services.automation_event_service.Auth.AppAuth'
         ), patch.object(
             AutomationEventService,
@@ -296,9 +307,7 @@ class TestForwardGithubEvent:
             'server.services.automation_event_service.OrgMemberStore.get_org_member',
             new_callable=AsyncMock,
             return_value=MagicMock(),
-        ), patch(
-            'server.services.automation_event_service.GithubIntegration'
-        ), patch(
+        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
             'server.services.automation_event_service.Auth.AppAuth'
         ), patch.object(
             AutomationEventService,
@@ -339,9 +348,7 @@ class TestForwardGithubEvent:
             'sender': {'id': 12345, 'login': 'testuser'},
         }
 
-        with patch(
-            'server.services.automation_event_service.GithubIntegration'
-        ), patch(
+        with patch('server.services.automation_event_service.GithubIntegration'), patch(
             'server.services.automation_event_service.Auth.AppAuth'
         ), patch(
             'server.services.automation_event_service.logger'
@@ -376,9 +383,7 @@ class TestForwardGithubEvent:
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=None,
-        ), patch(
-            'server.services.automation_event_service.GithubIntegration'
-        ), patch(
+        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
             'server.services.automation_event_service.Auth.AppAuth'
         ), patch(
             'server.services.automation_event_service.logger'
@@ -415,9 +420,7 @@ class TestForwardGithubEvent:
             'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
             new_callable=AsyncMock,
             return_value=None,
-        ), patch(
-            'server.services.automation_event_service.GithubIntegration'
-        ), patch(
+        ), patch('server.services.automation_event_service.GithubIntegration'), patch(
             'server.services.automation_event_service.Auth.AppAuth'
         ), patch(
             'server.services.automation_event_service.logger'
@@ -492,9 +495,7 @@ class TestCheckGithubOrgMembership:
         }
 
         service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(
-            payload, 99999, 'testuser'
-        )
+        result = await service._check_github_org_membership(payload, 99999, 'testuser')
         assert result is True
 
     @pytest.mark.asyncio
@@ -512,9 +513,7 @@ class TestCheckGithubOrgMembership:
         }
 
         service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(
-            payload, 99999, 'testuser'
-        )
+        result = await service._check_github_org_membership(payload, 99999, 'testuser')
         assert result is True
 
     @pytest.mark.asyncio
@@ -532,9 +531,7 @@ class TestCheckGithubOrgMembership:
         }
 
         service = create_service(mock_token_manager)
-        result = await service._check_github_org_membership(
-            payload, 99999, 'testuser'
-        )
+        result = await service._check_github_org_membership(payload, 99999, 'testuser')
         assert result is False
 
     @pytest.mark.asyncio
@@ -655,9 +652,7 @@ class TestSendToAutomationService:
             '',
         ), patch(
             'server.services.automation_event_service.logger'
-        ) as mock_logger, patch(
-            'aiohttp.ClientSession'
-        ) as mock_session:
+        ) as mock_logger, patch('aiohttp.ClientSession') as mock_session:
             service = create_service(mock_token_manager)
             await service._send_to_automation_service(org_id, payload)
 

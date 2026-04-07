@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import os
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from integrations.github.data_collector import GitHubDataCollector
 from integrations.github.github_manager import GithubManager
@@ -51,6 +51,7 @@ def verify_github_signature(payload: bytes, signature: str):
 @github_integration_router.post('/github/events')
 async def github_events(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_hub_signature_256: str = Header(None),
     x_github_event: str = Header(None),
 ):
@@ -80,12 +81,11 @@ async def github_events(
 
         # Forward to automation service (fire-and-forget background task)
         if AUTOMATION_EVENT_FORWARDING_ENABLED:
-            asyncio.create_task(
-                automation_event_service.forward_github_event(
-                    payload=payload_data,
-                    event_type=x_github_event,
-                    installation_id=installation_id,
-                )
+            background_tasks.add_task(
+                automation_event_service.forward_github_event,
+                payload=payload_data,
+                event_type=x_github_event,
+                installation_id=installation_id,
             )
 
         # Existing resolver bot processing

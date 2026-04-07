@@ -58,6 +58,15 @@ RECAPTCHA_BLOCK_THRESHOLD = float(os.getenv('RECAPTCHA_BLOCK_THRESHOLD', '0.3'))
 
 # Automation Service
 AUTOMATION_SERVICE_URL = os.getenv('AUTOMATION_SERVICE_URL', '').strip()
+if AUTOMATION_SERVICE_URL and not AUTOMATION_SERVICE_URL.startswith(
+    ('http://', 'https://')
+):
+    from openhands.core.logger import openhands_logger
+
+    openhands_logger.warning(
+        f'AUTOMATION_SERVICE_URL should start with http:// or https://, '
+        f'got: {AUTOMATION_SERVICE_URL}'
+    )
 AUTOMATION_EVENT_FORWARDING_ENABLED = os.getenv(
     'AUTOMATION_EVENT_FORWARDING_ENABLED', 'false'
 ) in ('1', 'true')

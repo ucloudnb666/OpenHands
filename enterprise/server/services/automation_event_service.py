@@ -39,10 +39,19 @@ class AutomationEventService:
     """Service for forwarding webhook events to the automation service."""
 
     def __init__(self, token_manager: TokenManager):
+        from server.auth.constants import AUTOMATION_EVENT_FORWARDING_ENABLED
+
         self.token_manager = token_manager
         self.github_integration = GithubIntegration(
             auth=Auth.AppAuth(GITHUB_APP_CLIENT_ID, GITHUB_APP_PRIVATE_KEY)
         )
+
+        # Validate config early if forwarding is enabled
+        if AUTOMATION_EVENT_FORWARDING_ENABLED and not AUTOMATION_SERVICE_URL:
+            logger.error(
+                '[AutomationEventService] AUTOMATION_EVENT_FORWARDING_ENABLED=true '
+                'but AUTOMATION_SERVICE_URL is not configured'
+            )
 
     async def forward_github_event(
         self,
@@ -147,10 +156,16 @@ class AutomationEventService:
             await self._send_to_automation_service(org_id, normalized_payload)
 
         except Exception as e:
-            logger.warning(
-                f'[AutomationEventService] Failed to forward event: {e}',
+            # Log at ERROR level with full context for debugging
+            logger.error(
+                f'[AutomationEventService] Failed to forward event '
+                f'(org_id={org_id if "org_id" in dir() else "unknown"}, '
+                f'event_type={event_type}): {e}',
                 exc_info=True,
+                extra={'installation_id': installation_id},
             )
+            # TODO: Add metrics tracking for failed forwards
+            # TODO: Consider retry mechanism for transient failures
 
     async def _resolve_github_org(self, git_org_name: str) -> UUID | None:
         """
@@ -224,7 +239,12 @@ class AutomationEventService:
         repo = payload.get('repository', {})
         owner = repo.get('owner', {})
 
-        # Private repo - if they can trigger an event, they have access
+        # Private repo - if they can trigger a webhook event, they have repo access.
+        # Note: This is an intentional trade-off. For private repos, we assume that
+        # webhook event access implies sufficient permissions to trigger automations.
+        # This covers collaborators with any access level (read, write, admin).
+        # The automation service can implement additional permission checks if needed
+        # based on the access_control metadata in the forwarded payload.
         if repo.get('private'):
             return True
 
@@ -237,14 +257,11 @@ class AutomationEventService:
             org_name = owner.get('login')
             token = self._get_installation_token(installation_id)
 
-            with Github(auth=Auth.Token(token)) as github_client:
-                org = github_client.get_organization(org_name)
-                # Check if user is a member of the organization
-                user = github_client.get_user(username)
-                # has_in_members expects NamedUser, but get_user can return AuthenticatedUser
-                # when querying the authenticated user. For org membership checks, we use
-                # get_user(username) which returns NamedUser for other users.
-                return org.has_in_members(user)  # type: ignore[arg-type]
+            # Run blocking GitHub API calls in a thread pool to avoid blocking
+            # the event loop
+            return await asyncio.to_thread(
+                self._check_org_membership_sync, org_name, username, token
+            )
         except Exception as e:
             logger.debug(
                 f'[AutomationEventService] Failed to check GitHub org membership for {username}: {e}'
@@ -282,24 +299,43 @@ class AutomationEventService:
         token_data = self.github_integration.get_access_token(installation_id)
         return token_data.token
 
+    def _check_org_membership_sync(
+        self, org_name: str, username: str, token: str
+    ) -> bool:
+        """
+        Synchronously check if a user is a member of a GitHub organization.
+
+        This method is designed to be called via asyncio.to_thread() to avoid
+        blocking the event loop with synchronous PyGithub API calls.
+        """
+        with Github(auth=Auth.Token(token)) as github_client:
+            org = github_client.get_organization(org_name)
+            user = github_client.get_user(username)
+            # has_in_members expects NamedUser, but get_user can return AuthenticatedUser
+            # when querying the authenticated user. For org membership checks, we use
+            # get_user(username) which returns NamedUser for other users.
+            return org.has_in_members(user)  # type: ignore[arg-type]
+
     def _infer_event_type(self, payload: dict[str, Any]) -> str:
-        """
-        Infer event type from payload structure (fallback if header missing).
-        """
+        """Infer event type from payload structure (fallback if header missing)."""
+        # Handle complex cases first
         if 'pull_request' in payload and 'review' not in payload:
             return 'pull_request'
-        if 'issue' in payload and 'comment' not in payload:
-            return 'issues'
-        if 'comment' in payload and 'issue' in payload:
-            return 'issue_comment'
+        if 'issue' in payload:
+            return 'issue_comment' if 'comment' in payload else 'issues'
         if 'ref' in payload and 'commits' in payload:
             return 'push'
-        if 'release' in payload:
-            return 'release'
-        if 'workflow_run' in payload:
-            return 'workflow_run'
-        if 'check_run' in payload:
-            return 'check_run'
+
+        # Simple key-based inference for remaining types
+        event_map = {
+            'release': 'release',
+            'workflow_run': 'workflow_run',
+            'check_run': 'check_run',
+        }
+        for key, event_type in event_map.items():
+            if key in payload:
+                return event_type
+
         return 'unknown'
 
     def _sign_payload(self, payload_bytes: bytes) -> str:
