@@ -461,12 +461,21 @@ class TestCheckGithubOrgMembership:
 
         service = create_service(mock_token_manager)
 
+        # Mock Redis as unavailable (to test API path)
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
+        mock_redis.setex = AsyncMock()
+
         # Mock the installation token and org membership check
-        with patch.object(
+        with patch(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio, patch.object(
             service, '_get_installation_token', return_value='test-token'
         ), patch.object(
             service, '_check_org_membership_sync', return_value=True
         ) as mock_check:
+            mock_sio.manager.redis = mock_redis
+
             result = await service._check_github_org_membership(
                 payload, 99999, 'testuser'
             )
@@ -525,6 +534,121 @@ class TestCheckGithubOrgMembership:
         service = create_service(mock_token_manager)
         result = await service._check_github_org_membership(payload, 99999, None)
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_returns_cached_value(self, mock_token_manager):
+        """
+        GIVEN: A cached membership result in Redis
+        WHEN: _check_github_org_membership is called
+        THEN: Cached value is returned without API call
+        """
+        payload = {
+            'repository': {
+                'private': False,
+                'owner': {'type': 'Organization', 'login': 'test-org'},
+            },
+        }
+
+        service = create_service(mock_token_manager)
+
+        # Mock Redis cache hit
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=b'1')  # Cached as member
+
+        with patch(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio, patch.object(
+            service, '_get_installation_token', return_value='test-token'
+        ) as mock_get_token, patch.object(
+            service, '_check_org_membership_sync', return_value=False
+        ) as mock_check:
+            mock_sio.manager.redis = mock_redis
+
+            result = await service._check_github_org_membership(
+                payload, 99999, 'testuser'
+            )
+
+            # Should return cached True, not call API
+            assert result is True
+            mock_check.assert_not_called()
+            mock_get_token.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cache_miss_calls_api_and_caches_result(self, mock_token_manager):
+        """
+        GIVEN: No cached membership result in Redis
+        WHEN: _check_github_org_membership is called
+        THEN: API is called and result is cached
+        """
+        payload = {
+            'repository': {
+                'private': False,
+                'owner': {'type': 'Organization', 'login': 'test-org'},
+            },
+        }
+
+        service = create_service(mock_token_manager)
+
+        # Mock Redis cache miss
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)  # Cache miss
+        mock_redis.setex = AsyncMock()
+
+        with patch(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio, patch.object(
+            service, '_get_installation_token', return_value='test-token'
+        ), patch.object(
+            service, '_check_org_membership_sync', return_value=True
+        ) as mock_check:
+            mock_sio.manager.redis = mock_redis
+
+            result = await service._check_github_org_membership(
+                payload, 99999, 'testuser'
+            )
+
+            # Should call API and cache result
+            assert result is True
+            mock_check.assert_called_once()
+            mock_redis.setex.assert_called_once()
+            # Verify cache key format
+            call_args = mock_redis.setex.call_args
+            assert 'automation:gh_membership:test-org:testuser' in call_args[0][0]
+            assert call_args[0][2] == '1'  # True cached as '1'
+
+    @pytest.mark.asyncio
+    async def test_redis_unavailable_falls_through_to_api(self, mock_token_manager):
+        """
+        GIVEN: Redis is unavailable
+        WHEN: _check_github_org_membership is called
+        THEN: API is called directly (graceful degradation)
+        """
+        payload = {
+            'repository': {
+                'private': False,
+                'owner': {'type': 'Organization', 'login': 'test-org'},
+            },
+        }
+
+        service = create_service(mock_token_manager)
+
+        # Mock Redis unavailable
+        with patch(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio, patch.object(
+            service, '_get_installation_token', return_value='test-token'
+        ), patch.object(
+            service, '_check_org_membership_sync', return_value=True
+        ) as mock_check:
+            mock_sio.manager.redis = None  # Redis unavailable
+
+            result = await service._check_github_org_membership(
+                payload, 99999, 'testuser'
+            )
+
+            # Should still work via API
+            assert result is True
+            mock_check.assert_called_once()
 
 
 class TestCheckOpenhandsOrgMembership:

@@ -34,6 +34,11 @@ from storage.org_member_store import OrgMemberStore
 
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderType
+from openhands.server.shared import sio
+
+# Cache TTL for GitHub org membership checks (5 minutes)
+MEMBERSHIP_CACHE_TTL_SECONDS = 300
+MEMBERSHIP_CACHE_PREFIX = 'automation:gh_membership'
 
 
 @dataclass
@@ -182,8 +187,7 @@ class AutomationEventService:
         if github_user_id:
             keycloak_user_id = await self._get_keycloak_user_id(github_user_id)
 
-        # Check GitHub org membership
-        # TODO: Consider caching membership results (TTL: 5-10 min) to reduce API calls
+        # Check GitHub org membership (cached in Redis for 5 minutes)
         is_github_org_member = await self._check_github_org_membership(
             payload, installation_id, github_username
         )
@@ -287,6 +291,8 @@ class AutomationEventService:
         This check is performed for both public and private repos to ensure
         proper access control. For org repos, we verify org membership.
         For personal repos, the owner is the only "member".
+
+        Results are cached in Redis for 5 minutes to reduce GitHub API calls.
         """
         if not username:
             return False
@@ -299,21 +305,89 @@ class AutomationEventService:
             return username == owner.get('login')
 
         # For org repos (both public and private), check org membership via GitHub API
+        org_name = owner.get('login')
+        if not org_name:
+            return False
+
+        # Check cache first
+        cached_result = await self._get_cached_membership(org_name, username)
+        if cached_result is not None:
+            logger.debug(
+                f'[AutomationEventService] Cache hit for membership check: '
+                f'{username} in {org_name} = {cached_result}'
+            )
+            return cached_result
+
+        # Cache miss - check via GitHub API
         try:
-            org_name = owner.get('login')
             token = self._get_installation_token(installation_id)
 
             # Run blocking GitHub API calls in a thread pool to avoid blocking
             # the event loop
-            return await asyncio.to_thread(
+            is_member = await asyncio.to_thread(
                 self._check_org_membership_sync, org_name, username, token
             )
+
+            # Cache the result
+            await self._cache_membership_result(org_name, username, is_member)
+
+            return is_member
         except Exception as e:
             logger.debug(
                 f'[AutomationEventService] Failed to check GitHub org membership for {username}: {e}'
             )
             # Fail closed - assume not a member if we can't verify
             return False
+
+    async def _get_cached_membership(self, org_name: str, username: str) -> bool | None:
+        """
+        Get cached membership result from Redis.
+
+        Returns True/False if cached, None if not cached or Redis unavailable.
+        """
+        try:
+            redis = getattr(sio.manager, 'redis', None)
+            if not redis:
+                return None
+
+            cache_key = (
+                f'{MEMBERSHIP_CACHE_PREFIX}:{org_name.lower()}:{username.lower()}'
+            )
+            cached = await redis.get(cache_key)
+
+            if cached is None:
+                return None
+
+            # Redis returns bytes
+            return cached == b'1'
+        except Exception as e:
+            logger.debug(f'[AutomationEventService] Redis cache read error: {e}')
+            return None
+
+    async def _cache_membership_result(
+        self, org_name: str, username: str, is_member: bool
+    ) -> None:
+        """
+        Cache membership result in Redis with TTL.
+
+        Fails silently if Redis is unavailable.
+        """
+        try:
+            redis = getattr(sio.manager, 'redis', None)
+            if not redis:
+                return
+
+            cache_key = (
+                f'{MEMBERSHIP_CACHE_PREFIX}:{org_name.lower()}:{username.lower()}'
+            )
+            value = '1' if is_member else '0'
+            await redis.setex(cache_key, MEMBERSHIP_CACHE_TTL_SECONDS, value)
+
+            logger.debug(
+                f'[AutomationEventService] Cached membership: {username} in {org_name} = {is_member}'
+            )
+        except Exception as e:
+            logger.debug(f'[AutomationEventService] Redis cache write error: {e}')
 
     async def _check_openhands_org_membership(
         self,
