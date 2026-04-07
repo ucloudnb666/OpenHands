@@ -7,15 +7,16 @@ This service handles:
    (keycloak user ID)
 3. Converting GitHub user ID → Keycloak user ID
 4. Access control checks:
-   - GitHub org membership (for public repos)
+   - GitHub org membership (for both public and private repos)
    - OpenHands org membership (Keycloak user must be member of OpenHands org)
-5. Forwarding normalized payloads to the automation service
+5. Forwarding payloads to the automation service
 """
 
 import asyncio
 import hashlib
 import hmac
 import json
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -35,6 +36,23 @@ from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderType
 
 
+@dataclass
+class OrgContext:
+    """Context for the resolved organization."""
+
+    org_id: UUID
+    github_org: str
+
+
+@dataclass
+class AccessControl:
+    """Access control metadata for the event sender."""
+
+    is_github_org_member: bool
+    is_openhands_org_member: bool
+    has_openhands_account: bool
+
+
 class AutomationEventService:
     """Service for forwarding webhook events to the automation service."""
 
@@ -46,12 +64,13 @@ class AutomationEventService:
             auth=Auth.AppAuth(GITHUB_APP_CLIENT_ID, GITHUB_APP_PRIVATE_KEY)
         )
 
-        # Validate config early if forwarding is enabled
-        if AUTOMATION_EVENT_FORWARDING_ENABLED and not AUTOMATION_SERVICE_URL:
-            logger.error(
-                '[AutomationEventService] AUTOMATION_EVENT_FORWARDING_ENABLED=true '
-                'but AUTOMATION_SERVICE_URL is not configured'
-            )
+        # Fail fast if forwarding is enabled but misconfigured
+        if AUTOMATION_EVENT_FORWARDING_ENABLED:
+            if not AUTOMATION_SERVICE_URL:
+                raise ValueError(
+                    'AUTOMATION_EVENT_FORWARDING_ENABLED=true but '
+                    'AUTOMATION_SERVICE_URL is not configured'
+                )
 
     async def forward_github_event(
         self,
@@ -69,88 +88,138 @@ class AutomationEventService:
             event_type: The X-GitHub-Event header value (used for logging only)
             installation_id: The GitHub App installation ID
         """
+        org_id: UUID | None = None
         try:
-            # 1. Extract GitHub org name from payload
-            repo = payload.get('repository', {})
-            owner = repo.get('owner', {})
-            git_org_name = owner.get('login')
-            owner_type = owner.get('type')  # 'User' or 'Organization'
-
-            if not git_org_name:
-                logger.warning(
-                    '[AutomationEventService] No repository owner in payload, skipping'
-                )
+            # Resolve org context (org_id and github_org name)
+            org_context = await self._resolve_org_context(payload)
+            if not org_context:
                 return
 
-            # 2. Resolve to OpenHands org_id using existing OrgGitClaim system
-            org_id = await self._resolve_github_org(git_org_name)
+            org_id = org_context.org_id
 
-            # 3. Fallback for personal repos: if owner is a User (not Organization),
-            # try to resolve to their personal OpenHands org (keycloak user ID)
-            if not org_id and owner_type == 'User':
-                org_id = await self._resolve_personal_org(owner.get('id'))
-                if org_id:
-                    logger.info(
-                        f'[AutomationEventService] Resolved personal repo owner '
-                        f'{git_org_name} to personal org {org_id}'
-                    )
-
-            if not org_id:
-                logger.warning(
-                    f'[AutomationEventService] GitHub org {git_org_name} not claimed '
-                    f'and no personal org found, skipping'
-                )
-                return
-
-            # 4. Get sender info and resolve to Keycloak user ID
-            sender = payload.get('sender', {})
-            github_user_id = sender.get('id')
-            github_username = sender.get('login')
-
-            keycloak_user_id = None
-            if github_user_id:
-                keycloak_user_id = await self._get_keycloak_user_id(github_user_id)
-
-            # 5. Check GitHub org membership for access control (public repos)
-            is_github_org_member = await self._check_github_org_membership(
-                payload, installation_id, github_username
+            # Build access control metadata
+            access_control = await self._build_access_control(
+                payload, installation_id, org_context
             )
 
-            # 6. Check OpenHands org membership (user must be member of the OpenHands org)
-            is_openhands_org_member = False
-            if keycloak_user_id:
-                is_openhands_org_member = await self._check_openhands_org_membership(
-                    org_id, keycloak_user_id
-                )
+            # Build and send the event payload
+            event_payload = self._build_event_payload(
+                org_context, access_control, payload
+            )
+            await self._send_to_automation_service(org_id, event_payload)
 
-            # 7. Build event payload with access control metadata
-            forwarded_payload = {
-                'organization': {
-                    'github_org': git_org_name,
-                    'openhands_org_id': str(org_id),
-                },
-                'access_control': {
-                    'is_github_org_member': is_github_org_member,
-                    'is_openhands_org_member': is_openhands_org_member,
-                    'has_openhands_account': keycloak_user_id is not None,
-                },
-                'raw_payload': payload,
-            }
-
-            # 8. Forward to automation service
-            await self._send_to_automation_service(org_id, forwarded_payload)
-
-        except Exception as e:
-            # Log at ERROR level with full context for debugging
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            # Network errors are expected and recoverable
             logger.error(
-                f'[AutomationEventService] Failed to forward event '
-                f'(org_id={org_id if "org_id" in dir() else "unknown"}, '
-                f'event_type={event_type}): {e}',
+                f'[AutomationEventService] Network error forwarding event '
+                f'(org_id={org_id}, event_type={event_type}): {e}',
                 exc_info=True,
                 extra={'installation_id': installation_id},
             )
             # TODO: Add metrics tracking for failed forwards
             # TODO: Consider retry mechanism for transient failures
+        except Exception as e:
+            # Log unexpected errors but re-raise to surface bugs
+            logger.error(
+                f'[AutomationEventService] Unexpected error forwarding event '
+                f'(org_id={org_id}, event_type={event_type}): {e}',
+                exc_info=True,
+                extra={'installation_id': installation_id},
+            )
+            raise
+
+    async def _resolve_org_context(self, payload: dict[str, Any]) -> OrgContext | None:
+        """
+        Resolve the organization context from the webhook payload.
+
+        Returns None if the org cannot be resolved (not claimed, no personal org).
+        """
+        repo = payload.get('repository', {})
+        owner = repo.get('owner', {})
+        git_org_name = owner.get('login')
+        owner_type = owner.get('type')  # 'User' or 'Organization'
+
+        if not git_org_name:
+            logger.warning(
+                '[AutomationEventService] No repository owner in payload, skipping'
+            )
+            return None
+
+        # Try to resolve via OrgGitClaim
+        org_id = await self._resolve_github_org(git_org_name)
+
+        # Fallback for personal repos
+        if not org_id and owner_type == 'User':
+            org_id = await self._resolve_personal_org(owner.get('id'))
+            if org_id:
+                logger.info(
+                    f'[AutomationEventService] Resolved personal repo owner '
+                    f'{git_org_name} to personal org {org_id}'
+                )
+
+        if not org_id:
+            logger.warning(
+                f'[AutomationEventService] GitHub org {git_org_name} not claimed '
+                f'and no personal org found, skipping'
+            )
+            return None
+
+        return OrgContext(org_id=org_id, github_org=git_org_name)
+
+    async def _build_access_control(
+        self,
+        payload: dict[str, Any],
+        installation_id: int,
+        org_context: OrgContext,
+    ) -> AccessControl:
+        """Build access control metadata for the event sender."""
+        sender = payload.get('sender', {})
+        github_user_id = sender.get('id')
+        github_username = sender.get('login')
+
+        # Resolve Keycloak user ID
+        keycloak_user_id = None
+        if github_user_id:
+            keycloak_user_id = await self._get_keycloak_user_id(github_user_id)
+
+        # Check GitHub org membership
+        # TODO: Consider caching membership results (TTL: 5-10 min) to reduce API calls
+        is_github_org_member = await self._check_github_org_membership(
+            payload, installation_id, github_username
+        )
+
+        # Check OpenHands org membership
+        is_openhands_org_member = False
+        if keycloak_user_id:
+            is_openhands_org_member = await self._check_openhands_org_membership(
+                org_context.org_id, keycloak_user_id
+            )
+
+        return AccessControl(
+            is_github_org_member=is_github_org_member,
+            is_openhands_org_member=is_openhands_org_member,
+            has_openhands_account=keycloak_user_id is not None,
+        )
+
+    def _build_event_payload(
+        self,
+        org_context: OrgContext,
+        access_control: AccessControl,
+        raw_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build the event payload to forward to the automation service."""
+        return {
+            'organization': {
+                'github_org': org_context.github_org,
+                'openhands_org_id': str(org_context.org_id),
+            },
+            'access_control': {
+                'is_github_org_member': access_control.is_github_org_member,
+                'is_openhands_org_member': access_control.is_openhands_org_member,
+                'has_openhands_account': access_control.has_openhands_account,
+            },
+            'raw_payload': raw_payload,
+        }
 
     async def _resolve_github_org(self, git_org_name: str) -> UUID | None:
         """
@@ -288,9 +357,10 @@ class AutomationEventService:
         with Github(auth=Auth.Token(token)) as github_client:
             org = github_client.get_organization(org_name)
             user = github_client.get_user(username)
-            # has_in_members expects NamedUser, but get_user can return AuthenticatedUser
-            # when querying the authenticated user. For org membership checks, we use
-            # get_user(username) which returns NamedUser for other users.
+            # For org membership, we need NamedUser. The API guarantees
+            # get_user(username) returns NamedUser for other users.
+            if not hasattr(user, 'login'):
+                raise TypeError(f'Expected NamedUser, got {type(user)}')
             return org.has_in_members(user)  # type: ignore[arg-type]
 
     def _sign_payload(self, payload_bytes: bytes) -> str:
