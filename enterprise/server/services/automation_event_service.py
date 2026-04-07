@@ -66,7 +66,7 @@ class AutomationEventService:
 
         Args:
             payload: The raw GitHub webhook payload
-            event_type: The X-GitHub-Event header value (e.g., 'pull_request')
+            event_type: The X-GitHub-Event header value (used for logging only)
             installation_id: The GitHub App installation ID
         """
         try:
@@ -123,21 +123,8 @@ class AutomationEventService:
                     org_id, keycloak_user_id
                 )
 
-            # 7. Build normalized event payload
-            normalized_payload = {
-                'event_type': event_type or self._infer_event_type(payload),
-                'action': payload.get('action'),
-                'sender': {
-                    'github_id': github_user_id,
-                    'github_login': github_username,
-                    'keycloak_user_id': keycloak_user_id,
-                },
-                'repository': {
-                    'id': repo.get('id'),
-                    'full_name': repo.get('full_name'),
-                    'private': repo.get('private'),
-                    'default_branch': repo.get('default_branch'),
-                },
+            # 7. Build event payload with access control metadata
+            forwarded_payload = {
                 'organization': {
                     'github_org': git_org_name,
                     'openhands_org_id': str(org_id),
@@ -147,13 +134,11 @@ class AutomationEventService:
                     'is_openhands_org_member': is_openhands_org_member,
                     'has_openhands_account': keycloak_user_id is not None,
                 },
-                'installation_id': installation_id,
-                # Include full payload for SDK script access
                 'raw_payload': payload,
             }
 
             # 8. Forward to automation service
-            await self._send_to_automation_service(org_id, normalized_payload)
+            await self._send_to_automation_service(org_id, forwarded_payload)
 
         except Exception as e:
             # Log at ERROR level with full context for debugging
@@ -308,28 +293,6 @@ class AutomationEventService:
             # get_user(username) which returns NamedUser for other users.
             return org.has_in_members(user)  # type: ignore[arg-type]
 
-    def _infer_event_type(self, payload: dict[str, Any]) -> str:
-        """Infer event type from payload structure (fallback if header missing)."""
-        # Handle complex cases first
-        if 'pull_request' in payload and 'review' not in payload:
-            return 'pull_request'
-        if 'issue' in payload:
-            return 'issue_comment' if 'comment' in payload else 'issues'
-        if 'ref' in payload and 'commits' in payload:
-            return 'push'
-
-        # Simple key-based inference for remaining types
-        event_map = {
-            'release': 'release',
-            'workflow_run': 'workflow_run',
-            'check_run': 'check_run',
-        }
-        for key, event_type in event_map.items():
-            if key in payload:
-                return event_type
-
-        return 'unknown'
-
     def _sign_payload(self, payload_bytes: bytes) -> str:
         """
         Sign a payload using the GitHub webhook secret.
@@ -388,10 +351,9 @@ class AutomationEventService:
                         )
                     else:
                         data = await resp.json()
-                        event_type = payload.get('event_type', 'unknown')
                         matched = data.get('matched', 0)
                         logger.info(
-                            f'[AutomationEventService] Forwarded {event_type} event: '
+                            f'[AutomationEventService] Forwarded event to org {org_id}: '
                             f'{matched} automations matched'
                         )
         except asyncio.TimeoutError:

@@ -280,8 +280,9 @@ class TestForwardGithubEvent:
             call_args = mock_send.call_args
             assert call_args[0][0] == mock_org_git_claim.org_id
             payload = call_args[0][1]
-            assert payload['event_type'] == 'push'
             assert payload['organization']['github_org'] == 'test-org'
+            assert 'raw_payload' in payload
+            assert 'access_control' in payload
 
     @pytest.mark.asyncio
     async def test_forward_personal_repo_event_success(
@@ -441,45 +442,6 @@ class TestForwardGithubEvent:
             assert 'no personal org found' in str(mock_logger.warning.call_args)
 
 
-class TestInferEventType:
-    """Tests for _infer_event_type method."""
-
-    @pytest.mark.asyncio
-    async def test_infer_pull_request(self, mock_token_manager):
-        """Test inferring pull_request event type."""
-        service = create_service(mock_token_manager)
-        payload = {'pull_request': {'number': 1}}
-        assert service._infer_event_type(payload) == 'pull_request'
-
-    @pytest.mark.asyncio
-    async def test_infer_issues(self, mock_token_manager):
-        """Test inferring issues event type."""
-        service = create_service(mock_token_manager)
-        payload = {'issue': {'number': 1}}
-        assert service._infer_event_type(payload) == 'issues'
-
-    @pytest.mark.asyncio
-    async def test_infer_issue_comment(self, mock_token_manager):
-        """Test inferring issue_comment event type."""
-        service = create_service(mock_token_manager)
-        payload = {'issue': {'number': 1}, 'comment': {'body': 'test'}}
-        assert service._infer_event_type(payload) == 'issue_comment'
-
-    @pytest.mark.asyncio
-    async def test_infer_push(self, mock_token_manager):
-        """Test inferring push event type."""
-        service = create_service(mock_token_manager)
-        payload = {'ref': 'refs/heads/main', 'commits': []}
-        assert service._infer_event_type(payload) == 'push'
-
-    @pytest.mark.asyncio
-    async def test_infer_unknown(self, mock_token_manager):
-        """Test inferring unknown event type."""
-        service = create_service(mock_token_manager)
-        payload = {'some_unknown_key': 'value'}
-        assert service._infer_event_type(payload) == 'unknown'
-
-
 class TestCheckGithubOrgMembership:
     """Tests for _check_github_org_membership method."""
 
@@ -618,7 +580,11 @@ class TestSendToAutomationService:
         THEN: Request is sent with correct signature
         """
         org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        payload = {'event_type': 'push', 'test': 'data'}
+        payload = {
+            'organization': {'github_org': 'test-org', 'openhands_org_id': str(org_id)},
+            'access_control': {'is_github_org_member': True},
+            'raw_payload': {'test': 'data'},
+        }
 
         mock_response = MagicMock()
         mock_response.status = 200
@@ -660,7 +626,7 @@ class TestSendToAutomationService:
         THEN: Warning is logged and request is not sent
         """
         org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        payload = {'event_type': 'push'}
+        payload = {'raw_payload': {'test': 'data'}}
 
         with patch(
             'server.services.automation_event_service.AUTOMATION_SERVICE_URL',
