@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, redirect } from "react-router";
+import { useNavigate, redirect, useLoaderData } from "react-router";
 import StepHeader from "#/components/features/onboarding/step-header";
 import { StepContent } from "#/components/features/onboarding/step-content";
 import { BrandButton } from "#/components/features/settings/brand-button";
@@ -10,7 +10,6 @@ import { useSubmitOnboarding } from "#/hooks/mutation/use-submit-onboarding";
 import { useTracking } from "#/hooks/use-tracking";
 import { ENABLE_ONBOARDING } from "#/utils/feature-flags";
 import { cn } from "#/utils/utils";
-import { useConfig } from "#/hooks/query/use-config";
 import { useMe } from "#/hooks/query/use-me";
 import {
   ONBOARDING_FORM,
@@ -37,7 +36,7 @@ export const clientLoader = async () => {
     return redirect("/");
   }
 
-  return null;
+  return { config };
 };
 
 type OnboardingAnswers = Record<string, string | string[]>;
@@ -81,13 +80,14 @@ function getTranslatedInputFields(
 function OnboardingForm() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const config = useConfig({ enabled: true });
+  const loaderData = useLoaderData<typeof clientLoader>();
+  const config = loaderData?.config;
   const { data: me } = useMe();
   const { mutate: submitOnboarding } = useSubmitOnboarding();
   const { trackOnboardingCompleted } = useTracking();
 
   const onboardingAppMode: OnboardingAppMode = getOnboardingAppMode(
-    config.data?.feature_flags?.deployment_mode,
+    config?.feature_flags?.deployment_mode,
   );
 
   const steps = React.useMemo(
@@ -172,7 +172,7 @@ function OnboardingForm() {
       // Track onboarding completion based on deployment mode:
       // - Cloud mode: track ALL users
       // - Self-hosted mode: track only org owners (SuperAdmin)
-      const deploymentMode = config.data?.feature_flags?.deployment_mode;
+      const deploymentMode = config?.feature_flags?.deployment_mode;
       const isOwner = me?.role === "owner";
       const shouldTrack =
         deploymentMode === "cloud" ||
