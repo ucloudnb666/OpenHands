@@ -31,7 +31,6 @@ from server.constants import (
     DEPLOYMENT_MODE,
     IS_FEATURE_ENV,
     IS_LOCAL_ENV,
-    ROLE_OWNER,
 )
 from server.routes.event_webhook import _get_session_api_key, _get_user_id
 from server.services.org_invitation_service import (
@@ -45,8 +44,6 @@ from server.utils.rate_limit_utils import check_rate_limit_by_user_id
 from server.utils.url_utils import get_cookie_domain, get_cookie_samesite, get_web_url
 from sqlalchemy import select
 from storage.database import a_session_maker
-from storage.org_member_store import OrgMemberStore
-from storage.role_store import RoleStore
 from storage.user import User
 from storage.user_store import UserStore
 
@@ -577,7 +574,8 @@ async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     - User has not completed onboarding
     - Either:
       - Deployment mode is 'cloud' (all users)
-      - Deployment mode is 'self_hosted' AND user is an owner
+      - Deployment mode is 'self_hosted' AND user is the super admin
+        (first owner in their current org to accept TOS)
     """
     if user.onboarding_completed:
         return False
@@ -586,15 +584,11 @@ async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     if DEPLOYMENT_MODE == 'cloud':
         return True
 
-    # Self-hosted SaaS: only owners go to onboarding
+    # Self-hosted SaaS: only the super admin (first owner to accept TOS in the org)
     if DEPLOYMENT_MODE == 'self_hosted':
-        org_member = await OrgMemberStore.get_org_member_for_current_org(
-            uuid.UUID(user_id)
-        )
-        if org_member:
-            role = await RoleStore.get_role_by_id(org_member.role_id)
-            if role and role.name == ROLE_OWNER:
-                return True
+        first_owner = await UserStore.get_first_owner_in_org(user.current_org_id)
+        if first_owner and str(first_owner.id) == user_id:
+            return True
 
     return False
 

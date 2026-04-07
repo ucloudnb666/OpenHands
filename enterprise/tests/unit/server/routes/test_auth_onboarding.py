@@ -16,8 +16,6 @@ from server.routes.auth import (
     _should_redirect_to_onboarding,
     complete_onboarding,
 )
-from storage.org_member import OrgMember
-from storage.role import Role
 from storage.user import User
 
 # --- Fixtures ---
@@ -41,40 +39,9 @@ def mock_user():
     """Create a mock User object."""
     user = MagicMock(spec=User)
     user.id = uuid.uuid4()
+    user.current_org_id = uuid.uuid4()
     user.onboarding_completed = False
     return user
-
-
-@pytest.fixture
-def mock_org_member():
-    """Create a mock OrgMember object."""
-    member = MagicMock(spec=OrgMember)
-    member.role_id = 1
-    return member
-
-
-@pytest.fixture
-def mock_owner_role():
-    """Create a mock owner Role object."""
-    role = MagicMock(spec=Role)
-    role.name = 'owner'
-    return role
-
-
-@pytest.fixture
-def mock_admin_role():
-    """Create a mock admin Role object."""
-    role = MagicMock(spec=Role)
-    role.name = 'admin'
-    return role
-
-
-@pytest.fixture
-def mock_member_role():
-    """Create a mock member Role object."""
-    role = MagicMock(spec=Role)
-    role.name = 'member'
-    return role
 
 
 # --- Tests for _should_redirect_to_onboarding ---
@@ -103,24 +70,21 @@ class TestShouldRedirectToOnboarding:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_returns_true_for_self_hosted_owner(
-        self, mock_user, mock_org_member, mock_owner_role
-    ):
-        """Test that self-hosted owners with incomplete onboarding are redirected."""
+    async def test_returns_true_for_self_hosted_super_admin(self, mock_user):
+        """Test that the super admin (first owner to accept TOS) is redirected."""
         mock_user.onboarding_completed = False
-        user_id = str(uuid.uuid4())
+        user_id = str(mock_user.id)
+
+        # Mock this user as the first owner in the org (super admin)
+        first_owner = MagicMock(spec=User)
+        first_owner.id = mock_user.id
 
         with (
             patch('server.routes.auth.DEPLOYMENT_MODE', 'self_hosted'),
             patch(
-                'server.routes.auth.OrgMemberStore.get_org_member_for_current_org',
+                'server.routes.auth.UserStore.get_first_owner_in_org',
                 new_callable=AsyncMock,
-                return_value=mock_org_member,
-            ),
-            patch(
-                'server.routes.auth.RoleStore.get_role_by_id',
-                new_callable=AsyncMock,
-                return_value=mock_owner_role,
+                return_value=first_owner,
             ),
         ):
             result = await _should_redirect_to_onboarding(user_id, mock_user)
@@ -128,24 +92,21 @@ class TestShouldRedirectToOnboarding:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_returns_false_for_self_hosted_admin(
-        self, mock_user, mock_org_member, mock_admin_role
-    ):
-        """Test that self-hosted admins are not redirected to onboarding."""
+    async def test_returns_false_for_self_hosted_non_super_admin_owner(self, mock_user):
+        """Test that owners who aren't the super admin are NOT redirected."""
         mock_user.onboarding_completed = False
-        user_id = str(uuid.uuid4())
+        user_id = str(mock_user.id)
+
+        # Mock a different user as the first owner (super admin)
+        first_owner = MagicMock(spec=User)
+        first_owner.id = uuid.uuid4()  # Different user
 
         with (
             patch('server.routes.auth.DEPLOYMENT_MODE', 'self_hosted'),
             patch(
-                'server.routes.auth.OrgMemberStore.get_org_member_for_current_org',
+                'server.routes.auth.UserStore.get_first_owner_in_org',
                 new_callable=AsyncMock,
-                return_value=mock_org_member,
-            ),
-            patch(
-                'server.routes.auth.RoleStore.get_role_by_id',
-                new_callable=AsyncMock,
-                return_value=mock_admin_role,
+                return_value=first_owner,
             ),
         ):
             result = await _should_redirect_to_onboarding(user_id, mock_user)
@@ -153,40 +114,15 @@ class TestShouldRedirectToOnboarding:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_returns_false_for_self_hosted_member(
-        self, mock_user, mock_org_member, mock_member_role
-    ):
-        """Test that self-hosted members are not redirected to onboarding."""
+    async def test_returns_false_for_self_hosted_when_no_owner_found(self, mock_user):
+        """Test that users are not redirected when no owner is found."""
         mock_user.onboarding_completed = False
-        user_id = str(uuid.uuid4())
+        user_id = str(mock_user.id)
 
         with (
             patch('server.routes.auth.DEPLOYMENT_MODE', 'self_hosted'),
             patch(
-                'server.routes.auth.OrgMemberStore.get_org_member_for_current_org',
-                new_callable=AsyncMock,
-                return_value=mock_org_member,
-            ),
-            patch(
-                'server.routes.auth.RoleStore.get_role_by_id',
-                new_callable=AsyncMock,
-                return_value=mock_member_role,
-            ),
-        ):
-            result = await _should_redirect_to_onboarding(user_id, mock_user)
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_returns_false_when_no_org_member(self, mock_user):
-        """Test that users without org membership are not redirected in self-hosted."""
-        mock_user.onboarding_completed = False
-        user_id = str(uuid.uuid4())
-
-        with (
-            patch('server.routes.auth.DEPLOYMENT_MODE', 'self_hosted'),
-            patch(
-                'server.routes.auth.OrgMemberStore.get_org_member_for_current_org',
+                'server.routes.auth.UserStore.get_first_owner_in_org',
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -196,27 +132,22 @@ class TestShouldRedirectToOnboarding:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_role_not_found(self, mock_user, mock_org_member):
-        """Test that users with missing role are not redirected in self-hosted."""
+    async def test_passes_current_org_id_to_get_first_owner(self, mock_user):
+        """Test that get_first_owner_in_org is called with user's current_org_id."""
         mock_user.onboarding_completed = False
-        user_id = str(uuid.uuid4())
+        user_id = str(mock_user.id)
+        mock_get_first_owner = AsyncMock(return_value=None)
 
         with (
             patch('server.routes.auth.DEPLOYMENT_MODE', 'self_hosted'),
             patch(
-                'server.routes.auth.OrgMemberStore.get_org_member_for_current_org',
-                new_callable=AsyncMock,
-                return_value=mock_org_member,
-            ),
-            patch(
-                'server.routes.auth.RoleStore.get_role_by_id',
-                new_callable=AsyncMock,
-                return_value=None,
+                'server.routes.auth.UserStore.get_first_owner_in_org',
+                mock_get_first_owner,
             ),
         ):
-            result = await _should_redirect_to_onboarding(user_id, mock_user)
+            await _should_redirect_to_onboarding(user_id, mock_user)
 
-        assert result is False
+        mock_get_first_owner.assert_called_once_with(mock_user.current_org_id)
 
 
 # --- Tests for /complete_onboarding endpoint ---
