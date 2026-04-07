@@ -201,9 +201,14 @@ class AutomationEventService:
 
         Uses Redis caching with 1-hour TTL. Caches both positive and negative
         results to avoid repeated DB queries for unclaimed orgs.
+
+        Note: GitHub org names are case-insensitive. We normalize to lowercase
+        for both cache keys and DB queries. This matches the OrgGitClaim schema
+        which stores git_organization as lowercase (enforced by GitOrgClaimRequest
+        validator in org_models.py).
         """
-        # GitHub org names are case-insensitive, normalize to lowercase for cache key
-        cache_key = f'{ORG_CLAIM_CACHE_PREFIX}:{git_org_name.lower()}'
+        normalized_org = git_org_name.lower()
+        cache_key = f'{ORG_CLAIM_CACHE_PREFIX}:{normalized_org}'
 
         # Check cache first
         cached = await self._get_cached_value(cache_key)
@@ -218,10 +223,10 @@ class AutomationEventService:
             )
             return UUID(cached)
 
-        # Cache miss - query DB
+        # Cache miss - query DB (using normalized lowercase org name)
         claim = await OrgGitClaimStore.get_claim_by_provider_and_git_org(
             provider='github',
-            git_organization=git_org_name.lower(),
+            git_organization=normalized_org,
         )
 
         # Cache the result (including negative results)
@@ -315,14 +320,18 @@ class AutomationEventService:
 
         Returns the cached string value, or None if not cached or Redis unavailable.
         Falls back to DB/API queries if Redis is unavailable (graceful degradation).
+
+        Warning: When Redis is unavailable, every webhook will hit the DB directly.
+        Monitor logs for 'Redis unavailable' warnings to detect degradation.
         """
         try:
             redis = getattr(sio.manager, 'redis', None)
             if not redis:
-                # TODO: Add metric for Redis unavailability to enable alerting
+                # Log at warning level - this is a significant degradation that
+                # will cause DB load. Monitor these logs for alerting.
                 logger.warning(
                     '[AutomationEventService] Redis unavailable for cache read, '
-                    'falling back to direct queries'
+                    'falling back to direct DB queries (this will increase DB load)'
                 )
                 return None
 
@@ -333,8 +342,10 @@ class AutomationEventService:
             # Redis returns bytes, decode to string
             return cached.decode('utf-8') if isinstance(cached, bytes) else cached
         except Exception as e:
-            # TODO: Add metric for cache errors to enable alerting
-            logger.warning(f'[AutomationEventService] Redis cache read error: {e}')
+            # Log at warning level - cache errors cause DB fallback
+            logger.warning(
+                f'[AutomationEventService] Redis cache read error (falling back to DB): {e}'
+            )
             return None
 
     async def _set_cached_value(
@@ -348,12 +359,12 @@ class AutomationEventService:
         try:
             redis = getattr(sio.manager, 'redis', None)
             if not redis:
-                # TODO: Add metric for Redis unavailability to enable alerting
+                # Silent failure - read path already logs the warning
                 return
 
             await redis.setex(cache_key, ttl_seconds, value)
         except Exception as e:
-            # TODO: Add metric for cache errors to enable alerting
+            # Log at warning level for visibility
             logger.warning(f'[AutomationEventService] Redis cache write error: {e}')
 
     def _sign_payload(self, payload_bytes: bytes) -> str:
@@ -410,7 +421,12 @@ class AutomationEventService:
                     timeout=aiohttp.ClientTimeout(total=AUTOMATION_SERVICE_TIMEOUT),
                 ) as resp:
                     if resp.status >= 400:
-                        body = await resp.json()
+                        # Try JSON first (expected interface), fall back to text
+                        # for infrastructure errors (502/503 from load balancer)
+                        try:
+                            body = await resp.json()
+                        except (aiohttp.ContentTypeError, ValueError):
+                            body = await resp.text()
                         logger.warning(
                             f'[AutomationEventService] Automation service returned '
                             f'{resp.status}: {body}'
