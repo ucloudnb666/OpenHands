@@ -1,15 +1,19 @@
-import { screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { createRoutesStub } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { renderWithProviders } from "../../../../test-utils";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { I18nextProvider } from "react-i18next";
+import i18n from "i18next";
 import OnboardingForm from "#/routes/onboarding-form";
 
 const mockMutate = vi.fn();
 const mockNavigate = vi.fn();
-const mockUseConfig = vi.fn();
 const mockUseMe = vi.fn();
 const mockTrackOnboardingCompleted = vi.fn();
+
+// Loader data set in beforeEach for each test suite
+let loaderData: { config: { app_mode: string; feature_flags: { deployment_mode: string } } };
 
 vi.mock("react-router", async (importOriginal) => {
   const original = await importOriginal<typeof import("react-router")>();
@@ -25,10 +29,6 @@ vi.mock("#/hooks/mutation/use-submit-onboarding", () => ({
   }),
 }));
 
-vi.mock("#/hooks/query/use-config", () => ({
-  useConfig: () => mockUseConfig(),
-}));
-
 vi.mock("#/hooks/query/use-me", () => ({
   useMe: () => mockUseMe(),
 }));
@@ -39,53 +39,71 @@ vi.mock("#/hooks/use-tracking", () => ({
   }),
 }));
 
-const renderOnboardingForm = () =>
-  renderWithProviders(
-    <MemoryRouter>
-      <OnboardingForm />
-    </MemoryRouter>,
+const renderOnboardingForm = async () => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
+  const RouterStub = createRoutesStub([
+    {
+      path: "/",
+      Component: OnboardingForm,
+      loader: () => loaderData,
+    },
+  ]);
+
+  const result = render(
+    <I18nextProvider i18n={i18n}>
+      <QueryClientProvider client={queryClient}>
+        <RouterStub initialEntries={["/"]} />
+      </QueryClientProvider>
+    </I18nextProvider>,
   );
+
+  // Wait for the component to render
+  await screen.findByTestId("onboarding-form");
+  return result;
+};
 
 describe("OnboardingForm - Cloud Mode", () => {
   beforeEach(() => {
     mockMutate.mockClear();
     mockNavigate.mockClear();
     mockTrackOnboardingCompleted.mockClear();
-    mockUseConfig.mockReturnValue({
-      data: {
+    loaderData = {
+      config: {
         app_mode: "saas",
         feature_flags: { deployment_mode: "cloud" },
       },
-      isLoading: false,
-    });
+    };
     // Cloud mode tracks all users, role doesn't matter
     mockUseMe.mockReturnValue({ data: { role: "member" } });
   });
 
-  it("should render with the correct test id", () => {
-    renderOnboardingForm();
+  it("should render with the correct test id", async () => {
+    await renderOnboardingForm();
 
     expect(screen.getByTestId("onboarding-form")).toBeInTheDocument();
   });
 
-  it("should render the first step initially", () => {
-    renderOnboardingForm();
+  it("should render the first step initially", async () => {
+    await renderOnboardingForm();
 
     expect(screen.getByTestId("step-header")).toBeInTheDocument();
     expect(screen.getByTestId("step-content")).toBeInTheDocument();
     expect(screen.getByTestId("step-actions")).toBeInTheDocument();
   });
 
-  it("should display step progress indicator with 3 bars for cloud mode", () => {
-    renderOnboardingForm();
+  it("should display step progress indicator with 3 bars for cloud mode", async () => {
+    await renderOnboardingForm();
 
     const stepHeader = screen.getByTestId("step-header");
     const progressBars = stepHeader.querySelectorAll(".rounded-full");
     expect(progressBars).toHaveLength(3);
   });
 
-  it("should have the Next button disabled when no option is selected", () => {
-    renderOnboardingForm();
+  it("should have the Next button disabled when no option is selected", async () => {
+    await renderOnboardingForm();
 
     const nextButton = screen.getByRole("button", { name: /next/i });
     expect(nextButton).toBeDisabled();
@@ -93,7 +111,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should enable the Next button when an option is selected", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     await user.click(screen.getByTestId("step-option-solo"));
 
@@ -103,7 +121,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should advance to the next step when Next is clicked", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // On step 1, first progress bar should be filled (bg-white)
     const stepHeader = screen.getByTestId("step-header");
@@ -120,7 +138,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should disable Next button again on new step until option is selected", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
@@ -131,7 +149,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should call submitOnboarding with selections when finishing the last step", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Step 1 - select org size (first step in saas mode - single select)
     await user.click(screen.getByTestId("step-option-org_2_10"));
@@ -157,7 +175,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should track onboarding completion to PostHog in cloud mode", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Complete the full cloud onboarding flow
     await user.click(screen.getByTestId("step-option-org_2_10"));
@@ -177,8 +195,8 @@ describe("OnboardingForm - Cloud Mode", () => {
     });
   });
 
-  it("should render 5 options on step 1 (org size question)", () => {
-    renderOnboardingForm();
+  it("should render 5 options on step 1 (org size question)", async () => {
+    await renderOnboardingForm();
 
     const options = screen
       .getAllByRole("button")
@@ -190,7 +208,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should preserve selections when navigating through steps", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Select org size on step 1 (single select)
     await user.click(screen.getByTestId("step-option-solo"));
@@ -216,7 +234,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should allow selecting multiple options on multi-select steps", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Step 1 - select org size (single select)
     await user.click(screen.getByTestId("step-option-solo"));
@@ -243,7 +261,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should allow deselecting options on multi-select steps", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Step 1 - select org size
     await user.click(screen.getByTestId("step-option-solo"));
@@ -271,7 +289,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should show all progress bars filled on the last step", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Navigate to step 3
     await user.click(screen.getByTestId("step-option-solo"));
@@ -286,8 +304,8 @@ describe("OnboardingForm - Cloud Mode", () => {
     expect(progressBars).toHaveLength(3);
   });
 
-  it("should not render the Back button on the first step", () => {
-    renderOnboardingForm();
+  it("should not render the Back button on the first step", async () => {
+    await renderOnboardingForm();
 
     const backButton = screen.queryByRole("button", { name: /back/i });
     expect(backButton).not.toBeInTheDocument();
@@ -295,7 +313,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should render the Back button on step 2", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     await user.click(screen.getByTestId("step-option-solo"));
     await user.click(screen.getByRole("button", { name: /next/i }));
@@ -306,7 +324,7 @@ describe("OnboardingForm - Cloud Mode", () => {
 
   it("should go back to the previous step when Back is clicked", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Navigate to step 2
     await user.click(screen.getByTestId("step-option-solo"));
@@ -334,25 +352,24 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
     mockMutate.mockClear();
     mockNavigate.mockClear();
     mockTrackOnboardingCompleted.mockClear();
-    mockUseConfig.mockReturnValue({
-      data: {
+    loaderData = {
+      config: {
         app_mode: "saas",
         feature_flags: { deployment_mode: "self_hosted" },
       },
-      isLoading: false,
-    });
+    };
     // Self-hosted mode only tracks org owners
     mockUseMe.mockReturnValue({ data: { role: "owner" } });
   });
 
-  it("should render with the correct test id", () => {
-    renderOnboardingForm();
+  it("should render with the correct test id", async () => {
+    await renderOnboardingForm();
 
     expect(screen.getByTestId("onboarding-form")).toBeInTheDocument();
   });
 
-  it("should display step progress indicator with 3 bars for self-hosted mode", () => {
-    renderOnboardingForm();
+  it("should display step progress indicator with 3 bars for self-hosted mode", async () => {
+    await renderOnboardingForm();
 
     // Self-hosted has 3 steps: org_name, org_size, use_case (role is cloud-only)
     const stepHeader = screen.getByTestId("step-header");
@@ -360,8 +377,8 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
     expect(progressBars).toHaveLength(3);
   });
 
-  it("should start with org_name question as first step with two input fields", () => {
-    renderOnboardingForm();
+  it("should start with org_name question as first step with two input fields", async () => {
+    await renderOnboardingForm();
 
     // The first step in self-hosted mode should be org_name with two inputs
     const orgNameInput = screen.getByTestId("form-input-org_name");
@@ -372,7 +389,7 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
 
   it("should call submitOnboarding with all selections including org_name when finishing", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Step 1 - enter org name and domain (input fields)
     const orgNameInput = screen.getByTestId("form-input-org_name");
@@ -402,7 +419,7 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
 
   it("should track onboarding completion in self-hosted mode", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Complete the full self-hosted onboarding flow (3 steps)
     const orgNameInput = screen.getByTestId("form-input-org_name");
@@ -428,7 +445,7 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
 
   it("should show all 3 progress bars filled on the last step", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Navigate through all 3 steps
     const orgNameInput = screen.getByTestId("form-input-org_name");
@@ -446,8 +463,8 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
     expect(progressBars).toHaveLength(3);
   });
 
-  it("should have Next button disabled when both org_name inputs are empty", () => {
-    renderOnboardingForm();
+  it("should have Next button disabled when both org_name inputs are empty", async () => {
+    await renderOnboardingForm();
 
     const nextButton = screen.getByRole("button", { name: /next/i });
     expect(nextButton).toBeDisabled();
@@ -455,7 +472,7 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
 
   it("should enable Next button when both org_name and org_domain are entered", async () => {
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     const orgNameInput = screen.getByTestId("form-input-org_name");
     const orgDomainInput = screen.getByTestId("form-input-org_domain");
@@ -471,7 +488,7 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
     mockUseMe.mockReturnValue({ data: { role: "member" } });
 
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Complete the full self-hosted onboarding flow (3 steps)
     const orgNameInput = screen.getByTestId("form-input-org_name");
@@ -498,7 +515,7 @@ describe("OnboardingForm - Self-Hosted Mode", () => {
     mockUseMe.mockReturnValue({ data: { role: "admin" } });
 
     const user = userEvent.setup();
-    renderOnboardingForm();
+    await renderOnboardingForm();
 
     // Complete the full self-hosted onboarding flow (3 steps)
     const orgNameInput = screen.getByTestId("form-input-org_name");
