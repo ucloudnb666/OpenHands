@@ -274,7 +274,10 @@ class SaasUserAuth(UserAuth):
         self._org_info_loaded = True
 
         try:
-            from server.auth.authorization import get_role_permissions, get_user_org_role
+            from server.auth.authorization import (
+                get_role_permissions,
+                get_user_org_role,
+            )
             from storage.org_store import OrgStore
             from storage.user_store import UserStore
 
