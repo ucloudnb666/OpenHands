@@ -102,6 +102,18 @@ class UserAuth(ABC):
         user: UserGitInfo = await client.get_user()
         return user
 
+    async def get_org_info(self) -> dict | None:
+        """Get organization info for the current user.
+
+        This is a SAAS-only feature. Returns None by default.
+        Override in SAAS implementations to return a dict with:
+        - org_id: str
+        - org_name: str
+        - role: str | None
+        - permissions: list[str]
+        """
+        return None
+
     @classmethod
     @abstractmethod
     async def get_instance(cls, request: Request) -> UserAuth:
