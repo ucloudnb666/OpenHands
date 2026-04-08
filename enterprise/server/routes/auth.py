@@ -633,68 +633,6 @@ async def logout(request: Request):
     return response
 
 
-@api_router.get('/me')
-async def get_current_user(request: Request):
-    """Get current authenticated user information including org role and permissions."""
-    try:
-        user_auth = await SaasUserAuth.get_instance(request)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='User not authenticated',
-        )
-
-    user_id = await user_auth.get_user_id()
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail='User not authenticated',
-        )
-
-    email = await user_auth.get_user_email()
-
-    # Get user and their current org
-    user = await UserStore.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='User not found',
-        )
-
-    from server.auth.authorization import get_role_permissions, get_user_org_role
-    from storage.org_store import OrgStore
-
-    # Get the current org
-    org = await OrgStore.get_org_by_id(user.current_org_id)
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail='Organization not found',
-        )
-
-    # Get user's role in the current org
-    role = await get_user_org_role(user_id, user.current_org_id)
-    role_name = role.name if role else None
-
-    # Get permissions for the role
-    permissions: list[str] = []
-    if role_name:
-        role_permissions = get_role_permissions(role_name)
-        permissions = [p.value for p in role_permissions]
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            'user_id': user_id,
-            'email': email,
-            'org_id': str(user.current_org_id),
-            'org_name': org.name,
-            'role': role_name,
-            'permissions': permissions,
-        },
-    )
-
-
 @api_router.get('/refresh-tokens', response_model=TokenResponse)
 async def refresh_tokens(
     request: Request,
