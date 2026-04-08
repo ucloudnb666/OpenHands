@@ -16,18 +16,14 @@ from fastapi.routing import Mount
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
-from openhands.agent_server.settings_router import (
-    settings_router as sdk_settings_router,
-)
 from openhands.app_server import v1_router
 from openhands.app_server.config import get_app_lifespan_service
 from openhands.app_server.status.status_router import router as health_router
 from openhands.integrations.service_types import AuthenticationError
-from openhands.server.dependencies import get_dependencies
 from openhands.server.routes.conversation import app as conversation_api_router
 from openhands.server.routes.feedback import app as feedback_api_router
 from openhands.server.routes.files import app as files_api_router
@@ -80,9 +76,6 @@ app = FastAPI(
     routes=[Mount(path='/mcp', app=mcp_app)],
 )
 
-settings_schema_router = APIRouter(prefix='/api', dependencies=get_dependencies())
-settings_schema_router.include_router(sdk_settings_router)
-
 
 @app.exception_handler(AuthenticationError)
 async def authentication_error_handler(request: Request, exc: AuthenticationError):
@@ -93,7 +86,6 @@ async def authentication_error_handler(request: Request, exc: AuthenticationErro
 
 
 app.include_router(public_api_router)
-app.include_router(settings_schema_router)
 app.include_router(files_api_router)
 app.include_router(security_api_router)
 app.include_router(feedback_api_router)
