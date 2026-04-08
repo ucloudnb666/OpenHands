@@ -4,7 +4,7 @@ Service for forwarding GitHub webhook events to the automation service.
 This service is optimized for high-traffic scenarios:
 1. Resolves GitHub org → OpenHands org_id (via cached OrgGitClaim lookup)
 2. For personal repos, resolves to personal org (via cached GitHub→Keycloak mapping)
-3. Forwards minimal payload to automation service (just org_id + raw_payload)
+3. Forwards minimal payload to automation service (just org_id + payload)
 4. Access control checks are deferred to automation execution time
 
 The lazy access control approach means:
@@ -173,7 +173,7 @@ class AutomationEventService:
     def _build_event_payload(
         self,
         org_context: OrgContext,
-        raw_payload: dict[str, Any],
+        payload: dict[str, Any],
     ) -> dict[str, Any]:
         """
         Build the minimal event payload to forward to the automation service.
@@ -186,7 +186,7 @@ class AutomationEventService:
                 'github_org': org_context.github_org,
                 'openhands_org_id': str(org_context.org_id),
             },
-            'raw_payload': raw_payload,
+            'payload': payload,
         }
 
     # =========================================================================

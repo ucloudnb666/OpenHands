@@ -311,7 +311,7 @@ class TestForwardGithubEvent:
 
             payload = call_args[0][1]
             assert payload['organization']['github_org'] == 'test-org'
-            assert 'raw_payload' in payload
+            assert 'payload' in payload
             # access_control should NOT be in payload (lazy evaluation)
             assert 'access_control' not in payload
 
@@ -437,9 +437,9 @@ class TestBuildEventPayload:
 
     def test_build_minimal_payload(self, mock_token_manager):
         """
-        GIVEN: Org context and raw payload
+        GIVEN: Org context and payload
         WHEN: _build_event_payload is called
-        THEN: Minimal payload with only org + raw_payload is returned
+        THEN: Minimal payload with only org + payload is returned
         """
         from server.services.automation_event_service import OrgContext
 
@@ -449,16 +449,16 @@ class TestBuildEventPayload:
             org_id=uuid.UUID('12345678-1234-5678-1234-567812345678'),
             github_org='test-org',
         )
-        raw_payload = {'action': 'opened', 'sender': {'login': 'user'}}
+        test_payload = {'action': 'opened', 'sender': {'login': 'user'}}
 
-        result = service._build_event_payload(org_context, raw_payload)
+        result = service._build_event_payload(org_context, test_payload)
 
         assert result == {
             'organization': {
                 'github_org': 'test-org',
                 'openhands_org_id': '12345678-1234-5678-1234-567812345678',
             },
-            'raw_payload': raw_payload,
+            'payload': test_payload,
         }
         # Verify NO access_control in payload
         assert 'access_control' not in result
@@ -476,7 +476,7 @@ class TestSendToAutomationService:
         """
 
         org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
-        payload = {'organization': {'github_org': 'test'}, 'raw_payload': {}}
+        payload = {'organization': {'github_org': 'test'}, 'payload': {}}
 
         mock_response = MagicMock()
         mock_response.status = 200
