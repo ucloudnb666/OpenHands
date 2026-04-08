@@ -303,10 +303,6 @@ flake8 = "*"
 enable = true
 style = "semver"
 
-[tool.uv]
-# Override litellm version for security fix CVE-2026-35030
-override-dependencies = ["litellm>=1.83.0"]
-
 [tool.autopep8]
 # autopep8 fights with mypy on line length issue
 ignore = [ "E501" ]
@@ -325,3 +321,7 @@ lint.pydocstyle.convention = "google"
 concurrency = [ "gevent" ]
 relative_files = true
 omit = [ "enterprise/tests/*", "**/test_*" ]
+
+[tool.uv]
+# Override litellm version for security fix CVE-2026-35030
+override-dependencies = [ "litellm>=1.83.0" ]
