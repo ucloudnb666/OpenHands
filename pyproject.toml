@@ -165,7 +165,7 @@ include = [
 python = "^3.12,<3.14"
 authlib = ">=1.6.9"                                # CVE-2026-27962 (fixed in 1.6.9)
 orjson = ">=3.11.6"                                # Pinned to fix CVE-2025-67221
-litellm = ">=1.74.3, !=1.64.4, !=1.67.*"           # avoid 1.64.4 (known bug) & 1.67.* (known bug #10272)
+litellm = ">=1.74.3, !=1.64.4, !=1.67.*"           # avoid 1.64.4 (known bug) & 1.67.* (known bug #10272); CVE-2026-35030 upgrade to >=1.83.0 via uv override
 openai = "2.8.0"                                   # Pin due to litellm incompatibility with >=1.100.0 (BerriAI/litellm#13711)
 aiohttp = ">=3.13.5"                               # Pin to avoid CVE-2026-22815 (vulnerable versions < 3.13.4)
 google-genai = "*"                                 # To use litellm with Gemini Pro API
@@ -302,6 +302,10 @@ flake8 = "*"
 [tool.poetry-dynamic-versioning]
 enable = true
 style = "semver"
+
+[tool.uv]
+# Override litellm version for security fix CVE-2026-35030
+override-dependencies = ["litellm>=1.83.0"]
 
 [tool.autopep8]
 # autopep8 fights with mypy on line length issue
