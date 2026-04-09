@@ -42,20 +42,10 @@ class AuthUserContext(UserContext):
             user_id = await self.get_user_id()
             settings = await self.user_auth.get_user_settings()
             assert settings is not None
-
-            # Build base user info from settings
-            user_info_data = {
-                'id': user_id,
+            user_info = UserInfo(
+                id=user_id,
                 **settings.model_dump(context={'expose_secrets': True}),
-            }
-            # Add org info if available (SAAS-only)
-            org_info = await self.user_auth.get_org_info()
-            if org_info:
-                user_info_data.update(org_info)
-                user_info_data['role'] = org_info.get('role')
-                user_info_data['permissions'] = org_info.get('permissions')
-
-            user_info = UserInfo(**user_info_data)
+            )
             self._user_info = user_info
         return user_info
 
