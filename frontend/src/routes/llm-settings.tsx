@@ -436,6 +436,7 @@ export function LlmSettingsScreen({
           schema,
           "llm.base_url",
         );
+        payload.search_api_key = DEFAULT_SETTINGS.search_api_key;
 
         if (hasAgentField) {
           payload.agent = getSchemaFieldDefaultValue(schema, "agent");
