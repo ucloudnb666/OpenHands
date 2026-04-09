@@ -537,6 +537,24 @@ class OpenHandsLoggerAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 
+_SENSITIVE_QS_RE = re.compile(r'(session_api_key=)[^&\s"]+')
+
+
+class _RedactAccessFilter(logging.Filter):
+    """Strip sensitive query-string params from uvicorn access log records."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if hasattr(record, 'request_line'):
+            record.request_line = _SENSITIVE_QS_RE.sub(r'\1***', record.request_line)
+        if record.args and isinstance(record.args, tuple):
+            record.args = tuple(
+                _SENSITIVE_QS_RE.sub(r'\1***', a) if isinstance(a, str) else a
+                for a in record.args
+            )
+        record.msg = _SENSITIVE_QS_RE.sub(r'\1***', str(record.msg))
+        return True
+
+
 def get_uvicorn_json_log_config() -> dict:
     """Returns a uvicorn log config dict for JSON structured logging.
 
@@ -573,6 +591,11 @@ def get_uvicorn_json_log_config() -> dict:
                 'fmt': '%(message)s %(levelname)s %(name)s %(asctime)s %(client_addr)s %(request_line)s %(status_code)s',
             },
         },
+        'filters': {
+            'redact_access': {
+                '()': 'openhands.core.logger._RedactAccessFilter',
+            },
+        },
         'handlers': {
             'default': {
                 'class': 'logging.StreamHandler',
@@ -584,6 +607,7 @@ def get_uvicorn_json_log_config() -> dict:
                 'class': 'logging.StreamHandler',
                 'level': 'INFO',
                 'formatter': 'json_access',
+                'filters': ['redact_access'],
                 'stream': 'ext://sys.stdout',
             },
         },
