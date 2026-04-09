@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import SecretStr
 from server.auth.token_manager import TokenManager
@@ -101,6 +102,31 @@ class SaasSettingsStore(SettingsStore):
         if org_member.has_custom_llm_api_key:
             return org_member.llm_api_key
         return org.llm_api_key or org_member.llm_api_key
+
+    @staticmethod
+    def _get_persisted_agent_settings(item: Settings) -> dict[str, Any]:
+        normalized_agent_settings = item.normalized_agent_settings(
+            strip_secret_values=True
+        )
+        effective_agent_settings = {
+            key: value
+            for key, value in normalized_agent_settings.items()
+            if key not in {'llm.api_key', 'mcp_config'}
+        }
+
+        for key, raw_value in item.raw_agent_settings.items():
+            if key in {'schema_version', 'llm.api_key', 'mcp_config'}:
+                continue
+            if raw_value is None:
+                effective_agent_settings[key] = None
+                continue
+
+            normalized_value = item.get_agent_setting(key)
+            effective_agent_settings[key] = (
+                raw_value if normalized_value is None else normalized_value
+            )
+
+        return effective_agent_settings
 
     async def load(self) -> Settings | None:
         user = await UserStore.get_user_by_id(self.user_id)
@@ -231,14 +257,7 @@ class SaasSettingsStore(SettingsStore):
                     item, str(org_id), openhands_type=is_openhands_model(llm_model)
                 )
 
-            normalized_agent_settings = item.normalized_agent_settings(
-                strip_secret_values=True
-            )
-            effective_agent_settings = {
-                key: value
-                for key, value in normalized_agent_settings.items()
-                if key not in {'llm.api_key', 'mcp_config'}
-            }
+            effective_agent_settings = self._get_persisted_agent_settings(item)
             org.agent_settings = merge_agent_settings(
                 OrgStore.get_agent_settings_from_org(org),
                 effective_agent_settings,

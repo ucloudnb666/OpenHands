@@ -279,6 +279,21 @@ def test_apply_payload_clears_secrets_when_explicitly_null_or_empty():
     assert 'llm.api_key' not in result.raw_agent_settings
 
 
+def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
+    """Explicit null non-secret SDK values should survive for inherited-settings clearing."""
+    existing = _make_settings(
+        **{
+            'llm.model': 'openai/gpt-4o',
+            'llm.base_url': 'https://custom.example/v1',
+        }
+    )
+
+    result = _apply_settings_payload({'llm.base_url': None}, existing, _TEST_SDK_SCHEMA)
+
+    assert 'llm.base_url' in result.raw_agent_settings
+    assert result.raw_agent_settings['llm.base_url'] is None
+
+
 def test_apply_payload_mcp_preserves_llm_settings():
     """Non-LLM payloads (e.g. MCP config) should not affect existing LLM settings."""
     existing = _make_settings(

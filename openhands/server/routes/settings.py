@@ -99,6 +99,7 @@ def _apply_settings_payload(
     schema_field_keys = _get_schema_field_keys(agent_schema)
     secret_field_keys = _get_schema_secret_field_keys(agent_schema)
     agent_settings = dict(settings.raw_agent_settings)
+    explicit_null_sdk_keys: set[str] = set()
 
     for key, value in payload.items():
         if key in schema_field_keys:
@@ -110,7 +111,8 @@ def _apply_settings_payload(
                 else:
                     agent_settings[key] = value
             elif value is None:
-                agent_settings.pop(key, None)
+                agent_settings[key] = None
+                explicit_null_sdk_keys.add(key)
             else:
                 agent_settings[key] = value
         elif key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
@@ -118,6 +120,13 @@ def _apply_settings_payload(
 
     object.__setattr__(settings, 'raw_agent_settings', agent_settings)
     settings.normalize_agent_settings()
+
+    if explicit_null_sdk_keys:
+        normalized_agent_settings = dict(settings.raw_agent_settings)
+        for key in explicit_null_sdk_keys:
+            normalized_agent_settings[key] = None
+        object.__setattr__(settings, 'raw_agent_settings', normalized_agent_settings)
+
     return settings
 
 
