@@ -9,7 +9,6 @@ import { useAgentStore } from "#/stores/agent-store";
 import { AgentState } from "#/types/agent-state";
 
 import { EventHandler } from "../wrapper/event-handler";
-import { useConversationConfig } from "#/hooks/query/use-conversation-config";
 
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useTaskPolling } from "#/hooks/query/use-task-polling";
@@ -28,7 +27,6 @@ import { I18nKey } from "#/i18n/declaration";
 import { useEventStore } from "#/stores/use-event-store";
 
 function AppContent() {
-  useConversationConfig();
   const { t } = useTranslation();
   const { conversationId } = useConversationId();
   const clearEvents = useEventStore((state) => state.clearEvents);
