@@ -133,6 +133,16 @@ async function selectProvider(providerLabel: "OpenHands" | "OpenAI") {
   return providerInput;
 }
 
+async function selectModel(modelLabel: string) {
+  const modelInput = screen.getByTestId("llm-model-input");
+  await userEvent.click(modelInput);
+  await userEvent.click(await screen.findByText(modelLabel));
+  await waitFor(() => {
+    expect(modelInput).toHaveValue(modelLabel);
+  });
+  return modelInput;
+}
+
 function renderLlmSettingsScreen({
   appMode = "oss",
   organizationId = "1",
@@ -202,14 +212,14 @@ describe("LlmSettingsScreen", () => {
     expect(screen.getByTestId("save-button")).toBeInTheDocument();
   });
 
-  it("opens advanced view when legacy advanced LLM settings are already set", async () => {
+  it("opens advanced view when a custom advanced LLM base URL is already set", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
         llm_model: "openai/gpt-4o",
-        llm_base_url: "https://api.openai.com/v1",
+        llm_base_url: "https://custom.example/v1",
         agent_settings: {
           "llm.model": "openai/gpt-4o",
-          "llm.base_url": "https://api.openai.com/v1",
+          "llm.base_url": "https://custom.example/v1",
         },
       }),
     );
@@ -625,6 +635,72 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
+  it("keeps the basic view after saving a basic model change when refetch includes a provider base URL", async () => {
+    let persistedSettings = buildSettingsWithAdvancedToggle();
+
+    const getSettingsSpy = vi
+      .spyOn(SettingsService, "getSettings")
+      .mockImplementation(async () => structuredClone(persistedSettings));
+    const saveSettingsSpy = vi
+      .spyOn(SettingsService, "saveSettings")
+      .mockImplementation(async (payload) => {
+        const nextAgentSettings = {
+          ...persistedSettings.agent_settings,
+        } as NonNullable<Settings["agent_settings"]>;
+
+        Object.entries(payload).forEach(([key, value]) => {
+          if (key.includes(".") || key === "agent" || key === "mcp_config") {
+            nextAgentSettings[key] = value as SettingsValue;
+          }
+        });
+
+        persistedSettings = buildSettingsWithAdvancedToggle({
+          ...persistedSettings,
+          llm_model: "openai/gpt-4o",
+          llm_base_url: "https://api.openai.com/v1",
+          agent_settings: {
+            ...nextAgentSettings,
+            "llm.model": "openai/gpt-4o",
+            "llm.base_url": "https://api.openai.com/v1",
+          },
+        });
+
+        return true;
+      });
+
+    renderLlmSettingsScreen({ appMode: "oss" });
+
+    await screen.findByTestId("llm-settings-form-basic");
+    await selectProvider("OpenAI");
+    await selectModel("gpt-4o");
+    await userEvent.type(
+      await screen.findByTestId("llm-api-key-input"),
+      "test-api-key",
+    );
+    await userEvent.click(screen.getByTestId("save-button"));
+
+    await waitFor(() => {
+      expect(saveSettingsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          "llm.model": "openai/gpt-4o",
+          "llm.api_key": "test-api-key",
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(getSettingsSpy).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+
 
   it("submits advanced form values through SDK setting keys", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
@@ -632,7 +708,7 @@ describe("LlmSettingsScreen", () => {
         llm_model: "openai/gpt-4o",
         agent_settings: {
           "llm.model": "openai/gpt-4o",
-          "llm.base_url": "https://api.openai.com/v1",
+          "llm.base_url": "https://custom.example/v1",
         },
       }),
     );
@@ -646,7 +722,7 @@ describe("LlmSettingsScreen", () => {
     await userEvent.type(baseUrlInput, "/extra");
 
     await waitFor(() => {
-      expect(baseUrlInput).toHaveValue("https://api.openai.com/v1/extra");
+      expect(baseUrlInput).toHaveValue("https://custom.example/v1/extra");
       expect(screen.getByTestId("save-button")).not.toBeDisabled();
     });
 
@@ -655,7 +731,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.base_url": "https://api.openai.com/v1/extra",
+          "llm.base_url": "https://custom.example/v1/extra",
         }),
       );
     });

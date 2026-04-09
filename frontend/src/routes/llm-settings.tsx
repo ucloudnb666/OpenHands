@@ -62,6 +62,38 @@ const getSchemaFieldDefaultValue = (
     .flatMap((section) => section.fields)
     .find((field) => field.key === fieldKey)?.default ?? null;
 
+const KNOWN_PROVIDER_DEFAULT_BASE_URLS: Partial<Record<string, Set<string>>> = {
+  openai: new Set(["https://api.openai.com", "https://api.openai.com/v1"]),
+  openhands: new Set([
+    "https://llm-proxy.app.all-hands.dev",
+    "https://llm-proxy.app.all-hands.dev/v1",
+  ]),
+};
+
+const normalizeBaseUrl = (baseUrl: string) => {
+  try {
+    const parsedUrl = new URL(baseUrl);
+    const normalizedPath = parsedUrl.pathname.replace(/\/+$/, "") || "";
+    return `${parsedUrl.origin}${normalizedPath}`;
+  } catch {
+    return baseUrl.trim().replace(/\/+$/, "");
+  }
+};
+
+const isProviderDefaultBaseUrl = (model: string, baseUrl: string) => {
+  const { provider } = extractModelAndProvider(model);
+  if (!provider) {
+    return false;
+  }
+
+  const knownDefaults = KNOWN_PROVIDER_DEFAULT_BASE_URLS[provider];
+  if (!knownDefaults) {
+    return false;
+  }
+
+  return knownDefaults.has(normalizeBaseUrl(baseUrl));
+};
+
 interface OpenHandsApiKeyHelpProps {
   testId: string;
 }
@@ -174,7 +206,10 @@ export function LlmSettingsScreen({
       const hasCustomModel = resources?.models
         ? isCustomModel(resources.models, currentModel)
         : false;
-      const hasCustomBaseUrl = Boolean(currentSettings.llm_base_url?.trim());
+      const trimmedBaseUrl = currentSettings.llm_base_url?.trim() ?? "";
+      const hasCustomBaseUrl =
+        trimmedBaseUrl.length > 0 &&
+        !isProviderDefaultBaseUrl(currentModel, trimmedBaseUrl);
       const hasSearchApiKey = currentSettings.search_api_key_set === true;
 
       return hasCustomModel || hasCustomBaseUrl || hasSearchApiKey
