@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { organizationService } from "#/api/organization-service/organization-service.api";
 import SettingsService from "#/api/settings-service/settings-service.api";
 import {
   MOCK_DEFAULT_USER_SETTINGS,
@@ -148,11 +149,13 @@ function renderLlmSettingsScreen({
   organizationId = "1",
   meData,
   organizations,
+  scope = "personal",
 }: {
   appMode?: "oss" | "saas";
   organizationId?: string;
   meData?: OrganizationMember;
   organizations?: Organization[];
+  scope?: "personal" | "org";
 } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -180,7 +183,7 @@ function renderLlmSettingsScreen({
     });
   }
 
-  return render(<LlmSettingsScreen />, {
+  return render(<LlmSettingsScreen scope={scope} />, {
     wrapper: ({ children }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
@@ -415,7 +418,9 @@ describe("LlmSettingsScreen", () => {
   });
 
   it("resets hidden advanced and all settings back to defaults when saving basic view", async () => {
-    const schema = structuredClone(MOCK_DEFAULT_USER_SETTINGS.agent_settings_schema!);
+    const schema = structuredClone(
+      MOCK_DEFAULT_USER_SETTINGS.agent_settings_schema!,
+    );
     const llmSection = schema.sections.find((section) => section.key === "llm");
 
     if (!llmSection) {
@@ -573,6 +578,148 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
+  it("keeps the basic view after save on SaaS personal settings when an inherited org search API key remains set on refetch", async () => {
+    let persistedSettings = buildSettingsWithAdvancedToggle({
+      llm_model: "openai/gpt-4o",
+      search_api_key_set: true,
+      agent_settings: {
+        "llm.model": "openai/gpt-4o",
+      },
+    });
+
+    const getSettingsSpy = vi
+      .spyOn(SettingsService, "getSettings")
+      .mockImplementation(async () => structuredClone(persistedSettings));
+    const saveSettingsSpy = vi
+      .spyOn(SettingsService, "saveSettings")
+      .mockImplementation(async (payload) => {
+        const nextAgentSettings = {
+          ...persistedSettings.agent_settings,
+        } as NonNullable<Settings["agent_settings"]>;
+
+        Object.entries(payload).forEach(([key, value]) => {
+          if (key.includes(".") || key === "agent" || key === "mcp_config") {
+            nextAgentSettings[key] = value as SettingsValue;
+          }
+        });
+
+        persistedSettings = buildSettingsWithAdvancedToggle({
+          ...persistedSettings,
+          search_api_key: "",
+          search_api_key_set: true,
+          agent_settings: nextAgentSettings,
+        });
+
+        return true;
+      });
+
+    renderLlmSettingsScreen({ appMode: "saas" });
+
+    await screen.findByTestId("llm-settings-form-basic");
+
+    const apiKeyInput = await screen.findByTestId("llm-api-key-input");
+    await userEvent.type(apiKeyInput, "test-api-key");
+    await userEvent.click(screen.getByTestId("save-button"));
+
+    await waitFor(() => {
+      expect(saveSettingsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          "llm.api_key": "test-api-key",
+        }),
+      );
+    });
+
+    const payload = saveSettingsSpy.mock.calls[0]?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(payload).not.toHaveProperty("search_api_key");
+
+    await waitFor(() => {
+      expect(getSettingsSpy).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not clear the hidden search API key on SaaS org settings when saving basic view", async () => {
+    let persistedSettings = buildSettingsWithAdvancedToggle({
+      llm_model: "openai/gpt-4o",
+      llm_base_url: "https://custom.example/v1",
+      search_api_key: "****1234",
+      agent_settings: {
+        "llm.model": "openai/gpt-4o",
+        "llm.base_url": "https://custom.example/v1",
+      },
+    });
+
+    const getOrganizationSettingsSpy = vi
+      .spyOn(organizationService, "getOrganizationAgentSettings")
+      .mockImplementation(async () => structuredClone(persistedSettings));
+    const saveOrganizationSettingsSpy = vi
+      .spyOn(organizationService, "saveOrganizationAgentSettings")
+      .mockImplementation(async (payload) => {
+        const nextAgentSettings = {
+          ...persistedSettings.agent_settings,
+        } as NonNullable<Settings["agent_settings"]>;
+
+        Object.entries(payload).forEach(([key, value]) => {
+          if (key.includes(".") || key === "agent" || key === "mcp_config") {
+            nextAgentSettings[key] = value as SettingsValue;
+          }
+        });
+
+        persistedSettings = buildSettingsWithAdvancedToggle({
+          ...persistedSettings,
+          llm_base_url: "",
+          search_api_key: "****1234",
+          agent_settings: nextAgentSettings,
+        });
+
+        return persistedSettings;
+      });
+
+    renderLlmSettingsScreen({ appMode: "saas", scope: "org" });
+
+    await screen.findByTestId("llm-settings-form-advanced");
+    await userEvent.click(screen.getByTestId("sdk-section-basic-toggle"));
+
+    const apiKeyInput = await screen.findByTestId("llm-api-key-input");
+    await userEvent.type(apiKeyInput, "test-api-key");
+    await userEvent.click(screen.getByTestId("save-button"));
+
+    await waitFor(() => {
+      expect(saveOrganizationSettingsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          "llm.api_key": "test-api-key",
+          "llm.base_url": null,
+        }),
+      );
+    });
+
+    const payload = saveOrganizationSettingsSpy.mock.calls[0]?.at(0) as Record<
+      string,
+      unknown
+    >;
+    expect(payload).not.toHaveProperty("search_api_key");
+
+    await waitFor(() => {
+      expect(getOrganizationSettingsSpy).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it("keeps the basic view after save when a stale legacy base URL lingers on refetch", async () => {
     let persistedSettings = buildSettingsWithAdvancedToggle({
       llm_base_url: "https://stale.example/v1",
@@ -715,15 +862,14 @@ describe("LlmSettingsScreen", () => {
 
     await waitFor(() => {
       expect(searchApiKeyInput).toHaveValue("a");
-      expect(screen.getByTestId("llm-settings-form-advanced")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("llm-settings-form-advanced"),
+      ).toBeInTheDocument();
       expect(
         screen.queryByTestId("llm-settings-form-basic"),
       ).not.toBeInTheDocument();
     });
   });
-
-
-
 
   it("submits advanced form values through SDK setting keys", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(

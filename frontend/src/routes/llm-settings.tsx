@@ -210,13 +210,14 @@ export function LlmSettingsScreen({
       const hasCustomBaseUrl =
         trimmedBaseUrl.length > 0 &&
         !isProviderDefaultBaseUrl(currentModel, trimmedBaseUrl);
-      const hasSearchApiKey = currentSettings.search_api_key_set === true;
+      const hasVisibleSearchApiKey =
+        !isSaasMode && currentSettings.search_api_key_set === true;
 
-      return hasCustomModel || hasCustomBaseUrl || hasSearchApiKey
+      return hasCustomModel || hasCustomBaseUrl || hasVisibleSearchApiKey
         ? "all"
         : "basic";
     },
-    [resources?.models],
+    [isSaasMode, resources?.models],
   );
 
   const buildHeader = React.useCallback(
@@ -444,7 +445,7 @@ export function LlmSettingsScreen({
     ) => {
       const payload = { ...basePayload };
 
-      if (searchApiKeyDirty) {
+      if (!isSaasMode && searchApiKeyDirty) {
         payload.search_api_key = searchApiKey.trim();
       }
 
@@ -471,7 +472,10 @@ export function LlmSettingsScreen({
           schema,
           "llm.base_url",
         );
-        payload.search_api_key = DEFAULT_SETTINGS.search_api_key;
+
+        if (!isSaasMode) {
+          payload.search_api_key = DEFAULT_SETTINGS.search_api_key;
+        }
 
         if (hasAgentField) {
           payload.agent = getSchemaFieldDefaultValue(schema, "agent");
