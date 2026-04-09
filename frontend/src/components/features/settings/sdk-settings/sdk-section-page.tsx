@@ -31,6 +31,8 @@ import {
 import { SchemaField } from "./schema-field";
 import { ViewToggle } from "./view-toggle";
 
+const EMPTY_EXCLUDE_KEYS = new Set<string>();
+
 export interface SdkSectionHeaderProps {
   values: SettingsFormValues;
   isDisabled: boolean;
@@ -49,7 +51,7 @@ export interface SdkSectionHeaderProps {
  */
 export function SdkSectionPage({
   sectionKeys,
-  excludeKeys = new Set<string>(),
+  excludeKeys = EMPTY_EXCLUDE_KEYS,
   scope = "personal",
   header,
   extraDirty = false,
@@ -97,29 +99,46 @@ export function SdkSectionPage({
   const [values, setValues] = React.useState<SettingsFormValues>({});
   const [dirty, setDirty] = React.useState<SettingsDirtyState>({});
 
+  const sectionKeysSignature = React.useMemo(
+    () => JSON.stringify(sectionKeys),
+    [sectionKeys],
+  );
+  const stableSectionKeys = React.useMemo(
+    () => JSON.parse(sectionKeysSignature) as string[],
+    [sectionKeysSignature],
+  );
+
   // Build a filtered schema containing only the requested sections
   const filteredSchema = React.useMemo(() => {
     if (!schema) return null;
-    const sectionSet = new Set(sectionKeys);
+    const sectionSet = new Set(stableSectionKeys);
     return {
       ...schema,
       sections: schema.sections.filter((s) => sectionSet.has(s.key)),
     };
-  }, [schema, sectionKeys]);
+  }, [schema, stableSectionKeys]);
 
   const showAdvanced = hasAdvancedSettings(filteredSchema);
   const showAll = hasMinorSettings(filteredSchema);
 
-  React.useEffect(() => {
-    if (!settings || !filteredSchema) return;
-    setValues(buildInitialSettingsFormValues(settings, filteredSchema));
-    setDirty({});
-    setView(
-      getInitialView
-        ? getInitialView(settings, filteredSchema)
-        : inferInitialView(settings, filteredSchema),
-    );
+  const initialValues = React.useMemo(() => {
+    if (!settings || !filteredSchema) return null;
+    return buildInitialSettingsFormValues(settings, filteredSchema);
+  }, [settings, filteredSchema]);
+
+  const initialView = React.useMemo(() => {
+    if (!settings || !filteredSchema) return null;
+    return getInitialView
+      ? getInitialView(settings, filteredSchema)
+      : inferInitialView(settings, filteredSchema);
   }, [settings, filteredSchema, getInitialView]);
+
+  React.useEffect(() => {
+    if (!initialValues || !initialView) return;
+    setValues(initialValues);
+    setDirty({});
+    setView(initialView);
+  }, [initialValues, initialView]);
 
   const visibleSections = React.useMemo(() => {
     if (!filteredSchema) return [];

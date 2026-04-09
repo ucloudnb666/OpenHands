@@ -700,6 +700,29 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
+  it("keeps the advanced view while typing into the search API key field", async () => {
+    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+      buildSettingsWithAdvancedToggle(),
+    );
+
+    renderLlmSettingsScreen({ appMode: "oss" });
+
+    await screen.findByTestId("llm-settings-form-basic");
+    await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
+
+    const searchApiKeyInput = await screen.findByTestId("search-api-key-input");
+    await userEvent.type(searchApiKeyInput, "a");
+
+    await waitFor(() => {
+      expect(searchApiKeyInput).toHaveValue("a");
+      expect(screen.getByTestId("llm-settings-form-advanced")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-basic"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+
 
 
   it("submits advanced form values through SDK setting keys", async () => {

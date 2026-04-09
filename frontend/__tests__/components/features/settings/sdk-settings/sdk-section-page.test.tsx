@@ -163,6 +163,95 @@ describe("SdkSectionPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("preserves the selected view when parent rerenders with the same settings", async () => {
+    const schema: NonNullable<Settings["agent_settings_schema"]> = {
+      model_name: "AgentSettings",
+      sections: [
+        {
+          key: "llm",
+          label: "LLM",
+          fields: [
+            {
+              key: "llm.model",
+              label: "Model",
+              section: "llm",
+              section_label: "LLM",
+              value_type: "string",
+              default: "openhands/claude-opus-4-5-20251101",
+              choices: [],
+              depends_on: [],
+              prominence: "critical",
+              secret: false,
+              required: true,
+            },
+            {
+              key: "llm.base_url",
+              label: "Base URL",
+              section: "llm",
+              section_label: "LLM",
+              value_type: "string",
+              default: null,
+              choices: [],
+              depends_on: [],
+              prominence: "major",
+              secret: false,
+              required: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+      buildSettings({
+        agent_settings_schema: schema,
+        agent_settings: {
+          "llm.model": "openhands/claude-opus-4-5-20251101",
+        },
+      }),
+    );
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+      },
+    });
+
+    function Wrapper() {
+      const [externalValue, setExternalValue] = React.useState("");
+
+      return (
+        <SdkSectionPage
+          sectionKeys={["llm"]}
+          header={() => (
+            <input
+              data-testid="external-state-input"
+              value={externalValue}
+              onChange={(event) => setExternalValue(event.target.value)}
+            />
+          )}
+        />
+      );
+    }
+
+    render(<Wrapper />, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await screen.findByTestId("sdk-section-advanced-toggle");
+    await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
+    await screen.findByTestId("sdk-settings-llm.base_url");
+
+    await userEvent.type(screen.getByTestId("external-state-input"), "a");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sdk-settings-llm.base_url")).toBeInTheDocument();
+    });
+  });
+
+
   it("shows the all toggle instead of an empty advanced tier for minor-only schemas", async () => {
     const schema: NonNullable<Settings["agent_settings_schema"]> = {
       model_name: "AgentSettings",
