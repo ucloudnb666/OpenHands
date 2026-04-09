@@ -1,6 +1,7 @@
 from types import MappingProxyType
 
 from github import Auth, Github, GithubIntegration
+from lmnr import Laminar
 from integrations.github.data_collector import GitHubDataCollector
 from integrations.github.github_solvability import summarize_issue_solvability
 from integrations.github.github_view import (
@@ -22,6 +23,8 @@ from integrations.utils import (
     CONVERSATION_URL,
     ENABLE_SOLVABILITY_ANALYSIS,
     HOST_URL,
+    LAMINAR_ENABLED,
+    LAMINAR_PROJECT_API_KEY,
     OPENHANDS_RESOLVER_TEMPLATES_DIR,
     get_session_expired_message,
     get_user_not_found_message,
@@ -329,6 +332,16 @@ class GithubManager(Manager[GithubViewType]):
             GithubCallbackProcessor,
         )
 
+        # Initialize Laminar if enabled
+        laminar_span_context = None
+        if LAMINAR_ENABLED:
+            try:
+                Laminar.initialize(project_api_key=LAMINAR_PROJECT_API_KEY)
+                laminar_span_context = Laminar.get_laminar_span_context()
+                logger.info('[Github] Laminar initialized for observability')
+            except Exception as e:
+                logger.warning(f'[Github] Failed to initialize Laminar: {e}')
+
         try:
             msg_info: str = ''
 
@@ -389,12 +402,42 @@ class GithubManager(Manager[GithubViewType]):
                     github_view.user_info.keycloak_user_id, self.token_manager
                 )
 
-                await github_view.create_new_conversation(
-                    self.jinja_env,
-                    secret_store.provider_tokens,
-                    convo_metadata,
-                    saas_user_auth,
-                )
+                # Set up Laminar tracing if enabled
+                if LAMINAR_ENABLED and laminar_span_context:
+                    try:
+                        with Laminar.start_as_current_span(
+                            name='github-resolver',
+                            parent_span_context=laminar_span_context,
+                        ):
+                            Laminar.set_trace_metadata({
+                                'source': 'github',
+                                'repo': github_view.full_repo_name,
+                                'issue_number': str(github_view.issue_number),
+                                'username': user_info.username,
+                                'conversation_id': github_view.conversation_id,
+                            })
+                            await github_view.create_new_conversation(
+                                self.jinja_env,
+                                secret_store.provider_tokens,
+                                convo_metadata,
+                                saas_user_auth,
+                            )
+                    except Exception as e:
+                        logger.warning(f'[Github] Laminar span error: {e}')
+                        # Fall back to non-Laminar execution
+                        await github_view.create_new_conversation(
+                            self.jinja_env,
+                            secret_store.provider_tokens,
+                            convo_metadata,
+                            saas_user_auth,
+                        )
+                else:
+                    await github_view.create_new_conversation(
+                        self.jinja_env,
+                        secret_store.provider_tokens,
+                        convo_metadata,
+                        saas_user_auth,
+                    )
 
                 conversation_id = github_view.conversation_id
 
@@ -458,3 +501,10 @@ class GithubManager(Manager[GithubViewType]):
             await self.data_collector.save_data(github_view)
         except Exception:
             logger.warning('[Github]: Error saving interaction data', exc_info=True)
+
+        # Flush Laminar traces if enabled
+        if LAMINAR_ENABLED:
+            try:
+                Laminar.flush()
+            except Exception as e:
+                logger.warning(f'[Github] Error flushing Laminar traces: {e}')
