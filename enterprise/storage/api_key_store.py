@@ -51,7 +51,11 @@ class ApiKeyStore:
         return f'{cls.SYSTEM_KEY_NAME_PREFIX}{name}'
 
     async def create_api_key(
-        self, user_id: str, name: str | None = None, expires_at: datetime | None = None
+        self,
+        user_id: str,
+        name: str | None = None,
+        expires_at: datetime | None = None,
+        org_id: UUID | None = None,
     ) -> str:
         """Create a new API key for a user.
 
@@ -60,15 +64,19 @@ class ApiKeyStore:
             name: Optional name for the key
             expires_at: Expiration datetime in UTC. Timezone info is stripped before
                 writing to the TIMESTAMP WITHOUT TIME ZONE column.
+            org_id: Optional organization ID. If not provided, uses User.current_org_id.
 
         Returns:
             The generated API key
         """
         api_key = self.generate_api_key()
-        user = await UserStore.get_user_by_id(user_id)
-        if user is None:
-            raise ValueError(f'User not found: {user_id}')
-        org_id = user.current_org_id
+
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        if org_id is None:
+            user = await UserStore.get_user_by_id(user_id)
+            if user is None:
+                raise ValueError(f'User not found: {user_id}')
+            org_id = user.current_org_id
 
         # Column is TIMESTAMP WITHOUT TIME ZONE; strip tzinfo before writing.
         if expires_at is not None and expires_at.tzinfo is not None:
@@ -281,17 +289,25 @@ class ApiKeyStore:
 
             return True
 
-    async def list_api_keys(self, user_id: str) -> list[ApiKey]:
+    async def list_api_keys(
+        self, user_id: str, org_id: UUID | None = None
+    ) -> list[ApiKey]:
         """List all user-visible API keys for a user.
 
         This excludes:
         - System keys (name starts with __SYSTEM__:) - created by internal services
         - MCP_API_KEY - internal MCP key
+
+        Args:
+            user_id: The ID of the user
+            org_id: Optional organization ID. If not provided, uses User.current_org_id.
         """
-        user = await UserStore.get_user_by_id(user_id)
-        if user is None:
-            raise ValueError(f'User not found: {user_id}')
-        org_id = user.current_org_id
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        if org_id is None:
+            user = await UserStore.get_user_by_id(user_id)
+            if user is None:
+                raise ValueError(f'User not found: {user_id}')
+            org_id = user.current_org_id
 
         async with a_session_maker() as session:
             result = await session.execute(
@@ -308,11 +324,21 @@ class ApiKeyStore:
                 if key.name != 'MCP_API_KEY' and not self.is_system_key_name(key.name)
             ]
 
-    async def retrieve_mcp_api_key(self, user_id: str) -> str | None:
-        user = await UserStore.get_user_by_id(user_id)
-        if user is None:
-            raise ValueError(f'User not found: {user_id}')
-        org_id = user.current_org_id
+    async def retrieve_mcp_api_key(
+        self, user_id: str, org_id: UUID | None = None
+    ) -> str | None:
+        """Retrieve the MCP API key for a user.
+
+        Args:
+            user_id: The ID of the user
+            org_id: Optional organization ID. If not provided, uses User.current_org_id.
+        """
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        if org_id is None:
+            user = await UserStore.get_user_by_id(user_id)
+            if user is None:
+                raise ValueError(f'User not found: {user_id}')
+            org_id = user.current_org_id
 
         async with a_session_maker() as session:
             result = await session.execute(

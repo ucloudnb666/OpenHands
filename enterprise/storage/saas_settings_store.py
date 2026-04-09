@@ -4,7 +4,8 @@ import binascii
 import hashlib
 import uuid
 from base64 import b64decode, b64encode
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import UUID
 
 from cryptography.fernet import Fernet
 from pydantic import SecretStr
@@ -33,6 +34,7 @@ from openhands.utils.llm import is_openhands_model
 class SaasSettingsStore(SettingsStore):
     user_id: str
     config: OpenHandsConfig
+    org_id: UUID | None = field(default=None)
     ENCRYPT_VALUES = ['llm_api_key', 'llm_api_key_for_byor', 'search_api_key']
 
     async def _get_user_settings_by_keycloak_id_async(
@@ -75,7 +77,8 @@ class SaasSettingsStore(SettingsStore):
             logger.error(f'User not found for ID {self.user_id}')
             return None
 
-        org_id = user.current_org_id
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        org_id = self.org_id if self.org_id is not None else user.current_org_id
         org_member: OrgMember | None = None
         for om in user.org_members:
             if om.org_id == org_id:
@@ -163,7 +166,8 @@ class SaasSettingsStore(SettingsStore):
                     logger.error(f'User not found for ID {self.user_id}')
                     return None
 
-            org_id = user.current_org_id
+            # Use org_id if provided, otherwise fall back to User.current_org_id
+            org_id = self.org_id if self.org_id is not None else user.current_org_id
 
             org_member: OrgMember | None = None
             for om in user.org_members:

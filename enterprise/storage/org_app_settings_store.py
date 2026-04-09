@@ -23,27 +23,31 @@ class OrgAppSettingsStore:
 
     db_session: AsyncSession
 
-    async def get_current_org_by_user_id(self, user_id: str) -> Org | None:
+    async def get_current_org_by_user_id(
+        self, user_id: str, org_id: UUID | None = None
+    ) -> Org | None:
         """Get the current organization for a user.
 
         Args:
             user_id: The user's ID (Keycloak user ID)
+            org_id: Optional organization ID. If not provided, uses User.current_org_id.
 
         Returns:
             Org: The organization object, or None if not found
         """
-        # Get user with their current_org_id
-        result = await self.db_session.execute(
-            select(User).filter(User.id == UUID(user_id))
-        )
-        user = result.scalars().first()
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        if org_id is None:
+            result = await self.db_session.execute(
+                select(User).filter(User.id == UUID(user_id))
+            )
+            user = result.scalars().first()
 
-        if not user:
-            return None
+            if not user:
+                return None
 
-        org_id = user.current_org_id
-        if not org_id:
-            return None
+            org_id = user.current_org_id
+            if not org_id:
+                return None
 
         # Get the organization
         result = await self.db_session.execute(select(Org).filter(Org.id == org_id))

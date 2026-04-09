@@ -55,18 +55,28 @@ class OrgStore:
     @staticmethod
     async def get_current_org_from_keycloak_user_id(
         keycloak_user_id: str,
+        org_id: UUID | None = None,
     ) -> Org | None:
+        """Get the current organization for a user.
+
+        Args:
+            keycloak_user_id: The keycloak user ID
+            org_id: Optional organization ID. If not provided, uses User.current_org_id.
+        """
         async with a_session_maker() as session:
-            result = await session.execute(
-                select(User)
-                .options(joinedload(User.org_members))
-                .filter(User.id == UUID(keycloak_user_id))
-            )
-            user = result.scalars().first()
-            if not user:
-                logger.warning(f'User not found for ID {keycloak_user_id}')
-                return None
-            org_id = user.current_org_id
+            # Use org_id if provided, otherwise fall back to User.current_org_id
+            if org_id is None:
+                result = await session.execute(
+                    select(User)
+                    .options(joinedload(User.org_members))
+                    .filter(User.id == UUID(keycloak_user_id))
+                )
+                user = result.scalars().first()
+                if not user:
+                    logger.warning(f'User not found for ID {keycloak_user_id}')
+                    return None
+                org_id = user.current_org_id
+
             result = await session.execute(select(Org).filter(Org.id == org_id))
             org = result.scalars().first()
             if not org:

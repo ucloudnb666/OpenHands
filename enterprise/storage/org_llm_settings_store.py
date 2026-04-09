@@ -20,28 +20,31 @@ class OrgLLMSettingsStore:
 
     db_session: AsyncSession
 
-    async def get_current_org_by_user_id(self, user_id: str) -> Org | None:
+    async def get_current_org_by_user_id(
+        self, user_id: str, org_id: UUID | None = None
+    ) -> Org | None:
         """Get the user's current organization.
 
         Args:
             user_id: The user's ID (Keycloak user ID)
+            org_id: Optional organization ID. If not provided, uses User.current_org_id.
 
         Returns:
             Org: The user's current organization, or None if not found
         """
-        # First get the user to find their current_org_id
-        result = await self.db_session.execute(
-            select(User).filter(User.id == uuid.UUID(user_id))
-        )
-        user = result.scalars().first()
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        if org_id is None:
+            result = await self.db_session.execute(
+                select(User).filter(User.id == uuid.UUID(user_id))
+            )
+            user = result.scalars().first()
 
-        if not user or not user.current_org_id:
-            return None
+            if not user or not user.current_org_id:
+                return None
+            org_id = user.current_org_id
 
         # Then get the org
-        result = await self.db_session.execute(
-            select(Org).filter(Org.id == user.current_org_id)
-        )
+        result = await self.db_session.execute(select(Org).filter(Org.id == org_id))
         return result.scalars().first()
 
     async def update_org_llm_settings(

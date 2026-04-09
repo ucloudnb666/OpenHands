@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from typing import cast
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
@@ -18,16 +19,22 @@ from openhands.server.user_auth.user_auth import AuthType
 
 
 # Helper functions for BYOR API key management
-async def get_byor_key_from_db(user_id: str) -> str | None:
-    """Get the BYOR key from the database for a user."""
+async def get_byor_key_from_db(user_id: str, org_id: UUID | None = None) -> str | None:
+    """Get the BYOR key from the database for a user.
+
+    Args:
+        user_id: The ID of the user
+        org_id: Optional organization ID. If not provided, uses User.current_org_id.
+    """
     user = await UserStore.get_user_by_id(user_id)
     if not user:
         return None
 
-    current_org_id = user.current_org_id
+    # Use org_id if provided, otherwise fall back to User.current_org_id
+    target_org_id = org_id if org_id is not None else user.current_org_id
     current_org_member: OrgMember | None = None
     for org_member in user.org_members:
-        if org_member.org_id == current_org_id:
+        if org_member.org_id == target_org_id:
             current_org_member = org_member
             break
     if not current_org_member:
@@ -37,16 +44,25 @@ async def get_byor_key_from_db(user_id: str) -> str | None:
     return None
 
 
-async def store_byor_key_in_db(user_id: str, key: str) -> None:
-    """Store the BYOR key in the database for a user."""
+async def store_byor_key_in_db(
+    user_id: str, key: str, org_id: UUID | None = None
+) -> None:
+    """Store the BYOR key in the database for a user.
+
+    Args:
+        user_id: The ID of the user
+        key: The BYOR key to store
+        org_id: Optional organization ID. If not provided, uses User.current_org_id.
+    """
     user = await UserStore.get_user_by_id(user_id)
     if not user:
         return None
 
-    current_org_id = user.current_org_id
+    # Use org_id if provided, otherwise fall back to User.current_org_id
+    target_org_id = org_id if org_id is not None else user.current_org_id
     current_org_member: OrgMember | None = None
     for org_member in user.org_members:
-        if org_member.org_id == current_org_id:
+        if org_member.org_id == target_org_id:
             current_org_member = org_member
             break
     if not current_org_member:
@@ -55,17 +71,24 @@ async def store_byor_key_in_db(user_id: str, key: str) -> None:
     await OrgMemberStore.update_org_member(current_org_member)
 
 
-async def generate_byor_key(user_id: str) -> str | None:
-    """Generate a new BYOR key for a user."""
+async def generate_byor_key(user_id: str, org_id: UUID | None = None) -> str | None:
+    """Generate a new BYOR key for a user.
+
+    Args:
+        user_id: The ID of the user
+        org_id: Optional organization ID. If not provided, uses User.current_org_id.
+    """
     try:
         user = await UserStore.get_user_by_id(user_id)
         if not user:
             return None
-        current_org_id = str(user.current_org_id)
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        target_org_id = org_id if org_id is not None else user.current_org_id
+        target_org_id_str = str(target_org_id)
         key = await LiteLlmManager.generate_key(
             user_id,
-            current_org_id,
-            f'BYOR Key - user {user_id}, org {current_org_id}',
+            target_org_id_str,
+            f'BYOR Key - user {user_id}, org {target_org_id_str}',
             {'type': 'byor'},
         )
 
@@ -86,18 +109,28 @@ async def generate_byor_key(user_id: str) -> str | None:
         return None
 
 
-async def delete_byor_key_from_litellm(user_id: str, byor_key: str) -> bool:
+async def delete_byor_key_from_litellm(
+    user_id: str, byor_key: str, org_id: UUID | None = None
+) -> bool:
     """Delete the BYOR key from LiteLLM using the key directly.
 
     Also attempts to delete by key alias if the key is not found,
     to clean up orphaned aliases that could block key regeneration.
+
+    Args:
+        user_id: The ID of the user
+        byor_key: The BYOR key to delete
+        org_id: Optional organization ID. If not provided, uses User.current_org_id.
     """
     try:
-        # Get user to construct the key alias
-        user = await UserStore.get_user_by_id(user_id)
+        # Use org_id if provided, otherwise fall back to User.current_org_id
         key_alias = None
-        if user and user.current_org_id:
-            key_alias = f'BYOR Key - user {user_id}, org {user.current_org_id}'
+        if org_id is not None:
+            key_alias = f'BYOR Key - user {user_id}, org {org_id}'
+        else:
+            user = await UserStore.get_user_by_id(user_id)
+            if user and user.current_org_id:
+                key_alias = f'BYOR Key - user {user_id}, org {user.current_org_id}'
 
         await LiteLlmManager.delete_key(byor_key, key_alias=key_alias)
         logger.info(
@@ -317,6 +350,7 @@ async def get_current_api_key(
 
 @api_router.get('/llm/byor', tags=['Keys'])
 async def get_llm_api_key_for_byor(
+    request: Request,
     user_id: str = Depends(get_user_id),
 ) -> LlmApiKeyResponse:
     """Get the LLM API key for BYOR (Bring Your Own Runtime) for the authenticated user.
@@ -328,6 +362,10 @@ async def get_llm_api_key_for_byor(
     Returns 402 Payment Required if BYOR export is not enabled for the user's org.
     """
     try:
+        # Get org_id from user_auth
+        user_auth = cast(SaasUserAuth, await get_user_auth(request))
+        org_id = user_auth.org_id
+
         # Check if BYOR export is enabled for the user's org
         if not await OrgService.check_byor_export_enabled(user_id):
             raise HTTPException(
@@ -336,7 +374,7 @@ async def get_llm_api_key_for_byor(
             )
 
         # Check if the BYOR key exists in the database
-        byor_key = await get_byor_key_from_db(user_id)
+        byor_key = await get_byor_key_from_db(user_id, org_id)
         if byor_key:
             # Validate that the key is actually registered in LiteLLM
             is_valid = await LiteLlmManager.verify_key(byor_key, user_id)
@@ -354,14 +392,14 @@ async def get_llm_api_key_for_byor(
                     },
                 )
                 # Delete the invalid key from LiteLLM (best effort, don't fail if it doesn't exist)
-                await delete_byor_key_from_litellm(user_id, byor_key)
+                await delete_byor_key_from_litellm(user_id, byor_key, org_id)
                 # Fall through to generate a new key
 
         # Generate a new key for BYOR (either no key exists or validation failed)
-        key = await generate_byor_key(user_id)
+        key = await generate_byor_key(user_id, org_id)
         if key:
             # Store the key in the database
-            await store_byor_key_in_db(user_id, key)
+            await store_byor_key_in_db(user_id, key, org_id)
             logger.info(
                 'Successfully generated and stored new BYOR key',
                 extra={'user_id': user_id},
@@ -390,6 +428,7 @@ async def get_llm_api_key_for_byor(
 
 @api_router.post('/llm/byor/refresh', tags=['Keys'])
 async def refresh_llm_api_key_for_byor(
+    request: Request,
     user_id: str = Depends(get_user_id),
 ) -> LlmApiKeyResponse:
     """Refresh the LLM API key for BYOR (Bring Your Own Runtime) for the authenticated user.
@@ -399,6 +438,10 @@ async def refresh_llm_api_key_for_byor(
     logger.info('Starting BYOR LLM API key refresh', extra={'user_id': user_id})
 
     try:
+        # Get org_id from user_auth
+        user_auth = cast(SaasUserAuth, await get_user_auth(request))
+        org_id = user_auth.org_id
+
         # Check if BYOR export is enabled for the user's org
         if not await OrgService.check_byor_export_enabled(user_id):
             raise HTTPException(
@@ -407,12 +450,12 @@ async def refresh_llm_api_key_for_byor(
             )
 
         # Get the existing BYOR key from the database
-        existing_byor_key = await get_byor_key_from_db(user_id)
+        existing_byor_key = await get_byor_key_from_db(user_id, org_id)
 
         # If we have an existing key, delete it from LiteLLM
         if existing_byor_key:
             delete_success = await delete_byor_key_from_litellm(
-                user_id, existing_byor_key
+                user_id, existing_byor_key, org_id
             )
             if not delete_success:
                 logger.warning(
@@ -426,7 +469,7 @@ async def refresh_llm_api_key_for_byor(
             )
 
         # Generate a new key
-        key = await generate_byor_key(user_id)
+        key = await generate_byor_key(user_id, org_id)
         if not key:
             logger.error(
                 'Failed to generate new BYOR LLM API key',
@@ -438,7 +481,7 @@ async def refresh_llm_api_key_for_byor(
             )
 
         # Store the key in the database
-        await store_byor_key_in_db(user_id, key)
+        await store_byor_key_in_db(user_id, key, org_id)
 
         logger.info(
             'BYOR LLM API key refresh completed successfully',

@@ -402,21 +402,37 @@ async def test_get_user_settings_store_cached():
 @pytest.mark.asyncio
 async def test_get_instance_from_bearer(mock_request):
     """Test that get_instance returns auth from bearer token."""
-    with patch(
-        'server.auth.saas_user_auth.saas_user_auth_from_bearer'
-    ) as mock_from_bearer:
-        mock_auth = MagicMock()
+    test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+    mock_user = MagicMock()
+    mock_user.current_org_id = test_org_id
+
+    with (
+        patch(
+            'server.auth.saas_user_auth.saas_user_auth_from_bearer'
+        ) as mock_from_bearer,
+        patch('server.auth.saas_user_auth.UserStore') as mock_user_store,
+    ):
+        mock_auth = SaasUserAuth(
+            user_id='test_user_id',
+            refresh_token=SecretStr('refresh_token'),
+        )
         mock_from_bearer.return_value = mock_auth
+        mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
 
         result = await SaasUserAuth.get_instance(mock_request)
 
-        assert result == mock_auth
+        assert result.user_id == 'test_user_id'
+        assert result.org_id == test_org_id
         mock_from_bearer.assert_called_once_with(mock_request)
 
 
 @pytest.mark.asyncio
 async def test_get_instance_from_cookie(mock_request):
     """Test that get_instance returns auth from cookie if bearer fails."""
+    test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+    mock_user = MagicMock()
+    mock_user.current_org_id = test_org_id
+
     with (
         patch(
             'server.auth.saas_user_auth.saas_user_auth_from_bearer'
@@ -424,14 +440,20 @@ async def test_get_instance_from_cookie(mock_request):
         patch(
             'server.auth.saas_user_auth.saas_user_auth_from_cookie'
         ) as mock_from_cookie,
+        patch('server.auth.saas_user_auth.UserStore') as mock_user_store,
     ):
         mock_from_bearer.return_value = None
-        mock_auth = MagicMock()
+        mock_auth = SaasUserAuth(
+            user_id='test_user_id',
+            refresh_token=SecretStr('refresh_token'),
+        )
         mock_from_cookie.return_value = mock_auth
+        mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
 
         result = await SaasUserAuth.get_instance(mock_request)
 
-        assert result == mock_auth
+        assert result.user_id == 'test_user_id'
+        assert result.org_id == test_org_id
         mock_from_bearer.assert_called_once_with(mock_request)
         mock_from_cookie.assert_called_once_with(mock_request)
 
@@ -910,3 +932,162 @@ async def test_saas_user_auth_from_signed_token_domain_blocking_inactive(mock_co
         mock_user_auth_store.get_authorization_type.assert_called_once_with(
             'user@colsch.us', None
         )
+
+
+# Tests for org_id functionality
+class TestSaasUserAuthOrgId:
+    """Tests for org_id functionality in SaasUserAuth."""
+
+    def test_get_org_id_returns_org_id(self):
+        """Test that get_org_id returns the org_id field."""
+        test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+        user_auth = SaasUserAuth(
+            user_id='test_user_id',
+            refresh_token=SecretStr('refresh_token'),
+            org_id=test_org_id,
+        )
+
+        assert user_auth.get_org_id() == test_org_id
+
+    def test_get_org_id_returns_none_when_not_set(self):
+        """Test that get_org_id returns None when org_id is not set."""
+        user_auth = SaasUserAuth(
+            user_id='test_user_id',
+            refresh_token=SecretStr('refresh_token'),
+        )
+
+        assert user_auth.get_org_id() is None
+
+    @pytest.mark.asyncio
+    async def test_get_instance_populates_org_id_from_header(self):
+        """Test that get_instance populates org_id from X-Org-Id header."""
+        test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.headers = {'X-Org-Id': str(test_org_id)}
+        mock_request.cookies = {'keycloak_auth': 'test_cookie'}
+        mock_request.state = MagicMock()
+        mock_request.state.user_rate_limit_processed = False
+
+        with (
+            patch(
+                'server.auth.saas_user_auth.saas_user_auth_from_bearer'
+            ) as mock_bearer,
+            patch(
+                'server.auth.saas_user_auth.saas_user_auth_from_cookie'
+            ) as mock_cookie,
+            patch('server.auth.saas_user_auth.rate_limiter') as mock_rate_limiter,
+            patch('server.auth.saas_user_auth.UserStore') as mock_user_store,
+        ):
+            mock_bearer.return_value = None
+            mock_instance = SaasUserAuth(
+                user_id='test_user_id',
+                refresh_token=SecretStr('refresh_token'),
+            )
+            mock_cookie.return_value = mock_instance
+            mock_rate_limiter.hit = AsyncMock()
+
+            result = await SaasUserAuth.get_instance(mock_request)
+
+            assert result.org_id == test_org_id
+            # UserStore should not be called since header is provided
+            mock_user_store.get_user_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_instance_populates_org_id_from_user_when_no_header(self):
+        """Test that get_instance populates org_id from User.current_org_id when no header."""
+        test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.headers = {}  # No X-Org-Id header
+        mock_request.cookies = {'keycloak_auth': 'test_cookie'}
+        mock_request.state = MagicMock()
+        mock_request.state.user_rate_limit_processed = False
+
+        mock_user = MagicMock()
+        mock_user.current_org_id = test_org_id
+
+        with (
+            patch(
+                'server.auth.saas_user_auth.saas_user_auth_from_bearer'
+            ) as mock_bearer,
+            patch(
+                'server.auth.saas_user_auth.saas_user_auth_from_cookie'
+            ) as mock_cookie,
+            patch('server.auth.saas_user_auth.rate_limiter') as mock_rate_limiter,
+            patch('server.auth.saas_user_auth.UserStore') as mock_user_store,
+        ):
+            mock_bearer.return_value = None
+            mock_instance = SaasUserAuth(
+                user_id='test_user_id',
+                refresh_token=SecretStr('refresh_token'),
+            )
+            mock_cookie.return_value = mock_instance
+            mock_rate_limiter.hit = AsyncMock()
+            mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
+
+            result = await SaasUserAuth.get_instance(mock_request)
+
+            assert result.org_id == test_org_id
+            mock_user_store.get_user_by_id.assert_called_once_with('test_user_id')
+
+    @pytest.mark.asyncio
+    async def test_get_instance_handles_invalid_uuid_in_header(self):
+        """Test that get_instance falls back to User when X-Org-Id header is invalid."""
+        test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.headers = {'X-Org-Id': 'invalid-uuid'}  # Invalid UUID
+        mock_request.cookies = {'keycloak_auth': 'test_cookie'}
+        mock_request.state = MagicMock()
+        mock_request.state.user_rate_limit_processed = False
+
+        mock_user = MagicMock()
+        mock_user.current_org_id = test_org_id
+
+        with (
+            patch(
+                'server.auth.saas_user_auth.saas_user_auth_from_bearer'
+            ) as mock_bearer,
+            patch(
+                'server.auth.saas_user_auth.saas_user_auth_from_cookie'
+            ) as mock_cookie,
+            patch('server.auth.saas_user_auth.rate_limiter') as mock_rate_limiter,
+            patch('server.auth.saas_user_auth.UserStore') as mock_user_store,
+        ):
+            mock_bearer.return_value = None
+            mock_instance = SaasUserAuth(
+                user_id='test_user_id',
+                refresh_token=SecretStr('refresh_token'),
+            )
+            mock_cookie.return_value = mock_instance
+            mock_rate_limiter.hit = AsyncMock()
+            mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
+
+            result = await SaasUserAuth.get_instance(mock_request)
+
+            # Should fall back to User.current_org_id
+            assert result.org_id == test_org_id
+            mock_user_store.get_user_by_id.assert_called_once_with('test_user_id')
+
+    @pytest.mark.asyncio
+    async def test_get_for_user_populates_org_id(self):
+        """Test that get_for_user populates org_id from User.current_org_id."""
+        test_org_id = uuid.UUID('12345678-1234-5678-1234-567812345678')
+
+        mock_user = MagicMock()
+        mock_user.current_org_id = test_org_id
+
+        with (
+            patch('server.auth.saas_user_auth.token_manager') as mock_token_manager,
+            patch('server.auth.saas_user_auth.UserStore') as mock_user_store,
+        ):
+            mock_token_manager.load_offline_token = AsyncMock(
+                return_value='offline_token'
+            )
+            mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
+
+            result = await SaasUserAuth.get_for_user('test_user_id')
+
+            assert result.org_id == test_org_id
+            mock_user_store.get_user_by_id.assert_called_once_with('test_user_id')

@@ -27,6 +27,7 @@ from storage.saas_secrets_store import SaasSecretsStore
 from storage.saas_settings_store import SaasSettingsStore
 from storage.user_authorization import UserAuthorizationType
 from storage.user_authorization_store import UserAuthorizationStore
+from storage.user_store import UserStore
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 from openhands.integrations.provider import (
@@ -64,6 +65,19 @@ class SaasUserAuth(UserAuth):
     api_key_org_id: UUID | None = None  # Org bound to the API key used for auth
     api_key_id: int | None = None
     api_key_name: str | None = None
+    # Current organization context - populated from X-Org-Id header or User.current_org_id
+    org_id: UUID | None = None
+
+    def get_org_id(self) -> UUID | None:
+        """Get the current organization ID for this user session.
+
+        This is set from the X-Org-Id header if provided, otherwise
+        falls back to the user's current_org_id from the database.
+
+        Returns:
+            The org_id for the current session context.
+        """
+        return self.org_id
 
     def get_api_key_org_id(self) -> UUID | None:
         """Get the organization ID bound to the API key used for authentication.
@@ -140,7 +154,7 @@ class SaasUserAuth(UserAuth):
         secrets_store = self.secrets_store
         if secrets_store:
             return secrets_store
-        secrets_store = SaasSecretsStore(self.user_id, get_config())
+        secrets_store = SaasSecretsStore(self.user_id, get_config(), self.org_id)
         self.secrets_store = secrets_store
         return secrets_store
 
@@ -229,16 +243,18 @@ class SaasUserAuth(UserAuth):
         settings_store = self.settings_store
         if settings_store:
             return settings_store
-        settings_store = SaasSettingsStore(self.user_id, get_config())
+        settings_store = SaasSettingsStore(self.user_id, get_config(), self.org_id)
         self.settings_store = settings_store
         return settings_store
 
     async def get_mcp_api_key(self) -> str:
         api_key_store = ApiKeyStore.get_instance()
-        mcp_api_key = await api_key_store.retrieve_mcp_api_key(self.user_id)
+        mcp_api_key = await api_key_store.retrieve_mcp_api_key(
+            self.user_id, self.org_id
+        )
         if not mcp_api_key:
             mcp_api_key = await api_key_store.create_api_key(
-                self.user_id, 'MCP_API_KEY', None
+                self.user_id, 'MCP_API_KEY', None, self.org_id
             )
         return mcp_api_key
 
@@ -261,16 +277,50 @@ class SaasUserAuth(UserAuth):
                 request.state.user_rate_limit_processed = True
                 # Will raise if rate limit is reached.
                 await rate_limiter.hit('auth_uid', user_id)
+
+        # Populate org_id from X-Org-Id header or fall back to User.current_org_id
+        x_org_id_header = request.headers.get('X-Org-Id')
+        if x_org_id_header:
+            try:
+                instance.org_id = UUID(x_org_id_header)
+                logger.debug(
+                    'saas_user_auth_get_instance:org_id_from_header',
+                    extra={'org_id': str(instance.org_id)},
+                )
+            except ValueError:
+                logger.warning(
+                    'saas_user_auth_get_instance:invalid_x_org_id_header',
+                    extra={'x_org_id_header': x_org_id_header},
+                )
+                # Fall through to get from User table
+                x_org_id_header = None
+
+        if not x_org_id_header:
+            # Get org_id from User.current_org_id in the database
+            user = await UserStore.get_user_by_id(instance.user_id)
+            if user and user.current_org_id:
+                instance.org_id = user.current_org_id
+                logger.debug(
+                    'saas_user_auth_get_instance:org_id_from_user',
+                    extra={'org_id': str(instance.org_id)},
+                )
+
         return instance
 
     @classmethod
     async def get_for_user(cls, user_id: str) -> UserAuth:
         offline_token = await token_manager.load_offline_token(user_id)
         assert offline_token is not None
+
+        # Get org_id from User.current_org_id
+        user = await UserStore.get_user_by_id(user_id)
+        org_id = user.current_org_id if user else None
+
         return SaasUserAuth(
             user_id=user_id,
             refresh_token=SecretStr(offline_token),
             auth_type=AuthType.BEARER,
+            org_id=org_id,
         )
 
 

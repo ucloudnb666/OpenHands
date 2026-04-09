@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 from base64 import b64decode, b64encode
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from uuid import UUID
 
 from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
@@ -20,12 +21,17 @@ from openhands.storage.secrets.secrets_store import SecretsStore
 class SaasSecretsStore(SecretsStore):
     user_id: str
     config: OpenHandsConfig
+    org_id: UUID | None = field(default=None)
 
     async def load(self) -> Secrets | None:
         if not self.user_id:
             return None
-        user = await UserStore.get_user_by_id(self.user_id)
-        org_id = user.current_org_id if user else None
+
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        org_id = self.org_id
+        if org_id is None:
+            user = await UserStore.get_user_by_id(self.user_id)
+            org_id = user.current_org_id if user else None
 
         async with a_session_maker() as session:
             # Fetch all secrets for the given user ID
@@ -52,10 +58,13 @@ class SaasSecretsStore(SecretsStore):
             return Secrets(custom_secrets=kwargs)  # type: ignore[arg-type]
 
     async def store(self, item: Secrets):
-        user = await UserStore.get_user_by_id(self.user_id)
-        if user is None:
-            raise ValueError(f'User not found: {self.user_id}')
-        org_id = user.current_org_id
+        # Use org_id if provided, otherwise fall back to User.current_org_id
+        org_id = self.org_id
+        if org_id is None:
+            user = await UserStore.get_user_by_id(self.user_id)
+            if user is None:
+                raise ValueError(f'User not found: {self.user_id}')
+            org_id = user.current_org_id
 
         async with a_session_maker() as session:
             # Incoming secrets are always the most updated ones
@@ -137,6 +146,7 @@ class SaasSecretsStore(SecretsStore):
         cls,
         config: OpenHandsConfig,
         user_id: str,  # type: ignore[override]
+        org_id: UUID | None = None,
     ) -> SaasSecretsStore:
         logger.debug(f'saas_secrets_store.get_instance::{user_id}')
-        return SaasSecretsStore(user_id, config)
+        return SaasSecretsStore(user_id, config, org_id)
