@@ -48,12 +48,10 @@ class AuthUserContext(UserContext):
                 'id': user_id,
                 **settings.model_dump(context={'expose_secrets': True}),
             }
-
             # Add org info if available (SAAS-only)
             org_info = await self.user_auth.get_org_info()
             if org_info:
-                user_info_data['org_id'] = org_info.get('org_id')
-                user_info_data['org_name'] = org_info.get('org_name')
+                user_info_data.update(org_info)
                 user_info_data['role'] = org_info.get('role')
                 user_info_data['permissions'] = org_info.get('permissions')
 
