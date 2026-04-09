@@ -19,7 +19,7 @@ import {
 import { retrieveAxiosErrorMessage } from "#/utils/retrieve-axios-error-message";
 import {
   buildInitialSettingsFormValues,
-  buildSdkSettingsPayload,
+  buildSdkSettingsPayloadForView,
   getVisibleSettingsSections,
   hasAdvancedSettings,
   hasMinorSettings,
@@ -65,7 +65,7 @@ export function SdkSectionPage({
   header?: (props: SdkSectionHeaderProps) => React.ReactNode;
   extraDirty?: boolean;
   buildPayload?: (
-    payload: ReturnType<typeof buildSdkSettingsPayload>,
+    payload: ReturnType<typeof buildSdkSettingsPayloadForView>,
     context: {
       values: SettingsFormValues;
       dirty: SettingsDirtyState;
@@ -152,10 +152,11 @@ export function SdkSectionPage({
 
     let payload: Record<string, unknown>;
     try {
-      const basePayload = buildSdkSettingsPayload(
+      const basePayload = buildSdkSettingsPayloadForView(
         filteredSchema,
         values,
         dirty,
+        view,
       );
       payload = buildPayload
         ? buildPayload(basePayload, { values, dirty, view })

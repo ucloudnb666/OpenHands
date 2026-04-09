@@ -54,6 +54,14 @@ const hasSchemaField = (
     section.fields.some((field) => field.key === fieldKey),
   ) ?? false;
 
+const getSchemaFieldDefaultValue = (
+  schema: SettingsSchema | null | undefined,
+  fieldKey: string,
+) =>
+  schema?.sections
+    .flatMap((section) => section.fields)
+    .find((field) => field.key === fieldKey)?.default ?? null;
+
 interface OpenHandsApiKeyHelpProps {
   testId: string;
 }
@@ -423,9 +431,27 @@ export function LlmSettingsScreen({
         payload["llm.api_key"] = "";
       }
 
+      if (context.view === "basic") {
+        payload["llm.base_url"] = getSchemaFieldDefaultValue(
+          schema,
+          "llm.base_url",
+        );
+
+        if (hasAgentField) {
+          payload.agent = getSchemaFieldDefaultValue(schema, "agent");
+        }
+      }
+
       return payload;
     },
-    [isSaasMode, searchApiKey, searchApiKeyDirty, selectedProvider],
+    [
+      hasAgentField,
+      isSaasMode,
+      schema,
+      searchApiKey,
+      searchApiKeyDirty,
+      selectedProvider,
+    ],
   );
 
   return (

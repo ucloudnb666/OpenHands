@@ -404,6 +404,94 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
+  it("resets hidden advanced and all settings back to defaults when saving basic view", async () => {
+    const schema = structuredClone(MOCK_DEFAULT_USER_SETTINGS.agent_settings_schema!);
+    const llmSection = schema.sections.find((section) => section.key === "llm");
+
+    if (!llmSection) {
+      throw new Error("Expected llm section in test schema");
+    }
+
+    const baseUrlField = llmSection.fields.find(
+      (field) => field.key === "llm.base_url",
+    );
+    if (!baseUrlField) {
+      throw new Error("Expected llm.base_url field in test schema");
+    }
+    baseUrlField.default = "https://schema.default/v1";
+
+    llmSection.fields.push({
+      key: "llm.timeout",
+      label: "Timeout",
+      section: "llm",
+      section_label: "LLM",
+      value_type: "integer",
+      default: 30,
+      choices: [],
+      depends_on: [],
+      prominence: "minor",
+      secret: false,
+      required: false,
+    });
+
+    schema.sections.push({
+      key: "general",
+      label: "General",
+      fields: [
+        {
+          key: "agent",
+          label: "Agent",
+          section: "general",
+          section_label: "General",
+          value_type: "string",
+          default: "CodeActAgent",
+          choices: [],
+          depends_on: [],
+          prominence: "major",
+          secret: false,
+          required: true,
+        },
+      ],
+    });
+
+    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+      buildSettings({
+        llm_model: "openai/gpt-4o",
+        llm_base_url: "https://custom.example/v1",
+        agent_settings_schema: schema,
+        agent_settings: {
+          "llm.model": "openai/gpt-4o",
+          "llm.base_url": "https://custom.example/v1",
+          "llm.timeout": 90,
+          agent: "BrowsingAgent",
+        },
+      }),
+    );
+    const saveSettingsSpy = vi
+      .spyOn(SettingsService, "saveSettings")
+      .mockResolvedValue(true);
+
+    renderLlmSettingsScreen({ appMode: "oss" });
+
+    await screen.findByTestId("llm-settings-form-advanced");
+    await userEvent.click(screen.getByTestId("sdk-section-basic-toggle"));
+
+    const apiKeyInput = await screen.findByTestId("llm-api-key-input");
+    await userEvent.type(apiKeyInput, "test-api-key");
+    await userEvent.click(screen.getByTestId("save-button"));
+
+    await waitFor(() => {
+      expect(saveSettingsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          "llm.api_key": "test-api-key",
+          "llm.base_url": "https://schema.default/v1",
+          "llm.timeout": 30,
+          agent: "CodeActAgent",
+        }),
+      );
+    });
+  });
+
   it("submits advanced form values through SDK setting keys", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
