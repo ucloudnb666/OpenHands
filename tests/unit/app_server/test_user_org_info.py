@@ -264,7 +264,11 @@ class TestGetCurrentUserEndpointOrgFields:
         )
         mock_user_context.get_user_info = AsyncMock(return_value=user_info)
 
-        result = await get_current_user(user_context=mock_user_context)
+        # Must pass expose_secrets=False explicitly because the Query() default
+        # is only evaluated properly by FastAPI, not when calling directly
+        result = await get_current_user(
+            user_context=mock_user_context, expose_secrets=False
+        )
 
         assert result.id == 'user-123'
         assert result.org_id == 'org-456'
@@ -287,7 +291,11 @@ class TestGetCurrentUserEndpointOrgFields:
         )
         mock_user_context.get_user_info = AsyncMock(return_value=user_info)
 
-        result = await get_current_user(user_context=mock_user_context)
+        # Must pass expose_secrets=False explicitly because the Query() default
+        # is only evaluated properly by FastAPI, not when calling directly
+        result = await get_current_user(
+            user_context=mock_user_context, expose_secrets=False
+        )
 
         assert result.id == 'user-123'
         assert result.org_id is None
