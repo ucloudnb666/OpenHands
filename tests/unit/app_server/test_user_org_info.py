@@ -273,7 +273,9 @@ class TestGetCurrentUserEndpointOrgFields:
         assert result.permissions == ['read', 'write']
 
     @pytest.mark.asyncio
-    async def test_endpoint_returns_null_org_fields_in_oss_mode(self, mock_user_context):
+    async def test_endpoint_returns_null_org_fields_in_oss_mode(
+        self, mock_user_context
+    ):
         """GET /users/me should return null org fields in OSS mode."""
         from openhands.app_server.user.user_models import UserInfo
         from openhands.app_server.user.user_router import get_current_user
