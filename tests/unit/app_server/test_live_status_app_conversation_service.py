@@ -1183,6 +1183,32 @@ class TestLiveStatusAppConversationService:
             assert isinstance(result, StartConversationRequest)
             mock_logger.warning.assert_called_once()
 
+    def test_update_agent_with_llm_metadata_sets_condenser_usage_id(self):
+        """Condenser LLM must get usage_id='condenser' even when it inherits 'agent'."""
+        from openhands.sdk.context.condenser import LLMSummarizingCondenser
+
+        llm = LLM(model='openhands/gpt-4', api_key='k', usage_id='agent')
+        condenser = LLMSummarizingCondenser(llm=llm)
+        agent = Agent(llm=llm, tools=[], condenser=condenser)
+
+        updated = self.service._update_agent_with_llm_metadata(agent, uuid4(), 'user-1')
+
+        assert updated.llm.usage_id == 'agent'
+        assert updated.condenser.llm.usage_id == 'condenser'
+
+    def test_update_agent_with_llm_metadata_condenser_non_openhands_model(self):
+        """Condenser usage_id is set even for non-openhands models (no metadata)."""
+        from openhands.sdk.context.condenser import LLMSummarizingCondenser
+
+        llm = LLM(model='gpt-4', api_key='k', usage_id='agent')
+        condenser = LLMSummarizingCondenser(llm=llm)
+        agent = Agent(llm=llm, tools=[], condenser=condenser)
+
+        updated = self.service._update_agent_with_llm_metadata(agent, uuid4(), 'user-1')
+
+        # Non-openhands model: main LLM unchanged, but condenser still gets usage_id
+        assert updated.condenser.llm.usage_id == 'condenser'
+
     @pytest.mark.asyncio
     async def test_build_start_conversation_request_for_user_integration(self):
         """Test the main _build_start_conversation_request_for_user method integration."""
