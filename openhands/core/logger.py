@@ -537,21 +537,24 @@ class OpenHandsLoggerAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 
-_SENSITIVE_QS_RE = re.compile(r'(session_api_key=)[^&\s"]+')
-
-
 class _RedactAccessFilter(logging.Filter):
-    """Strip sensitive query-string params from uvicorn access log records."""
+    """Strip sensitive query-string params from uvicorn access log records.
+
+    Uses the SDK's centralized redaction utilities (via _redact_compat) to ensure
+    consistent secret detection patterns across the codebase.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
+        # Import here to avoid circular imports at module load time
+        from openhands.utils._redact_compat import redact_text_secrets
+
         if hasattr(record, 'request_line'):
-            record.request_line = _SENSITIVE_QS_RE.sub(r'\1***', record.request_line)
+            record.request_line = redact_text_secrets(record.request_line)
         if record.args and isinstance(record.args, tuple):
             record.args = tuple(
-                _SENSITIVE_QS_RE.sub(r'\1***', a) if isinstance(a, str) else a
-                for a in record.args
+                redact_text_secrets(a) if isinstance(a, str) else a for a in record.args
             )
-        record.msg = _SENSITIVE_QS_RE.sub(r'\1***', str(record.msg))
+        record.msg = redact_text_secrets(str(record.msg))
         return True
 
 
