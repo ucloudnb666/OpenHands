@@ -266,17 +266,17 @@ def test_apply_payload_mcp_update_preserves_existing_llm_settings():
     assert _agent_value(result, 'llm.base_url') == 'https://my-custom-proxy.example.com'
 
 
-def test_apply_payload_preserves_secrets_when_null():
-    """Null/empty secret values in the payload should not overwrite existing secrets."""
+def test_apply_payload_clears_secrets_when_explicitly_null_or_empty():
+    """Explicit null/empty secret values should clear existing SDK secrets."""
     existing = _make_settings(**{'llm.api_key': 'existing-api-key'})
 
     payload = {'llm.api_key': None}
     result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
-    assert result.raw_agent_settings['llm.api_key'] == 'existing-api-key'
+    assert 'llm.api_key' not in result.raw_agent_settings
 
     payload = {'llm.api_key': ''}
     result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
-    assert result.raw_agent_settings['llm.api_key'] == 'existing-api-key'
+    assert 'llm.api_key' not in result.raw_agent_settings
 
 
 def test_apply_payload_mcp_preserves_llm_settings():

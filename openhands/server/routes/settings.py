@@ -103,7 +103,11 @@ def _apply_settings_payload(
     for key, value in payload.items():
         if key in schema_field_keys:
             if key in secret_field_keys:
-                if value is not None and value != '' and value != _SECRET_REDACTED:
+                if value == _SECRET_REDACTED:
+                    continue
+                if value is None or value == '':
+                    agent_settings.pop(key, None)
+                else:
                     agent_settings[key] = value
             elif value is None:
                 agent_settings.pop(key, None)
@@ -217,7 +221,7 @@ async def store_settings(
         )
 
         if existing_settings:
-            if not settings.search_api_key:
+            if 'search_api_key' not in payload and settings.search_api_key is None:
                 settings.search_api_key = existing_settings.search_api_key
             if settings.user_consents_to_analytics is None:
                 settings.user_consents_to_analytics = (

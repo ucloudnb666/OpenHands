@@ -268,9 +268,8 @@ async def test_saving_settings_with_frozen_secrets_store(test_client):
 
 
 @pytest.mark.asyncio
-async def test_search_api_key_preservation(test_client):
-    """Test that search_api_key is preserved when sending an empty string."""
-    # 1. Set initial settings with a search API key (use SDK dotted keys)
+async def test_search_api_key_explicit_clear(test_client):
+    """Explicit empty search_api_key payloads should clear the stored secret."""
     initial_settings = {
         'search_api_key': 'initial-secret-key',
         'llm.model': 'gpt-4',
@@ -278,13 +277,10 @@ async def test_search_api_key_preservation(test_client):
     response = test_client.post('/api/settings', json=initial_settings)
     assert response.status_code == 200
 
-    # Verify key is set
     response = test_client.get('/api/settings')
     assert response.status_code == 200
     assert response.json()['search_api_key_set'] is True
 
-    # 2. Update settings with EMPTY search API key (simulating the frontend bug)
-    # and changing another field via SDK key
     update_settings = {
         'search_api_key': '',
         'llm.model': 'claude-3-opus',
@@ -292,11 +288,9 @@ async def test_search_api_key_preservation(test_client):
     response = test_client.post('/api/settings', json=update_settings)
     assert response.status_code == 200
 
-    # 3. Verify the key was NOT wiped out (The Critical Check)
     response = test_client.get('/api/settings')
     assert response.status_code == 200
-    assert response.json()['search_api_key_set'] is True
-    # Verify the SDK value updated
+    assert response.json()['search_api_key_set'] is False
     assert response.json()['agent_settings']['llm.model'] == 'claude-3-opus'
 
 
