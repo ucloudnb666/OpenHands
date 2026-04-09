@@ -15,6 +15,39 @@ import {
 } from "#/utils/settings-value-pickers";
 import { parseMcpConfig } from "#/utils/mcp-config";
 
+const hasAgentSettingKey = (
+  agentSettings: Record<string, SettingsValue>,
+  key: string,
+) => Object.prototype.hasOwnProperty.call(agentSettings, key);
+
+const resolveSdkStringSetting = ({
+  agentSettings,
+  key,
+  legacyValue,
+  defaultValue,
+  allowEmpty = false,
+}: {
+  agentSettings: Record<string, SettingsValue>;
+  key: string;
+  legacyValue: unknown;
+  defaultValue: string;
+  allowEmpty?: boolean;
+}) => {
+  if (hasAgentSettingKey(agentSettings, key)) {
+    const agentValue = agentSettings[key];
+
+    if (typeof agentValue === "string") {
+      if (agentValue.length > 0 || allowEmpty) {
+        return agentValue;
+      }
+    }
+
+    return defaultValue;
+  }
+
+  return pickFirstString(legacyValue) ?? defaultValue;
+};
+
 const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
   const agentSettings = (settings.agent_settings ?? {}) as Record<
     string,
@@ -24,15 +57,25 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
-    llm_model:
-      pickFirstString(settings.llm_model, agentSettings["llm.model"]) ??
-      DEFAULT_SETTINGS.llm_model,
-    llm_base_url:
-      pickFirstString(settings.llm_base_url, agentSettings["llm.base_url"]) ??
-      DEFAULT_SETTINGS.llm_base_url,
-    agent:
-      pickFirstString(agentSettings.agent, settings.agent) ??
-      DEFAULT_SETTINGS.agent,
+    llm_model: resolveSdkStringSetting({
+      agentSettings,
+      key: "llm.model",
+      legacyValue: settings.llm_model,
+      defaultValue: DEFAULT_SETTINGS.llm_model,
+    }),
+    llm_base_url: resolveSdkStringSetting({
+      agentSettings,
+      key: "llm.base_url",
+      legacyValue: settings.llm_base_url,
+      defaultValue: DEFAULT_SETTINGS.llm_base_url,
+      allowEmpty: true,
+    }),
+    agent: resolveSdkStringSetting({
+      agentSettings,
+      key: "agent",
+      legacyValue: settings.agent,
+      defaultValue: DEFAULT_SETTINGS.agent,
+    }),
     llm_api_key: settings.llm_api_key ?? null,
     llm_api_key_set: settings.llm_api_key_set ?? false,
     confirmation_mode:

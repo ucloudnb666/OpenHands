@@ -563,6 +563,69 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
+  it("keeps the basic view after save when a stale legacy base URL lingers on refetch", async () => {
+    let persistedSettings = buildSettingsWithAdvancedToggle({
+      llm_base_url: "https://stale.example/v1",
+      agent_settings: {
+        "llm.base_url": "https://stale.example/v1",
+      },
+    });
+
+    const getSettingsSpy = vi
+      .spyOn(SettingsService, "getSettings")
+      .mockImplementation(async () => structuredClone(persistedSettings));
+    const saveSettingsSpy = vi
+      .spyOn(SettingsService, "saveSettings")
+      .mockImplementation(async (payload) => {
+        const nextAgentSettings = {
+          ...persistedSettings.agent_settings,
+        } as NonNullable<Settings["agent_settings"]>;
+
+        Object.entries(payload).forEach(([key, value]) => {
+          if (key.includes(".") || key === "agent" || key === "mcp_config") {
+            nextAgentSettings[key] = value as SettingsValue;
+          }
+        });
+
+        persistedSettings = buildSettingsWithAdvancedToggle({
+          ...persistedSettings,
+          agent_settings: nextAgentSettings,
+        });
+
+        return true;
+      });
+
+    renderLlmSettingsScreen({ appMode: "oss" });
+
+    await screen.findByTestId("llm-settings-form-advanced");
+    await userEvent.click(screen.getByTestId("sdk-section-basic-toggle"));
+
+    const apiKeyInput = await screen.findByTestId("llm-api-key-input");
+    await userEvent.type(apiKeyInput, "test-api-key");
+    await userEvent.click(screen.getByTestId("save-button"));
+
+    await waitFor(() => {
+      expect(saveSettingsSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          "llm.api_key": "test-api-key",
+          "llm.base_url": null,
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(getSettingsSpy).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+
   it("submits advanced form values through SDK setting keys", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
