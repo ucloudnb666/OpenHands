@@ -25,13 +25,13 @@ from openhands.app_server.sandbox.sandbox_router import (
     get_secret_value,
     list_secret_names,
 )
-from openhands.app_server.sandbox.session_auth import validate_session_key
+from openhands.app_server.sandbox.session_auth import (
+    validate_session_key,
+    validate_session_key_ownership,
+)
 from openhands.app_server.user.auth_user_context import AuthUserContext
 from openhands.app_server.user.user_models import UserInfo
-from openhands.app_server.user.user_router import (
-    _validate_session_key_ownership,
-    get_current_user,
-)
+from openhands.app_server.user.user_router import get_current_user
 from openhands.integrations.provider import ProviderHandler, ProviderToken
 from openhands.integrations.service_types import ProviderType
 from openhands.sdk.secret import StaticSecret
@@ -167,7 +167,7 @@ class TestGetCurrentUserExposeSecrets:
         mock_context.get_user_id = AsyncMock(return_value=USER_ID)
 
         with patch(
-            'openhands.app_server.user.user_router._validate_session_key_ownership'
+            'openhands.app_server.user.user_router.validate_session_key_ownership'
         ) as mock_validate:
             mock_validate.return_value = None
             result = await get_current_user(
@@ -189,7 +189,7 @@ class TestGetCurrentUserExposeSecrets:
         mock_context = AsyncMock()
 
         with pytest.raises(HTTPException) as exc_info:
-            await _validate_session_key_ownership(mock_context, session_api_key=None)
+            await validate_session_key_ownership(mock_context, session_api_key=None)
         assert exc_info.value.status_code == 401
         assert 'X-Session-API-Key' in exc_info.value.detail
 
@@ -205,7 +205,7 @@ class TestGetCurrentUserExposeSecrets:
             mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_svc)
             mock_get.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            await _validate_session_key_ownership(
+            await validate_session_key_ownership(
                 mock_context, session_api_key='stolen-key'
             )
 
@@ -223,7 +223,7 @@ class TestGetCurrentUserExposeSecrets:
             mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_svc)
             mock_get.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            await _validate_session_key_ownership(
+            await validate_session_key_ownership(
                 mock_context, session_api_key='some-key'
             )
 
@@ -404,7 +404,7 @@ def _build_integration_test_app(
 
     The ``depends_user_context`` dependency is overridden with a mock, but the
     session key validation logic in ``validate_session_key`` and
-    ``_validate_session_key_ownership`` runs unmodified.
+    ``validate_session_key_ownership`` runs unmodified.
 
     Router-level dependencies (e.g. ``check_session_api_key`` from ``SESSION_API_KEY``
     env var) are overridden to no-ops so we can exercise the endpoint-level auth logic
@@ -437,7 +437,7 @@ class TestExposeSecretsIntegration:
 
     These tests exercise the full auth validation stack:
     - validate_session_key (real)
-    - _validate_session_key_ownership (real)
+    - validate_session_key_ownership (real)
     - ownership check (real)
     Only the data layer (sandbox service lookup, user context) is mocked.
     """
