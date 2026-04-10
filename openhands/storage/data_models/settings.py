@@ -275,18 +275,6 @@ def _merge_sdk_mcp_configs(
     return SDKMCPConfig.model_validate({'mcpServers': merged_servers})
 
 
-def _legacy_mcp_config_from_value(value: Any) -> LegacyMCPConfig | None:
-    if value in (None, {}):
-        return None
-    if isinstance(value, LegacyMCPConfig):
-        return value
-    if isinstance(value, SDKMCPConfig):
-        return _sdk_mcp_config_to_legacy(value)
-    if isinstance(value, dict) and 'mcpServers' in value:
-        return _sdk_mcp_config_to_legacy(SDKMCPConfig.model_validate(value))
-    return LegacyMCPConfig.model_validate(value)
-
-
 def _normalize_agent_setting_value(key: str, value: Any) -> Any:
     if key == 'mcp_config':
         sdk_mcp_config = _sdk_mcp_config_from_value(value)
@@ -327,7 +315,6 @@ class Settings(BaseModel):
     user_consents_to_analytics: bool | None = None
     sandbox_base_container_image: str | None = None
     sandbox_runtime_container_image: str | None = None
-    mcp_config: LegacyMCPConfig | None = None
     disabled_skills: list[str] | None = None
     search_api_key: SecretStr | None = None
     sandbox_api_key: SecretStr | None = None
@@ -356,8 +343,16 @@ class Settings(BaseModel):
     def agent_settings(self) -> AgentSettings:
         return self._agent_settings
 
+    @property
+    def mcp_config(self) -> LegacyMCPConfig | None:
+        """Legacy MCP config view — computed from ``agent_settings``."""
+        return self.to_legacy_mcp_config()
+
     def to_legacy_mcp_config(self) -> LegacyMCPConfig | None:
-        return _legacy_mcp_config_from_value(self.agent_settings.mcp_config)
+        sdk_config = self.agent_settings.mcp_config
+        if sdk_config is None or not sdk_config.mcpServers:
+            return None
+        return _sdk_mcp_config_to_legacy(sdk_config)
 
     def _reload_agent_settings(self) -> None:
         self._agent_settings = AgentSettings.model_validate(

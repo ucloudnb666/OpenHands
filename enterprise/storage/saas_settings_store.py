@@ -175,7 +175,6 @@ class SaasSettingsStore(SettingsStore):
             kwargs.pop('sandbox_grouping_strategy', None)
 
         settings = Settings(**kwargs)
-        object.__setattr__(settings, "mcp_config", settings.to_legacy_mcp_config())
         return settings
 
     async def store(self, item: Settings):
