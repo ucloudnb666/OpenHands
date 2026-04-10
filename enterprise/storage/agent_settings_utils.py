@@ -6,10 +6,6 @@ from typing import Any, Mapping
 from storage.org import Org
 from storage.org_member import OrgMember
 
-from openhands.sdk.settings import (
-    AGENT_SETTINGS_SCHEMA_VERSION,
-    CONVERSATION_SETTINGS_SCHEMA_VERSION,
-)
 from openhands.utils.jsonpatch_compat import make_patch
 
 
@@ -32,55 +28,37 @@ def _apply_updates(
     return target
 
 
-def ensure_schema_version(
-    settings: Mapping[str, Any] | None,
-    default_version: int = AGENT_SETTINGS_SCHEMA_VERSION,
-) -> dict[str, Any]:
-    normalized = dict(settings or {})
-    if normalized and "schema_version" not in normalized:
-        normalized["schema_version"] = default_version
-    return normalized
-
-
 def merge_agent_settings(
     base: Mapping[str, Any] | None,
     updates: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    base_settings = ensure_schema_version(base)
-    target_settings = ensure_schema_version(_apply_updates(base_settings, updates))
-    return ensure_schema_version(
-        make_patch(base_settings, target_settings).apply(base_settings)
-    )
+    base_settings = dict(base or {})
+    target_settings = _apply_updates(base_settings, updates)
+    return make_patch(base_settings, target_settings).apply(base_settings)
 
 
 def get_org_agent_settings(org: Org) -> dict[str, Any]:
-    return ensure_schema_version(dict(getattr(org, "agent_settings", {}) or {}))
+    return dict(getattr(org, "agent_settings", {}) or {})
 
 
 def get_org_member_agent_settings(org_member: OrgMember) -> dict[str, Any]:
-    return ensure_schema_version(dict(getattr(org_member, "agent_settings", {}) or {}))
+    return dict(getattr(org_member, "agent_settings", {}) or {})
 
 
 def get_org_conversation_settings(org: Org) -> dict[str, Any]:
-    return ensure_schema_version(
-        dict(getattr(org, "conversation_settings", {}) or {}),
-        default_version=CONVERSATION_SETTINGS_SCHEMA_VERSION,
-    )
+    return dict(getattr(org, "conversation_settings", {}) or {})
 
 
 def get_org_member_conversation_settings(org_member: OrgMember) -> dict[str, Any]:
-    return ensure_schema_version(
-        dict(getattr(org_member, "conversation_settings", {}) or {}),
-        default_version=CONVERSATION_SETTINGS_SCHEMA_VERSION,
-    )
+    return dict(getattr(org_member, "conversation_settings", {}) or {})
 
 
 def compute_agent_settings_overrides(
     base: Mapping[str, Any] | None,
     effective: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    base_settings = ensure_schema_version(base)
-    effective_settings = ensure_schema_version(effective)
+    base_settings = dict(base or {})
+    effective_settings = dict(effective or {})
 
     overrides: dict[str, Any] = {}
     for operation in make_patch(base_settings, effective_settings).patch:
@@ -88,4 +66,4 @@ def compute_agent_settings_overrides(
         if key == "schema_version":
             continue
         overrides[key] = None if operation["op"] == "remove" else operation["value"]
-    return ensure_schema_version(overrides)
+    return overrides
