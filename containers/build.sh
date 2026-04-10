@@ -9,10 +9,12 @@ load=0
 tag_suffix=""
 dry_run=0
 platform_override=""
+arch_suffix=""
+tags_only=0
 
 # Function to display usage information
 usage() {
-    echo "Usage: $0 -i <image_name> [-o <org_name>] [--push] [--load] [-t <tag_suffix>] [-p <platform>] [--dry]"
+    echo "Usage: $0 -i <image_name> [-o <org_name>] [--push] [--load] [-t <tag_suffix>] [-p <platform>] [--dry] [--arch <arch>] [--tags-only]"
     echo "  -i: Image name (required)"
     echo "  -o: Organization name"
     echo "  --push: Push the image"
@@ -20,6 +22,8 @@ usage() {
     echo "  -t: Tag suffix"
     echo "  -p: Platform(s) to build for (e.g. linux/amd64 or linux/amd64,linux/arm64)"
     echo "  --dry: Don't build, only create build-args.json"
+    echo "  --arch: Architecture suffix (e.g. amd64 or arm64). Appends -<arch> to tags and forces single-platform build"
+    echo "  --tags-only: Print final (non-arch-suffixed) fully-qualified tags and exit"
     exit 1
 }
 
@@ -33,6 +37,8 @@ while [[ $# -gt 0 ]]; do
         -t) tag_suffix="$2"; shift 2 ;;
         -p) platform_override="$2"; shift 2 ;;
         --dry) dry_run=1; shift ;;
+        --arch) arch_suffix="$2"; shift 2 ;;
+        --tags-only) tags_only=1; shift ;;
         *) usage ;;
     esac
 done
@@ -78,7 +84,7 @@ if [[ -n $tag_suffix ]]; then
   done
 fi
 
-echo "Tags: ${tags[@]}"
+echo "Tags (before arch suffix): ${tags[@]}"
 
 if [[ "$image_name" == "openhands" ]]; then
   dir="./containers/app"
@@ -113,10 +119,21 @@ if [[ -n "$DOCKER_IMAGE_TAG" ]]; then
   tags+=("$DOCKER_IMAGE_TAG")
 fi
 
+# Apply architecture suffix for split-arch builds (after all tags are collected)
+if [[ -n "$arch_suffix" ]]; then
+  cache_tag+="-${arch_suffix}"
+  for i in "${!tags[@]}"; do
+    tags[$i]="${tags[$i]}-${arch_suffix}"
+  done
+  # Force single-platform build for this architecture
+  platform_override="linux/${arch_suffix}"
+fi
+
 DOCKER_REPOSITORY="$DOCKER_REGISTRY/$DOCKER_ORG/$DOCKER_IMAGE"
 DOCKER_REPOSITORY=${DOCKER_REPOSITORY,,} # lowercase
 echo "Repo: $DOCKER_REPOSITORY"
 echo "Base dir: $DOCKER_BASE_DIR"
+echo "Tags: ${tags[@]}"
 
 args=""
 full_tags=()
@@ -125,6 +142,17 @@ for tag in "${tags[@]}"; do
   full_tags+=("$DOCKER_REPOSITORY:$tag")
 done
 
+# --tags-only: print final fully-qualified tags (without arch suffix) and exit
+if [[ $tags_only -eq 1 ]]; then
+  for ftag in "${full_tags[@]}"; do
+    if [[ -n "$arch_suffix" ]]; then
+      echo "${ftag%-${arch_suffix}}"
+    else
+      echo "$ftag"
+    fi
+  done
+  exit 0
+fi
 
 if [[ $push -eq 1 ]]; then
   args+=" --push"
@@ -174,7 +202,7 @@ docker buildx build \
   $args \
   --build-arg OPENHANDS_BUILD_VERSION="$OPENHANDS_BUILD_VERSION" \
   --cache-from=type=registry,ref=$DOCKER_REPOSITORY:$cache_tag \
-  --cache-from=type=registry,ref=$DOCKER_REPOSITORY:$cache_tag_base-main \
+  --cache-from=type=registry,ref=$DOCKER_REPOSITORY:${cache_tag_base}-main${arch_suffix:+-${arch_suffix}} \
   --platform $platform \
   --provenance=false \
   -f "$dir/Dockerfile" \
