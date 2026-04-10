@@ -8,12 +8,6 @@ from pydantic import (
     StringConstraints,
     field_validator,
 )
-from storage.agent_settings_utils import (
-    get_org_agent_settings,
-    get_org_conversation_settings,
-    get_org_member_agent_settings,
-    get_org_member_conversation_settings,
-)
 from storage.org import Org
 from storage.org_member import OrgMember
 from storage.role import Role
@@ -185,8 +179,8 @@ class OrgResponse(BaseModel):
             sandbox_base_container_image=org.sandbox_base_container_image,
             sandbox_runtime_container_image=org.sandbox_runtime_container_image,
             org_version=org.org_version if org.org_version is not None else 0,
-            agent_settings=get_org_agent_settings(org),
-            conversation_settings=get_org_conversation_settings(org),
+            agent_settings=dict(org.agent_settings),
+            conversation_settings=dict(org.conversation_settings),
             search_api_key=None,
             sandbox_api_key=None,
             max_budget_per_task=org.max_budget_per_task,
@@ -253,8 +247,8 @@ class OrgLLMSettingsResponse(BaseModel):
     def from_org(cls, org: Org) -> 'OrgLLMSettingsResponse':
         """Create response from Org entity."""
         return cls(
-            agent_settings=get_org_agent_settings(org),
-            conversation_settings=get_org_conversation_settings(org),
+            agent_settings=dict(org.agent_settings),
+            conversation_settings=dict(org.conversation_settings),
             llm_api_key_set=org.llm_api_key is not None,
             search_api_key=cls._mask_key(org.search_api_key),
         )
@@ -366,8 +360,8 @@ class MeResponse(BaseModel):
             role=role.name,
             llm_api_key=cls._mask_key(member.llm_api_key),
             llm_api_key_for_byor=cls._mask_key(member.llm_api_key_for_byor) or None,
-            agent_settings=get_org_member_agent_settings(member),
-            conversation_settings=get_org_member_conversation_settings(member),
+            agent_settings=dict(member.agent_settings),
+            conversation_settings=dict(member.conversation_settings),
             status=member.status,
         )
 

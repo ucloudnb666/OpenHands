@@ -9,11 +9,7 @@ from server.routes.org_models import OrgMemberLLMSettings
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from storage.agent_settings_utils import (
-    get_org_member_agent_settings,
-    get_org_member_conversation_settings,
-    merge_agent_settings,
-)
+from storage.agent_settings_utils import merge_agent_settings
 from storage.database import a_session_maker
 from storage.org_member import OrgMember
 from storage.user import User
@@ -155,13 +151,13 @@ class OrgMemberStore:
 
     @staticmethod
     def get_agent_settings_from_org_member(org_member: OrgMember) -> dict[str, object]:
-        return get_org_member_agent_settings(org_member)
+        return dict(org_member.agent_settings)
 
     @staticmethod
     def get_conversation_settings_from_org_member(
         org_member: OrgMember,
     ) -> dict[str, object]:
-        return get_org_member_conversation_settings(org_member)
+        return dict(org_member.conversation_settings)
 
     @staticmethod
     def get_kwargs_from_settings(settings: Settings):
@@ -283,13 +279,13 @@ class OrgMemberStore:
 
             if agent_settings_updates is not None:
                 org_member.agent_settings = merge_agent_settings(
-                    get_org_member_agent_settings(org_member),
+                    org_member.agent_settings,
                     agent_settings_updates,
                 )
 
             if conversation_settings_updates is not None:
                 org_member.conversation_settings = merge_agent_settings(
-                    get_org_member_conversation_settings(org_member),
+                    org_member.conversation_settings,
                     conversation_settings_updates,
                 )
 

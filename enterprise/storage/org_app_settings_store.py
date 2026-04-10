@@ -13,7 +13,7 @@ from server.constants import (
 from server.routes.org_models import OrgAppSettingsUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.agent_settings_utils import get_org_agent_settings, merge_agent_settings
+from storage.agent_settings_utils import merge_agent_settings
 from storage.org import Org
 from storage.user import User
 
@@ -67,7 +67,7 @@ class OrgAppSettingsStore:
         if org.org_version < ORG_SETTINGS_VERSION:
             org.org_version = ORG_SETTINGS_VERSION
             org.agent_settings = merge_agent_settings(
-                get_org_agent_settings(org),
+                org.agent_settings,
                 {
                     'llm.model': get_default_litellm_model(),
                     'llm.base_url': LITE_LLM_API_URL,

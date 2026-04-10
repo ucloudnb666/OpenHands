@@ -9,11 +9,7 @@ from uuid import UUID
 from server.routes.org_models import OrgLLMSettingsUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.agent_settings_utils import (
-    get_org_agent_settings,
-    get_org_conversation_settings,
-    merge_agent_settings,
-)
+from storage.agent_settings_utils import merge_agent_settings
 from storage.org import Org
 from storage.user import User
 
@@ -73,12 +69,12 @@ class OrgLLMSettingsStore:
         update_data.apply_to_org(org)
         if update_data.agent_settings:
             org.agent_settings = merge_agent_settings(
-                get_org_agent_settings(org),
+                org.agent_settings,
                 update_data.agent_settings,
             )
         if update_data.conversation_settings:
             org.conversation_settings = merge_agent_settings(
-                get_org_conversation_settings(org),
+                org.conversation_settings,
                 update_data.conversation_settings,
             )
 

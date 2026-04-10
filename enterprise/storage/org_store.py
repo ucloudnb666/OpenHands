@@ -14,11 +14,7 @@ from server.constants import (
 from server.routes.org_models import OrgLLMSettingsUpdate, OrphanedUserError
 from sqlalchemy import select, text
 from sqlalchemy.orm import joinedload
-from storage.agent_settings_utils import (
-    get_org_agent_settings,
-    get_org_conversation_settings,
-    merge_agent_settings,
-)
+from storage.agent_settings_utils import merge_agent_settings
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager
 from storage.org import Org
@@ -51,19 +47,19 @@ class OrgStore:
 
     @staticmethod
     def get_agent_settings_from_org(org: Org) -> dict[str, object]:
-        return get_org_agent_settings(org)
+        return dict(org.agent_settings)
 
     @staticmethod
     def get_conversation_settings_from_org(org: Org) -> dict[str, object]:
-        return get_org_conversation_settings(org)
+        return dict(org.conversation_settings)
 
     @staticmethod
     def sync_agent_settings(org: Org) -> None:
-        org.agent_settings = get_org_agent_settings(org)
+        org.agent_settings = dict(org.agent_settings)
 
     @staticmethod
     def sync_conversation_settings(org: Org) -> None:
-        org.conversation_settings = get_org_conversation_settings(org)
+        org.conversation_settings = dict(org.conversation_settings)
 
     @staticmethod
     async def create_org(
@@ -76,7 +72,7 @@ class OrgStore:
             org.agent_settings = merge_agent_settings(
                 org.agent_settings,
                 {
-                    "llm.model": get_org_agent_settings(org).get("llm.model")
+                    "llm.model": org.agent_settings.get("llm.model")
                     or get_default_litellm_model()
                 },
             )
@@ -234,13 +230,13 @@ class OrgStore:
 
             if agent_settings_updates is not None:
                 org.agent_settings = merge_agent_settings(
-                    get_org_agent_settings(org),
+                    org.agent_settings,
                     agent_settings_updates,
                 )
 
             if conversation_settings_updates is not None:
                 org.conversation_settings = merge_agent_settings(
-                    get_org_conversation_settings(org),
+                    org.conversation_settings,
                     conversation_settings_updates,
                 )
 
@@ -481,7 +477,7 @@ class OrgStore:
             llm_settings.apply_to_org(org)
             if llm_settings.agent_settings is not None:
                 org.agent_settings = merge_agent_settings(
-                    get_org_agent_settings(org),
+                    org.agent_settings,
                     llm_settings.agent_settings,
                 )
 
