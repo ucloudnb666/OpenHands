@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - "saas-rel-*"
+      - "jl/enterprise-arm64-build"
     tags:
       - "*"
   pull_request:
@@ -190,6 +191,11 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       # Set up Docker Buildx for better performance
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3.7.0
+        with:
+          image: tonistiigi/binfmt:latest
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -238,7 +244,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OPENHANDS_VERSION=${{ env.OPENHANDS_DOCKER_TAG }}
-          platforms: linux/amd64
+          platforms: ${{ needs.define-matrix.outputs.platforms }}
           # Add build provenance
           provenance: true
           # Add build attestations for better security
