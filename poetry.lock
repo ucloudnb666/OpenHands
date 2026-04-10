@@ -6573,7 +6573,7 @@ llama = ["llama-index (>=0.12.29,<0.13.0)", "llama-index-core (>=0.12.29,<0.13.0
 
 [[package]]
 name = "openhands-agent-server"
-version = "1.16.1"
+version = "1.17.0"
 description = "OpenHands Agent Server - REST/WebSocket interface for OpenHands AI Agent"
 optional = false
 python-versions = ">=3.12"
@@ -6597,12 +6597,12 @@ wsproto = ">=1.2.0"
 type = "git"
 url = "https://github.com/OpenHands/software-agent-sdk.git"
 reference = "openhands/issue-2788-agent-settings-migrations"
-resolved_reference = "dca806219eb8fd04d69089247cd927bb0d489d84"
+resolved_reference = "4ad8c935b5fc01186ee40b40856fd32a888652ea"
 subdirectory = "openhands-agent-server"
 
 [[package]]
 name = "openhands-sdk"
-version = "1.16.1"
+version = "1.17.0"
 description = "OpenHands SDK - Core functionality for building AI agents"
 optional = false
 python-versions = ">=3.12"
@@ -6632,7 +6632,7 @@ boto3 = ["boto3 (>=1.35.0)"]
 type = "git"
 url = "https://github.com/OpenHands/software-agent-sdk.git"
 reference = "openhands/issue-2788-agent-settings-migrations"
-resolved_reference = "dca806219eb8fd04d69089247cd927bb0d489d84"
+resolved_reference = "4ad8c935b5fc01186ee40b40856fd32a888652ea"
 subdirectory = "openhands-sdk"
 
 [[package]]
