@@ -6,9 +6,11 @@ from typing import Any, Mapping
 from storage.org import Org
 from storage.org_member import OrgMember
 
+from openhands.sdk.settings import (
+    AGENT_SETTINGS_SCHEMA_VERSION,
+    CONVERSATION_SETTINGS_SCHEMA_VERSION,
+)
 from openhands.utils.jsonpatch_compat import make_patch
-
-_SCHEMA_VERSION = 1
 
 
 def _path_to_key(path: str) -> str:
@@ -30,10 +32,13 @@ def _apply_updates(
     return target
 
 
-def ensure_schema_version(agent_settings: Mapping[str, Any] | None) -> dict[str, Any]:
-    normalized = dict(agent_settings or {})
+def ensure_schema_version(
+    settings: Mapping[str, Any] | None,
+    default_version: int = AGENT_SETTINGS_SCHEMA_VERSION,
+) -> dict[str, Any]:
+    normalized = dict(settings or {})
     if normalized and "schema_version" not in normalized:
-        normalized["schema_version"] = _SCHEMA_VERSION
+        normalized["schema_version"] = default_version
     return normalized
 
 
@@ -57,12 +62,16 @@ def get_org_member_agent_settings(org_member: OrgMember) -> dict[str, Any]:
 
 
 def get_org_conversation_settings(org: Org) -> dict[str, Any]:
-    return ensure_schema_version(dict(getattr(org, "conversation_settings", {}) or {}))
+    return ensure_schema_version(
+        dict(getattr(org, "conversation_settings", {}) or {}),
+        default_version=CONVERSATION_SETTINGS_SCHEMA_VERSION,
+    )
 
 
 def get_org_member_conversation_settings(org_member: OrgMember) -> dict[str, Any]:
     return ensure_schema_version(
-        dict(getattr(org_member, "conversation_settings", {}) or {})
+        dict(getattr(org_member, "conversation_settings", {}) or {}),
+        default_version=CONVERSATION_SETTINGS_SCHEMA_VERSION,
     )
 
 

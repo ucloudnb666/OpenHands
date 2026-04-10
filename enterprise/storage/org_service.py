@@ -8,7 +8,8 @@ from uuid import UUID, uuid4
 from uuid import UUID as parse_uuid
 
 from server.constants import ORG_SETTINGS_VERSION, get_default_litellm_model
-from storage.agent_settings_utils import _SCHEMA_VERSION
+
+from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
 from server.routes.org_models import (
     LiteLLMIntegrationError,
     OrgAuthorizationError,
@@ -115,7 +116,7 @@ class OrgService:
             contact_email=contact_email,
             org_version=ORG_SETTINGS_VERSION,
             agent_settings={
-                'schema_version': _SCHEMA_VERSION,
+                'schema_version': AGENT_SETTINGS_SCHEMA_VERSION,
                 'llm.model': get_default_litellm_model(),
             },
         )

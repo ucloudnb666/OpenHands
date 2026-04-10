@@ -15,8 +15,9 @@ from server.constants import (
 )
 from server.logger import logger
 from sqlalchemy import select, text
-from storage.agent_settings_utils import _SCHEMA_VERSION
 from sqlalchemy.orm import selectinload
+
+from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
 from storage.database import a_session_maker
 from storage.encrypt_utils import (
     decrypt_legacy_model,
@@ -234,7 +235,7 @@ class UserStore:
             # If the user has custom settings, keep the org defaults minimal.
             if custom_settings:
                 org_kwargs["agent_settings"] = {
-                    "schema_version": _SCHEMA_VERSION,
+                    "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
                     "llm.model": get_default_litellm_model(),
                     "llm.base_url": LITE_LLM_API_URL,
                 }
