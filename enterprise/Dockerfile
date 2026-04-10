@@ -30,8 +30,8 @@ RUN /app/.venv/bin/pip install poetry poetry-plugin-export
 # Copy lock files first for better Docker layer caching
 COPY --chown=openhands:openhands enterprise/pyproject.toml enterprise/poetry.lock /tmp/enterprise/
 RUN cd /tmp/enterprise && \
-    # Export only main dependencies with hashes for supply chain security
-    /app/.venv/bin/poetry export --only main -o requirements.txt && \
+    # Export main dependencies (without hashes to support VCS-pinned packages)
+    /app/.venv/bin/poetry export --only main --without-hashes -o requirements.txt && \
     # Remove the local path dependency (openhands-ai is already in base image)
     sed -i '/^-e /d; /openhands-ai/d' requirements.txt && \
     # Install pinned dependencies from lock file

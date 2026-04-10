@@ -20,9 +20,9 @@ from openhands.sdk.settings import ConversationSettings
 
 
 _CONVERSATION_SETTINGS_KEYS = {
-    "max_iterations",
-    "confirmation_mode",
-    "security_analyzer",
+    'max_iterations',
+    'confirmation_mode',
+    'security_analyzer',
 }
 
 
@@ -33,9 +33,9 @@ def get_org_conversation_settings(org: Org) -> dict[str, Any]:
         for key, value in agent_settings.items()
         if key in _CONVERSATION_SETTINGS_KEYS
     }
-    conversation_settings["schema_version"] = (
-        ConversationSettings.model_fields["schema_version"].default
-    )
+    conversation_settings['schema_version'] = ConversationSettings.model_fields[
+        'schema_version'
+    ].default
     return conversation_settings
 
 
@@ -74,7 +74,7 @@ class OrgDeletionError(Exception):
 class OrgAuthorizationError(OrgDeletionError):
     """Raised when user is not authorized to delete organization."""
 
-    def __init__(self, message: str = "Not authorized to delete organization"):
+    def __init__(self, message: str = 'Not authorized to delete organization'):
         super().__init__(message)
 
 
@@ -84,7 +84,7 @@ class OrphanedUserError(OrgDeletionError):
     def __init__(self, user_ids: list[str]):
         self.user_ids = user_ids
         super().__init__(
-            f"Cannot delete organization: {len(user_ids)} user(s) would have no remaining organization"
+            f'Cannot delete organization: {len(user_ids)} user(s) would have no remaining organization'
         )
 
 
@@ -124,30 +124,30 @@ class InvalidRoleError(Exception):
 class InsufficientPermissionError(Exception):
     """Raised when user lacks permission to perform an operation."""
 
-    def __init__(self, message: str = "Insufficient permission"):
+    def __init__(self, message: str = 'Insufficient permission'):
         super().__init__(message)
 
 
 class CannotModifySelfError(Exception):
     """Raised when user attempts to modify their own membership."""
 
-    def __init__(self, action: str = "modify"):
+    def __init__(self, action: str = 'modify'):
         self.action = action
-        super().__init__(f"Cannot {action} your own membership")
+        super().__init__(f'Cannot {action} your own membership')
 
 
 class LastOwnerError(Exception):
     """Raised when attempting to remove or demote the last owner."""
 
-    def __init__(self, action: str = "remove"):
+    def __init__(self, action: str = 'remove'):
         self.action = action
-        super().__init__(f"Cannot {action} the last owner of an organization")
+        super().__init__(f'Cannot {action} the last owner of an organization')
 
 
 class MemberUpdateError(Exception):
     """Raised when member update operation fails."""
 
-    def __init__(self, message: str = "Failed to update member"):
+    def __init__(self, message: str = 'Failed to update member'):
         super().__init__(message)
 
 
@@ -188,7 +188,7 @@ class OrgResponse(BaseModel):
     @classmethod
     def from_org(
         cls, org: Org, credits: float | None = None, user_id: str | None = None
-    ) -> "OrgResponse":
+    ) -> 'OrgResponse':
         """Create an OrgResponse from an Org entity."""
         return cls(
             id=str(org.id),
@@ -263,11 +263,11 @@ class OrgLLMSettingsResponse(BaseModel):
         if not raw:
             return None
         if len(raw) <= 4:
-            return "****"
-        return "****" + raw[-4:]
+            return '****'
+        return '****' + raw[-4:]
 
     @classmethod
-    def from_org(cls, org: Org) -> "OrgLLMSettingsResponse":
+    def from_org(cls, org: Org) -> 'OrgLLMSettingsResponse':
         """Create response from Org entity."""
         return cls(
             agent_settings=get_org_agent_settings(org),
@@ -357,13 +357,13 @@ class MeResponse(BaseModel):
     def _mask_key(secret: str | SecretStr | None) -> str:
         """Mask an API key, showing only last 4 characters."""
         if secret is None:
-            return ""
+            return ''
         raw = secret.get_secret_value() if isinstance(secret, SecretStr) else secret
         if not raw:
-            return ""
+            return ''
         if len(raw) <= 4:
-            return "****"
-        return "****" + raw[-4:]
+            return '****'
+        return '****' + raw[-4:]
 
     @classmethod
     def from_org_member(
@@ -371,7 +371,7 @@ class MeResponse(BaseModel):
         member: OrgMember,
         role: Role,
         email: str,
-    ) -> "MeResponse":
+    ) -> 'MeResponse':
         """Create a MeResponse from an OrgMember, Role, and user email."""
         return cls(
             org_id=str(member.org_id),
@@ -392,7 +392,7 @@ class OrgAppSettingsResponse(BaseModel):
     max_budget_per_task: float | None = None
 
     @classmethod
-    def from_org(cls, org: Org) -> "OrgAppSettingsResponse":
+    def from_org(cls, org: Org) -> 'OrgAppSettingsResponse':
         """Create an OrgAppSettingsResponse from an Org entity.
 
         Args:
@@ -417,15 +417,15 @@ class OrgAppSettingsUpdate(BaseModel):
     enable_solvability_analysis: bool | None = None
     max_budget_per_task: float | None = None
 
-    @field_validator("max_budget_per_task")
+    @field_validator('max_budget_per_task')
     @classmethod
     def validate_max_budget_per_task(cls, v: float | None) -> float | None:
         if v is not None and v <= 0:
-            raise ValueError("max_budget_per_task must be greater than 0")
+            raise ValueError('max_budget_per_task must be greater than 0')
         return v
 
 
-VALID_GIT_PROVIDERS = {"github", "gitlab", "bitbucket"}
+VALID_GIT_PROVIDERS = {'github', 'gitlab', 'bitbucket'}
 
 
 class GitOrgClaimRequest(BaseModel):
@@ -434,7 +434,7 @@ class GitOrgClaimRequest(BaseModel):
     provider: str
     git_organization: str
 
-    @field_validator("provider")
+    @field_validator('provider')
     @classmethod
     def validate_provider(cls, v: str) -> str:
         v = v.lower().strip()
@@ -444,12 +444,12 @@ class GitOrgClaimRequest(BaseModel):
             )
         return v
 
-    @field_validator("git_organization")
+    @field_validator('git_organization')
     @classmethod
     def validate_git_organization(cls, v: str) -> str:
         v = v.strip().lower()
         if not v:
-            raise ValueError("git_organization must not be empty")
+            raise ValueError('git_organization must not be empty')
         return v
 
 

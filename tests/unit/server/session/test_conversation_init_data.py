@@ -19,11 +19,11 @@ from openhands.storage.data_models.settings import Settings
 def base_settings():
     """Create a base Settings object with minimal required fields."""
     return Settings(
-        language="en",
-        agent="CodeActAgent",
+        language='en',
+        agent='CodeActAgent',
         max_iterations=100,
-        llm_model="anthropic/claude-3-5-sonnet-20241022",
-        llm_api_key=SecretStr("test_api_key_12345"),
+        llm_model='anthropic/claude-3-5-sonnet-20241022',
+        llm_api_key=SecretStr('test_api_key_12345'),
         llm_base_url=None,
     )
 
@@ -36,10 +36,10 @@ class TestConversationInitDataValidator:
         # Create provider tokens as a regular dict
         provider_tokens_dict = {
             ProviderType.GITHUB: ProviderToken(
-                token=SecretStr("ghp_test_token_123"), user_id="test_user"
+                token=SecretStr('ghp_test_token_123'), user_id='test_user'
             ),
             ProviderType.GITLAB: ProviderToken(
-                token=SecretStr("glpat_test_token_456"), user_id="test_user_2"
+                token=SecretStr('glpat_test_token_456'), user_id='test_user_2'
             ),
         }
 
@@ -55,14 +55,14 @@ class TestConversationInitDataValidator:
         assert ProviderType.GITLAB in init_data.git_provider_tokens
         assert (
             init_data.git_provider_tokens[ProviderType.GITHUB].token.get_secret_value()
-            == "ghp_test_token_123"
+            == 'ghp_test_token_123'
         )
 
     def test_git_provider_tokens_mappingproxy_preserved(self, base_settings):
         """Test that MappingProxyType passed as git_provider_tokens is converted to MappingProxyType."""
         # Create provider tokens as MappingProxyType
         provider_token = ProviderToken(
-            token=SecretStr("ghp_test_token_789"), user_id="test_user_3"
+            token=SecretStr('ghp_test_token_789'), user_id='test_user_3'
         )
         provider_tokens_proxy = MappingProxyType({ProviderType.GITHUB: provider_token})
 
@@ -76,10 +76,10 @@ class TestConversationInitDataValidator:
         assert isinstance(init_data.git_provider_tokens, MappingProxyType)
         assert (
             init_data.git_provider_tokens[ProviderType.GITHUB].token.get_secret_value()
-            == "ghp_test_token_789"
+            == 'ghp_test_token_789'
         )
         assert (
-            init_data.git_provider_tokens[ProviderType.GITHUB].user_id == "test_user_3"
+            init_data.git_provider_tokens[ProviderType.GITHUB].user_id == 'test_user_3'
         )
 
     def test_git_provider_tokens_none_preserved(self, base_settings):
@@ -97,11 +97,11 @@ class TestConversationInitDataValidator:
         """Test that dict passed as custom_secrets is converted to MappingProxyType."""
         # Create custom secrets as a regular dict
         custom_secrets_dict = {
-            "API_KEY": CustomSecret(
-                secret=SecretStr("api_key_123"), description="API key for service"
+            'API_KEY': CustomSecret(
+                secret=SecretStr('api_key_123'), description='API key for service'
             ),
-            "DATABASE_URL": CustomSecret(
-                secret=SecretStr("postgres://localhost"), description="Database URL"
+            'DATABASE_URL': CustomSecret(
+                secret=SecretStr('postgres://localhost'), description='Database URL'
             ),
         }
 
@@ -113,20 +113,20 @@ class TestConversationInitDataValidator:
 
         # Verify it's now a MappingProxyType
         assert isinstance(init_data.custom_secrets, MappingProxyType)
-        assert "API_KEY" in init_data.custom_secrets
-        assert "DATABASE_URL" in init_data.custom_secrets
+        assert 'API_KEY' in init_data.custom_secrets
+        assert 'DATABASE_URL' in init_data.custom_secrets
         assert (
-            init_data.custom_secrets["API_KEY"].secret.get_secret_value()
-            == "api_key_123"
+            init_data.custom_secrets['API_KEY'].secret.get_secret_value()
+            == 'api_key_123'
         )
 
     def test_custom_secrets_mappingproxy_preserved(self, base_settings):
         """Test that MappingProxyType passed as custom_secrets is converted to MappingProxyType."""
         # Create custom secrets as MappingProxyType
         custom_secret = CustomSecret(
-            secret=SecretStr("api_key_456"), description="API key"
+            secret=SecretStr('api_key_456'), description='API key'
         )
-        custom_secrets_proxy = MappingProxyType({"API_KEY": custom_secret})
+        custom_secrets_proxy = MappingProxyType({'API_KEY': custom_secret})
 
         # Create ConversationInitData with MappingProxyType
         init_data = ConversationInitData(
@@ -137,10 +137,10 @@ class TestConversationInitDataValidator:
         # Verify it's a MappingProxyType (Pydantic may create a new one, but type is preserved)
         assert isinstance(init_data.custom_secrets, MappingProxyType)
         assert (
-            init_data.custom_secrets["API_KEY"].secret.get_secret_value()
-            == "api_key_456"
+            init_data.custom_secrets['API_KEY'].secret.get_secret_value()
+            == 'api_key_456'
         )
-        assert init_data.custom_secrets["API_KEY"].description == "API key"
+        assert init_data.custom_secrets['API_KEY'].description == 'API key'
 
     def test_custom_secrets_none_preserved(self, base_settings):
         """Test that None passed as custom_secrets is preserved."""
@@ -157,12 +157,12 @@ class TestConversationInitDataValidator:
         """Test that both fields are converted when passed as dicts."""
         provider_tokens_dict = {
             ProviderType.GITHUB: ProviderToken(
-                token=SecretStr("ghp_token"), user_id="user1"
+                token=SecretStr('ghp_token'), user_id='user1'
             )
         }
         custom_secrets_dict = {
-            "SECRET": CustomSecret(
-                secret=SecretStr("secret_value"), description="A secret"
+            'SECRET': CustomSecret(
+                secret=SecretStr('secret_value'), description='A secret'
             )
         }
 
@@ -195,7 +195,7 @@ class TestConversationInitDataValidator:
         """Test that MappingProxyType prevents mutation of the underlying data."""
         provider_tokens_dict = {
             ProviderType.GITHUB: ProviderToken(
-                token=SecretStr("ghp_token"), user_id="user1"
+                token=SecretStr('ghp_token'), user_id='user1'
             )
         }
 
@@ -211,7 +211,7 @@ class TestConversationInitDataValidator:
         with pytest.raises(TypeError):
             # MappingProxyType doesn't support item assignment
             init_data.git_provider_tokens[ProviderType.GITLAB] = ProviderToken(
-                token=SecretStr("new_token")
+                token=SecretStr('new_token')
             )
 
     def test_validator_with_settings_dict_unpacking(self, base_settings):
@@ -222,9 +222,9 @@ class TestConversationInitDataValidator:
         """
         # Simulate the pattern used in conversation_service.py
         session_init_args = {**base_settings.__dict__}
-        session_init_args["git_provider_tokens"] = {
+        session_init_args['git_provider_tokens'] = {
             ProviderType.GITHUB: ProviderToken(
-                token=SecretStr("ghp_from_dict"), user_id="user_from_dict"
+                token=SecretStr('ghp_from_dict'), user_id='user_from_dict'
             )
         }
 
@@ -235,7 +235,7 @@ class TestConversationInitDataValidator:
         assert isinstance(init_data.git_provider_tokens, MappingProxyType)
         assert (
             init_data.git_provider_tokens[ProviderType.GITHUB].token.get_secret_value()
-            == "ghp_from_dict"
+            == 'ghp_from_dict'
         )
 
     def test_validator_with_mixed_types(self, base_settings):
@@ -243,15 +243,15 @@ class TestConversationInitDataValidator:
         # git_provider_tokens as dict
         provider_tokens_dict = {
             ProviderType.GITHUB: ProviderToken(
-                token=SecretStr("ghp_dict_token"), user_id="user_dict"
+                token=SecretStr('ghp_dict_token'), user_id='user_dict'
             )
         }
 
         # custom_secrets as MappingProxyType
         custom_secret = CustomSecret(
-            secret=SecretStr("secret_proxy"), description="From proxy"
+            secret=SecretStr('secret_proxy'), description='From proxy'
         )
-        custom_secrets_proxy = MappingProxyType({"SECRET": custom_secret})
+        custom_secrets_proxy = MappingProxyType({'SECRET': custom_secret})
 
         init_data = ConversationInitData(
             **base_settings.__dict__,
@@ -265,11 +265,11 @@ class TestConversationInitDataValidator:
         # Verify the content is preserved (Pydantic may create new MappingProxyType instances)
         assert (
             init_data.git_provider_tokens[ProviderType.GITHUB].token.get_secret_value()
-            == "ghp_dict_token"
+            == 'ghp_dict_token'
         )
         assert (
-            init_data.custom_secrets["SECRET"].secret.get_secret_value()
-            == "secret_proxy"
+            init_data.custom_secrets['SECRET'].secret.get_secret_value()
+            == 'secret_proxy'
         )
 
 
@@ -277,8 +277,8 @@ def test_conversation_init_data_default_agent_settings_initializes():
     """Frozen subclasses should still normalize default agent_settings."""
     init_data = ConversationInitData()
 
-    assert init_data.raw_agent_settings["schema_version"] == 1
-    assert init_data.agent_settings.agent == "CodeActAgent"
+    assert init_data.raw_agent_settings['schema_version'] == 1
+    assert init_data.agent_settings.agent == 'CodeActAgent'
 
 
 def test_conversation_init_data_no_pydantic_frozen_field_warning():
@@ -289,7 +289,7 @@ def test_conversation_init_data_no_pydantic_frozen_field_warning():
     See: https://github.com/All-Hands-AI/infra/issues/860
     """
     with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
+        warnings.simplefilter('always')
 
         # Re-import to trigger any warnings during model definition
         import importlib
@@ -301,9 +301,9 @@ def test_conversation_init_data_no_pydantic_frozen_field_warning():
         # Check for warnings containing 'frozen' which would indicate
         # incorrect usage of frozen=True in Field()
         frozen_warnings = [
-            warning for warning in w if "frozen" in str(warning.message).lower()
+            warning for warning in w if 'frozen' in str(warning.message).lower()
         ]
 
         assert len(frozen_warnings) == 0, (
-            f"Pydantic frozen field warnings found: {[str(w.message) for w in frozen_warnings]}"
+            f'Pydantic frozen field warnings found: {[str(w.message) for w in frozen_warnings]}'
         )
