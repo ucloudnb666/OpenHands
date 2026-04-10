@@ -458,7 +458,9 @@ class Settings(BaseModel):
             for key, value in self.raw_conversation_settings.items()
             if key != 'schema_version' and key not in _conversation_schema_field_keys()
         }
-        values['schema_version'] = ConversationSettings.CURRENT_PERSISTED_VERSION
+        values['schema_version'] = ConversationSettings.model_fields[
+            'schema_version'
+        ].default
         for key, field_name in _CONVERSATION_SETTINGS_FIELD_MAP.items():
             value = getattr(self, field_name)
             if value is not None:
@@ -557,7 +559,8 @@ class Settings(BaseModel):
             key: value for key, value in self._extra_agent_settings_payload().items()
         }
         values['schema_version'] = payload.get(
-            'schema_version', AgentSettings.CURRENT_PERSISTED_VERSION
+            'schema_version',
+            AgentSettings.model_fields['schema_version'].default,
         )
 
         missing = object()

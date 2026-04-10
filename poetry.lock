@@ -6596,8 +6596,8 @@ wsproto = ">=1.2.0"
 [package.source]
 type = "git"
 url = "https://github.com/OpenHands/software-agent-sdk.git"
-reference = "openhands/issue-2788-agent-settings-migrations"
-resolved_reference = "3890fc47b9a68ebf325661ddb09b9f44b996f6e9"
+reference = "dc47d3cbc4e9c20f70a13b564e4e148cba07bab1"
+resolved_reference = "dc47d3cbc4e9c20f70a13b564e4e148cba07bab1"
 subdirectory = "openhands-agent-server"
 
 [[package]]
@@ -6631,8 +6631,8 @@ boto3 = ["boto3 (>=1.35.0)"]
 [package.source]
 type = "git"
 url = "https://github.com/OpenHands/software-agent-sdk.git"
-reference = "openhands/issue-2788-agent-settings-migrations"
-resolved_reference = "3890fc47b9a68ebf325661ddb09b9f44b996f6e9"
+reference = "dc47d3cbc4e9c20f70a13b564e4e148cba07bab1"
+resolved_reference = "dc47d3cbc4e9c20f70a13b564e4e148cba07bab1"
 subdirectory = "openhands-sdk"
 
 [[package]]
@@ -15041,4 +15041,4 @@ third-party-runtimes = ["daytona", "e2b-code-interpreter", "modal", "runloop-api
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12,<3.14"
-content-hash = "e68a40a25fe5fc503187f4e23ef1071660a9e055f98d31f4733ff47aa74dffae"
+content-hash = "78140e8d4c9eec17b2e71bc1bf59fb971a6e75809ca15589de75257dffa6f3bf"
