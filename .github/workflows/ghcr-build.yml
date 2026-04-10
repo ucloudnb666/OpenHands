@@ -40,13 +40,12 @@ jobs:
         shell: bash
         id: define-base-images
         run: |
+          architectures='["amd64", "arm64"]'
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            architectures='["amd64"]'
             json=$(jq -n -c '[
                 { image: "nikolaik/python-nodejs:python3.12-nodejs22-slim", tag: "nikolaik" }
               ]')
           else
-            architectures='["amd64", "arm64"]'
             json=$(jq -n -c '[
                 { image: "nikolaik/python-nodejs:python3.12-nodejs22-slim", tag: "nikolaik" },
                 { image: "ubuntu:24.04", tag: "ubuntu" }
