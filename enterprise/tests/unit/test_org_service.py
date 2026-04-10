@@ -1265,7 +1265,7 @@ async def test_update_org_with_permissions_success_llm_fields_owner(
     update_data = OrgUpdate(
         agent_settings={
             'llm.model': 'claude-opus-4-5-20251101',
-            'verification.security_analyzer': 'enabled',
+            'security_analyzer': 'enabled',
         }
     )
 
@@ -1284,7 +1284,7 @@ async def test_update_org_with_permissions_success_llm_fields_owner(
         # Assert
         assert result is not None
         assert result.agent_settings['llm.model'] == 'claude-opus-4-5-20251101'
-        assert result.agent_settings['verification.security_analyzer'] == 'enabled'
+        assert result.agent_settings['security_analyzer'] == 'enabled'
 
 
 @pytest.mark.asyncio
@@ -1776,7 +1776,7 @@ async def test_update_org_with_permissions_only_llm_fields(
     update_data = OrgUpdate(
         agent_settings={
             'llm.model': 'claude-opus-4-5-20251101',
-            'verification.security_analyzer': 'enabled',
+            'security_analyzer': 'enabled',
             'agent': 'agent-mode',
         }
     )
@@ -1796,7 +1796,7 @@ async def test_update_org_with_permissions_only_llm_fields(
         # Assert
         assert result is not None
         assert result.agent_settings['llm.model'] == 'claude-opus-4-5-20251101'
-        assert result.agent_settings['verification.security_analyzer'] == 'enabled'
+        assert result.agent_settings['security_analyzer'] == 'enabled'
         assert result.agent_settings['agent'] == 'agent-mode'
 
 

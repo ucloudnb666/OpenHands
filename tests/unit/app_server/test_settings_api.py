@@ -97,8 +97,8 @@ def test_get_agent_settings_schema_includes_critic_verification_fields(test_clie
     section = next(s for s in schema['sections'] if s['key'] == 'verification')
     field_keys = [f['key'] for f in section['fields']]
     assert 'verification.critic_enabled' in field_keys
-    assert 'verification.confirmation_mode' not in field_keys
-    assert 'verification.security_analyzer' not in field_keys
+    assert 'confirmation_mode' not in field_keys
+    assert 'security_analyzer' not in field_keys
 
 
 def test_get_conversation_settings_schema_endpoint(test_client):
@@ -113,8 +113,8 @@ def test_get_conversation_settings_schema_endpoint(test_client):
         s for s in schema['sections'] if s['key'] == 'verification'
     )
     field_keys = [f['key'] for f in verification_section['fields']]
-    assert 'verification.confirmation_mode' in field_keys
-    assert 'verification.security_analyzer' in field_keys
+    assert 'confirmation_mode' in field_keys
+    assert 'security_analyzer' in field_keys
 
 
 @pytest.mark.asyncio
@@ -208,12 +208,12 @@ async def test_settings_api_endpoints(test_client):
                 'label': 'Verification',
                 'fields': [
                     {
-                        'key': 'verification.confirmation_mode',
+                        'key': 'confirmation_mode',
                         'value_type': 'boolean',
                         'prominence': 'major',
                     },
                     {
-                        'key': 'verification.security_analyzer',
+                        'key': 'security_analyzer',
                         'value_type': 'string',
                         'prominence': 'major',
                     },
@@ -277,8 +277,8 @@ async def test_settings_api_endpoints(test_client):
         assert response_data['conversation_settings'] == {
             'schema_version': 1,
             'max_iterations': 100,
-            'verification.confirmation_mode': True,
-            'verification.security_analyzer': 'default',
+            'confirmation_mode': True,
+            'security_analyzer': 'default',
         }
         assert vals['llm.api_key'] == '<hidden>'
 

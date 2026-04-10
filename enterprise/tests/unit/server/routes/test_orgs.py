@@ -932,8 +932,8 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
             'schema_version': 1,
             'agent': 'CodeActAgent',
             'max_iterations': 50,
-            'verification.security_analyzer': 'enabled',
-            'verification.confirmation_mode': True,
+            'security_analyzer': 'enabled',
+            'confirmation_mode': True,
             'llm.model': 'claude-opus-4-5-20251101',
             'llm.base_url': 'https://api.example.com',
             'condenser.enabled': True,
@@ -977,8 +977,8 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         assert org_data['conversation_expiration'] == 3600
         assert org_data['agent_settings']['agent'] == 'CodeActAgent'
         assert org_data['agent_settings']['max_iterations'] == 50
-        assert org_data['agent_settings']['verification.security_analyzer'] == 'enabled'
-        assert org_data['agent_settings']['verification.confirmation_mode'] is True
+        assert org_data['agent_settings']['security_analyzer'] == 'enabled'
+        assert org_data['agent_settings']['confirmation_mode'] is True
         assert org_data['agent_settings']['llm.model'] == 'claude-opus-4-5-20251101'
         assert org_data['agent_settings']['llm.base_url'] == 'https://api.example.com'
         assert org_data['remote_runtime_resource_factor'] == 2

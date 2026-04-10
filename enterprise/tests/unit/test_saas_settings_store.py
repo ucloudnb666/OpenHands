@@ -55,8 +55,8 @@ def test_member_settings_persist_full_effective_agent_settings(mock_config):
         'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
         'llm.base_url': 'https://api.example.com',
         'max_iterations': 42,
-        'verification.confirmation_mode': True,
-        'verification.security_analyzer': 'llm',
+        'confirmation_mode': True,
+        'security_analyzer': 'llm',
         'condenser.enabled': False,
         'condenser.max_size': 128,
     }

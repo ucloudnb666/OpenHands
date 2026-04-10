@@ -61,27 +61,17 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     >),
   };
 
-  if (
-    !hasAgentSettingKey(conversationSettings, "verification.confirmation_mode")
-  ) {
-    const confirmationMode = pickFirstBoolean(
-      settings.confirmation_mode,
-      agentSettings["verification.confirmation_mode"],
-    );
+  if (!hasAgentSettingKey(conversationSettings, "confirmation_mode")) {
+    const confirmationMode = pickFirstBoolean(settings.confirmation_mode);
     if (confirmationMode !== undefined) {
-      conversationSettings["verification.confirmation_mode"] = confirmationMode;
+      conversationSettings.confirmation_mode = confirmationMode;
     }
   }
 
-  if (
-    !hasAgentSettingKey(conversationSettings, "verification.security_analyzer")
-  ) {
-    const securityAnalyzer = pickNullableString(
-      settings.security_analyzer,
-      agentSettings["verification.security_analyzer"],
-    );
+  if (!hasAgentSettingKey(conversationSettings, "security_analyzer")) {
+    const securityAnalyzer = pickNullableString(settings.security_analyzer);
     if (securityAnalyzer !== undefined) {
-      conversationSettings["verification.security_analyzer"] = securityAnalyzer;
+      conversationSettings.security_analyzer = securityAnalyzer;
     }
   }
 
@@ -118,15 +108,13 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     llm_api_key_set: settings.llm_api_key_set ?? false,
     confirmation_mode:
       pickFirstBoolean(
-        conversationSettings["verification.confirmation_mode"],
+        conversationSettings.confirmation_mode,
         settings.confirmation_mode,
-        agentSettings["verification.confirmation_mode"],
       ) ?? DEFAULT_SETTINGS.confirmation_mode,
     security_analyzer:
       pickNullableString(
-        conversationSettings["verification.security_analyzer"],
+        conversationSettings.security_analyzer,
         settings.security_analyzer,
-        agentSettings["verification.security_analyzer"],
       ) ?? DEFAULT_SETTINGS.security_analyzer,
     max_iterations:
       pickFirstNumber(

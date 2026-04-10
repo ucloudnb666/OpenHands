@@ -126,6 +126,8 @@ Backend:
   - Backend tests currently assume Python 3.12; under Python 3.13 some legacy imports (for example `aifc` via `openhands/core/logger.py`) break test collection. Prefer Python 3.12 for backend validation unless that import path is updated.
   - The `Settings` model now stores SDK-managed values in `raw_agent_settings`, but legacy route code still expects flat attributes like `llm_model`, `llm_base_url`, and `llm_api_key`; preserve or update those compatibility accessors when touching settings routes to avoid breaking V0/V1 endpoints and mypy.
   - For legacy `/api/settings` saves in SaaS, explicit non-secret SDK `null` values (for example `llm.base_url: null` from basic-view resets) must survive in `raw_agent_settings`; if they are normalized away, inherited org settings will leak back into personal effective settings on refetch.
+  - Conversation settings now persist `confirmation_mode`, `security_analyzer`, and `max_iterations` as direct `conversation_settings` keys. Do not route them through `agent_settings` or nested `verification.*` keys; the SDK conversation schema exports those same direct keys under the `verification` section.
+
 
 
 

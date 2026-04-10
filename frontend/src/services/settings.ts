@@ -52,8 +52,8 @@ export const DEFAULT_SETTINGS: Settings = {
   conversation_settings_schema: null,
   conversation_settings: {
     schema_version: 1,
-    "verification.confirmation_mode": false,
-    "verification.security_analyzer": "llm",
+    confirmation_mode: false,
+    security_analyzer: "llm",
   },
 };
 

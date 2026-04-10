@@ -153,7 +153,7 @@ const MOCK_CONVERSATION_SETTINGS_SCHEMA: NonNullable<
       label: "Verification",
       fields: [
         {
-          key: "verification.confirmation_mode",
+          key: "confirmation_mode",
           label: "Confirmation mode",
           section: "verification",
           section_label: "Verification",
@@ -166,7 +166,7 @@ const MOCK_CONVERSATION_SETTINGS_SCHEMA: NonNullable<
           required: true,
         },
         {
-          key: "verification.security_analyzer",
+          key: "security_analyzer",
           label: "Security analyzer",
           section: "verification",
           section_label: "Verification",
@@ -176,7 +176,7 @@ const MOCK_CONVERSATION_SETTINGS_SCHEMA: NonNullable<
             { label: "llm", value: "llm" },
             { label: "none", value: "none" },
           ],
-          depends_on: ["verification.confirmation_mode"],
+          depends_on: ["confirmation_mode"],
           prominence: "major",
           secret: false,
           required: false,

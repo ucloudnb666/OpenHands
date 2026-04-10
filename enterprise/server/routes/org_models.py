@@ -21,8 +21,8 @@ from openhands.sdk.settings import ConversationSettings
 
 _CONVERSATION_SETTINGS_KEYS = {
     'max_iterations',
-    'verification.confirmation_mode',
-    'verification.security_analyzer',
+    'confirmation_mode',
+    'security_analyzer',
 }
 
 

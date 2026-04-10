@@ -15,8 +15,8 @@ import { createPermissionGuard } from "#/utils/org/permission-guard";
 import { SettingsView } from "#/utils/sdk-settings-schema";
 
 const VERIFICATION_SCHEMA_EXCLUDE_KEYS = new Set([
-  "verification.confirmation_mode",
-  "verification.security_analyzer",
+  "confirmation_mode",
+  "security_analyzer",
 ]);
 
 function VerificationSettingsHeader({
@@ -152,21 +152,19 @@ export function VerificationSettingsScreen({
       const payload = { ...basePayload };
 
       if (context.view === "basic") {
-        payload["verification.confirmation_mode"] =
-          DEFAULT_SETTINGS.confirmation_mode;
-        payload["verification.security_analyzer"] =
-          DEFAULT_SETTINGS.security_analyzer;
+        payload.confirmation_mode = DEFAULT_SETTINGS.confirmation_mode;
+        payload.security_analyzer = DEFAULT_SETTINGS.security_analyzer;
         return { conversation_settings: payload };
       }
 
       if (confirmationModeDirty) {
-        payload["verification.confirmation_mode"] = confirmationMode;
+        payload.confirmation_mode = confirmationMode;
       }
       if (
         securityAnalyzerDirty ||
         (confirmationMode && settings?.security_analyzer !== securityAnalyzer)
       ) {
-        payload["verification.security_analyzer"] = securityAnalyzer;
+        payload.security_analyzer = securityAnalyzer;
       }
 
       return { conversation_settings: payload };

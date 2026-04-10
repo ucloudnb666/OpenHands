@@ -23,11 +23,11 @@ const LEGACY_FLAT_TO_SDK: Record<string, string> = {
   condenser_max_size: "condenser.max_size",
 };
 
-const LEGACY_FLAT_TO_CONVERSATION: Record<string, string> = {
-  confirmation_mode: "verification.confirmation_mode",
-  security_analyzer: "verification.security_analyzer",
-  max_iterations: "max_iterations",
-};
+const ROOT_CONVERSATION_KEYS = [
+  "confirmation_mode",
+  "security_analyzer",
+  "max_iterations",
+] as const;
 
 const saveSettingsMutationFn = async (
   scope: SettingsScope,
@@ -55,17 +55,13 @@ const saveSettingsMutationFn = async (
     >) ?? {}),
   };
 
-  for (const [legacyKey, conversationKey] of Object.entries(
-    LEGACY_FLAT_TO_CONVERSATION,
-  )) {
-    const hasLegacyValue = legacyKey in settingsToSave;
-    const hasConversationValue = conversationKey in conversationSettings;
+  for (const key of ROOT_CONVERSATION_KEYS) {
+    const hasRootValue = key in settingsToSave;
+    const hasConversationValue = key in conversationSettings;
 
-    if (hasLegacyValue && !hasConversationValue) {
-      conversationSettings[conversationKey] = settingsToSave[
-        legacyKey
-      ] as SettingsValue;
-      delete settingsToSave[legacyKey];
+    if (hasRootValue && !hasConversationValue) {
+      conversationSettings[key] = settingsToSave[key] as SettingsValue;
+      delete settingsToSave[key];
     }
   }
 

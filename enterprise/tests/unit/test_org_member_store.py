@@ -21,8 +21,8 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
         agent_settings={
             'schema_version': 1,
             'agent': 'CodeActAgent',
-            'verification.confirmation_mode': True,
-            'verification.security_analyzer': 'llm',
+            'confirmation_mode': True,
+            'security_analyzer': 'llm',
             'condenser.enabled': False,
             'condenser.max_size': 128,
             'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
@@ -39,8 +39,8 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
         | {
             'schema_version': 1,
             'agent': 'CodeActAgent',
-            'verification.confirmation_mode': True,
-            'verification.security_analyzer': 'llm',
+            'confirmation_mode': True,
+            'security_analyzer': 'llm',
             'condenser.enabled': False,
             'condenser.max_size': 128,
             'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
@@ -79,7 +79,7 @@ def test_get_agent_settings_from_org_member_uses_canonical_snapshot_json():
             'llm.model': 'member-model',
             'llm.base_url': 'https://member.example.com',
             'max_iterations': 42,
-            'verification.confirmation_mode': True,
+            'confirmation_mode': True,
         },
     )
 
@@ -89,7 +89,7 @@ def test_get_agent_settings_from_org_member_uses_canonical_snapshot_json():
         'llm.model': 'member-model',
         'llm.base_url': 'https://member.example.com',
         'max_iterations': 42,
-        'verification.confirmation_mode': True,
+        'confirmation_mode': True,
     }
 
 

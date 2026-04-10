@@ -53,8 +53,8 @@ _TEST_CONVERSATION_SCHEMA = {
         {
             'key': 'verification',
             'fields': [
-                {'key': 'verification.confirmation_mode', 'secret': False},
-                {'key': 'verification.security_analyzer', 'secret': False},
+                {'key': 'confirmation_mode', 'secret': False},
+                {'key': 'security_analyzer', 'secret': False},
             ],
         },
     ]
@@ -388,7 +388,7 @@ def test_apply_payload_conversation_settings_stored_top_level():
 
     assert result.confirmation_mode is True
     assert result.security_analyzer == 'llm'
-    assert 'verification.confirmation_mode' not in result.agent_settings_values()
+    assert 'confirmation_mode' not in result.agent_settings_values()
 
 
 def test_legacy_flat_fields_migrate_to_agent_vals():
@@ -416,7 +416,8 @@ def test_agent_settings_normalized_with_schema_version_and_extras():
     s = Settings(
         llm_model='anthropic/claude-sonnet-4-5-20250929',
         confirmation_mode=True,
-        agent_settings={'max_iterations': 64, 'custom.extra': 'keep-me'},
+        agent_settings={'custom.extra': 'keep-me'},
+        conversation_settings={'max_iterations': 64},
     )
 
     assert s.raw_agent_settings['schema_version'] == 1
@@ -430,7 +431,7 @@ def test_agent_settings_persistence_strips_secret_values():
     s = Settings(
         llm_model='anthropic/claude-sonnet-4-5-20250929',
         llm_api_key='super-secret',
-        agent_settings={'max_iterations': 64},
+        conversation_settings={'max_iterations': 64},
     )
 
     persisted = s.normalized_agent_settings(strip_secret_values=True)

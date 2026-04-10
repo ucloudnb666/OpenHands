@@ -795,7 +795,7 @@ def test_create_user_settings_from_entities():
     org.agent_settings = {
         'schema_version': 1,
         'agent': 'CodeActAgent',
-        'verification.security_analyzer': 'mock-analyzer',
+        'security_analyzer': 'mock-analyzer',
     }
     org.search_api_key = None
     org.sandbox_api_key = None
@@ -813,7 +813,7 @@ def test_create_user_settings_from_entities():
     assert result.agent_settings['llm.base_url'] == 'https://api.example.com'
     assert result.agent_settings['max_iterations'] == 50
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['verification.security_analyzer'] == 'mock-analyzer'
+    assert result.agent_settings['security_analyzer'] == 'mock-analyzer'
     assert result.language == 'en'
     assert result.email == 'test@example.com'
 
@@ -849,7 +849,7 @@ def test_create_user_settings_from_entities_with_org_fallback():
         'agent': 'CodeActAgent',
         'llm.model': 'default-model',
         'llm.base_url': 'https://default.api.com',
-        'verification.confirmation_mode': True,
+        'confirmation_mode': True,
         'condenser.enabled': False,
         'condenser.max_size': 1000,
         'max_iterations': 100,
@@ -870,7 +870,7 @@ def test_create_user_settings_from_entities_with_org_fallback():
     assert result.agent_settings['llm.base_url'] == 'https://default.api.com'
     assert result.agent_settings['max_iterations'] == 100
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['verification.confirmation_mode'] is True
+    assert result.agent_settings['confirmation_mode'] is True
     assert result.agent_settings['condenser.max_size'] == 1000
     assert result.language == 'es'
     assert result.search_api_key == 'search-key'

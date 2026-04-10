@@ -39,7 +39,7 @@ def mock_org(org_id):
         'llm.model': 'claude-3',
         'llm.base_url': 'https://api.anthropic.com',
         'agent': 'CodeActAgent',
-        'verification.confirmation_mode': True,
+        'confirmation_mode': True,
         'max_iterations': 50,
     }
     org.llm_api_key = None
@@ -139,7 +139,7 @@ async def test_update_org_llm_settings_success(
         'schema_version': 1,
         'llm.model': 'new-model',
         'agent': 'CodeActAgent',
-        'verification.confirmation_mode': False,
+        'confirmation_mode': False,
         'max_iterations': 100,
     }
     updated_org.llm_api_key = None
@@ -148,7 +148,7 @@ async def test_update_org_llm_settings_success(
     update_data = OrgLLMSettingsUpdate(
         agent_settings={
             'llm.model': 'new-model',
-            'verification.confirmation_mode': False,
+            'confirmation_mode': False,
             'max_iterations': 100,
         }
     )
@@ -163,7 +163,7 @@ async def test_update_org_llm_settings_success(
     # Assert
     assert isinstance(result, OrgLLMSettingsResponse)
     assert result.agent_settings['llm.model'] == 'new-model'
-    assert result.agent_settings['verification.confirmation_mode'] is False
+    assert result.agent_settings['confirmation_mode'] is False
     assert result.agent_settings['max_iterations'] == 100
     mock_store.update_org_llm_settings.assert_called_once_with(
         org_id=mock_org.id,

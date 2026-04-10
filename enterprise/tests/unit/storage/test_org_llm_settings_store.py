@@ -108,7 +108,7 @@ async def test_update_org_llm_settings_success(async_session_maker):
             agent_settings={
                 'llm.model': 'new-model',
                 'agent': 'CodeActAgent',
-                'verification.confirmation_mode': True,
+                'confirmation_mode': True,
             }
         )
 
@@ -120,7 +120,7 @@ async def test_update_org_llm_settings_success(async_session_maker):
     assert result is not None
     assert result.agent_settings['llm.model'] == 'new-model'
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['verification.confirmation_mode'] is True
+    assert result.agent_settings['confirmation_mode'] is True
 
 
 @pytest.mark.asyncio

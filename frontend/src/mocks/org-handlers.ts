@@ -43,8 +43,8 @@ export const createMockOrganization = (
   agent_settings: {
     agent: "default-agent",
     max_iterations: 20,
-    "verification.security_analyzer": "standard",
-    "verification.confirmation_mode": false,
+    security_analyzer: "standard",
+    confirmation_mode: false,
     "llm.model": "gpt-5-1",
     "llm.base_url": "https://api.example-llm.com",
     "condenser.enabled": true,

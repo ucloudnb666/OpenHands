@@ -46,8 +46,8 @@ _LEGACY_FLAT_TO_SDK: dict[str, str] = {
 
 _CONVERSATION_SETTINGS_FIELD_MAP: dict[str, str] = {
     'max_iterations': 'max_iterations',
-    'verification.confirmation_mode': 'confirmation_mode',
-    'verification.security_analyzer': 'security_analyzer',
+    'confirmation_mode': 'confirmation_mode',
+    'security_analyzer': 'security_analyzer',
 }
 
 _CONVERSATION_SETTINGS_REVERSE_FIELD_MAP: dict[str, str] = {
@@ -595,16 +595,6 @@ class Settings(BaseModel):
     ) -> dict[str, Any]:
         return self.conversation_settings_values()
 
-    def legacy_conversation_settings_payload(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.confirmation_mode is not None:
-            payload['verification.confirmation_mode'] = self.confirmation_mode
-        if self.security_analyzer is not None:
-            payload['verification.security_analyzer'] = self.security_analyzer
-        if self.max_iterations is not None:
-            payload['max_iterations'] = self.max_iterations
-        return payload
-
     @field_serializer('search_api_key')
     def api_key_serializer(self, api_key: SecretStr | None, info: SerializationInfo):
         if api_key is None:
@@ -691,18 +681,6 @@ class Settings(BaseModel):
             conversation_value = conversation_vals.get(conversation_key, missing)
             if conversation_value is not missing and data.get(field_name) is None:
                 data[field_name] = conversation_value
-
-            legacy_value = (
-                _lookup_dotted_value(agent_vals, conversation_key, missing)
-                if '.' in conversation_key
-                else agent_vals.get(conversation_key, missing)
-            )
-            if legacy_value is not missing and data.get(field_name) is None:
-                data[field_name] = legacy_value
-            if '.' in conversation_key:
-                _remove_dotted_value(agent_vals, conversation_key)
-            else:
-                agent_vals.pop(conversation_key, None)
 
         for flat_key in _LEGACY_FLAT_TO_SDK:
             data.pop(flat_key, None)
