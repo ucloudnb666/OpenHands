@@ -956,19 +956,19 @@ class UserStore:
         from storage.org_member_store import OrgMemberStore
         from storage.org_store import OrgStore
 
-        member_agent_settings = OrgMemberStore.get_agent_settings_from_org_member(
-            org_member
+        member_agent_settings_diff = (
+            OrgMemberStore.get_agent_settings_diff_from_org_member(org_member)
         )
         org_agent_settings = OrgStore.get_agent_settings_from_org(org)
-        agent_settings = {**org_agent_settings, **member_agent_settings}
+        agent_settings = {**org_agent_settings, **member_agent_settings_diff}
 
-        member_conversation_settings = (
-            OrgMemberStore.get_conversation_settings_from_org_member(org_member)
+        member_conversation_settings_diff = (
+            OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
         )
         org_conversation_settings = OrgStore.get_conversation_settings_from_org(org)
         conversation_settings = {
             **org_conversation_settings,
-            **member_conversation_settings,
+            **member_conversation_settings_diff,
         }
 
         return UserSettings(

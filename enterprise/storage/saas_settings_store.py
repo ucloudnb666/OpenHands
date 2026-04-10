@@ -68,7 +68,7 @@ class SaasSettingsStore(SettingsStore):
                 return result.scalars().first()
 
     async def _persist_agent_settings_async(
-        self, org_id: uuid.UUID, agent_settings: dict
+        self, org_id: uuid.UUID, agent_settings: dict[str, Any]
     ) -> None:
         async with a_session_maker() as session:
             stmt = (
@@ -83,7 +83,7 @@ class SaasSettingsStore(SettingsStore):
             await session.commit()
 
     async def _persist_org_agent_settings_async(
-        self, org_id: uuid.UUID, agent_settings: dict
+        self, org_id: uuid.UUID, agent_settings: dict[str, Any]
     ) -> None:
         async with a_session_maker() as session:
             stmt = (
@@ -130,8 +130,8 @@ class SaasSettingsStore(SettingsStore):
             )
             return None
         org_agent_settings = OrgStore.get_agent_settings_from_org(org)
-        member_agent_settings = OrgMemberStore.get_agent_settings_from_org_member(
-            org_member
+        member_agent_settings_diff = (
+            OrgMemberStore.get_agent_settings_diff_from_org_member(org_member)
         )
 
         kwargs = {
@@ -158,15 +158,15 @@ class SaasSettingsStore(SettingsStore):
             kwargs['mcp_config'] = org_member.mcp_config
         kwargs["agent_settings"] = deep_merge(
             org_agent_settings,
-            member_agent_settings,
+            member_agent_settings_diff,
         )
-        org_conversation = dict(getattr(org, "conversation_settings", {}) or {})
-        member_conversation = dict(
-            getattr(org_member, "conversation_settings", {}) or {}
+        org_conversation = OrgStore.get_conversation_settings_from_org(org)
+        member_conversation_diff = (
+            OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
         )
         kwargs["conversation_settings"] = deep_merge(
             org_conversation,
-            member_conversation,
+            member_conversation_diff,
         )
         if org.v1_enabled is None:
             kwargs['v1_enabled'] = True
@@ -245,17 +245,18 @@ class SaasSettingsStore(SettingsStore):
                     item, str(org_id), openhands_type=is_openhands_model(llm_model)
                 )
 
-            effective_agent_settings = self._get_persisted_agent_settings(item)
+            effective_agent_settings_diff = self._get_persisted_agent_settings(item)
             org.agent_settings = deep_merge(
                 OrgStore.get_agent_settings_from_org(org),
-                effective_agent_settings,
+                effective_agent_settings_diff,
             )
 
-            effective_conversation = item.conversation_settings.model_dump(mode="json")
-            org_conversation = dict(getattr(org, "conversation_settings", {}) or {})
+            effective_conversation_diff = item.conversation_settings.model_dump(
+                mode="json"
+            )
             org.conversation_settings = deep_merge(
-                org_conversation,
-                effective_conversation,
+                OrgStore.get_conversation_settings_from_org(org),
+                effective_conversation_diff,
             )
 
             kwargs = item.model_dump(context={"expose_secrets": True})
@@ -301,8 +302,8 @@ class SaasSettingsStore(SettingsStore):
                 session,
                 org_id,
                 OrgMemberLLMSettings(
-                    agent_settings=effective_agent_settings,
-                    conversation_settings=effective_conversation,
+                    agent_settings_diff=effective_agent_settings_diff,
+                    conversation_settings_diff=effective_conversation_diff,
                     llm_api_key=(
                         current_member_llm_api_key_raw
                         if not uses_managed_llm_key

@@ -2,7 +2,7 @@
 Store class for managing organization-member relationships.
 """
 
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from server.routes.org_models import OrgMemberLLMSettings
@@ -28,13 +28,10 @@ class OrgMemberStore:
         role_id: int,
         llm_api_key: str,
         status: Optional[str] = None,
-        agent_settings: Optional[dict] = None,
-        conversation_settings: Optional[dict] = None,
+        agent_settings_diff: Optional[dict[str, Any]] = None,
+        conversation_settings_diff: Optional[dict[str, Any]] = None,
     ) -> OrgMember:
         """Add a user to an organization with a specific role."""
-        agent_settings = dict(agent_settings or {})
-        conversation_settings = dict(conversation_settings or {})
-
         async with a_session_maker() as session:
             org_member = OrgMember(
                 org_id=org_id,
@@ -42,8 +39,8 @@ class OrgMemberStore:
                 role_id=role_id,
                 llm_api_key=llm_api_key,
                 status=status,
-                agent_settings=agent_settings,
-                conversation_settings=conversation_settings,
+                agent_settings=dict(agent_settings_diff or {}),
+                conversation_settings=dict(conversation_settings_diff or {}),
             )
             session.add(org_member)
             await session.commit()
@@ -150,17 +147,20 @@ class OrgMemberStore:
             return True
 
     @staticmethod
-    def get_agent_settings_from_org_member(org_member: OrgMember) -> dict[str, object]:
+    def get_agent_settings_diff_from_org_member(
+        org_member: OrgMember,
+    ) -> dict[str, Any]:
         return dict(org_member.agent_settings)
 
     @staticmethod
-    def get_conversation_settings_from_org_member(
+    def get_conversation_settings_diff_from_org_member(
         org_member: OrgMember,
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         return dict(org_member.conversation_settings)
 
     @staticmethod
-    def get_kwargs_from_settings(settings: Settings):
+    def get_kwargs_from_settings(settings: Settings) -> dict[str, Any]:
+        """Return kwargs for OrgMember construction (keys match column names)."""
         return {
             "llm_api_key": settings.get_secret_agent_setting("llm.api_key"),
             "agent_settings": {},
@@ -168,7 +168,8 @@ class OrgMemberStore:
         }
 
     @staticmethod
-    def get_kwargs_from_user_settings(user_settings: UserSettings):
+    def get_kwargs_from_user_settings(user_settings: UserSettings) -> dict[str, Any]:
+        """Return kwargs for OrgMember construction (keys match column names)."""
         return {
             "llm_api_key": user_settings.llm_api_key,
             "agent_settings": dict(user_settings.agent_settings or {}),
@@ -270,23 +271,23 @@ class OrgMemberStore:
         org_members = list(result.scalars().all())
 
         raw_key = values.pop("llm_api_key", None)
-        agent_settings_updates = values.pop("agent_settings", None)
-        conversation_settings_updates = values.pop("conversation_settings", None)
+        agent_settings_diff = values.pop("agent_settings_diff", None)
+        conversation_settings_diff = values.pop("conversation_settings_diff", None)
 
         for org_member in org_members:
             if raw_key is not None:
                 org_member.llm_api_key = raw_key
 
-            if agent_settings_updates is not None:
+            if agent_settings_diff is not None:
                 org_member.agent_settings = deep_merge(
                     org_member.agent_settings,
-                    agent_settings_updates,
+                    agent_settings_diff,
                 )
 
-            if conversation_settings_updates is not None:
+            if conversation_settings_diff is not None:
                 org_member.conversation_settings = deep_merge(
                     org_member.conversation_settings,
-                    conversation_settings_updates,
+                    conversation_settings_diff,
                 )
 
             for key, value in values.items():

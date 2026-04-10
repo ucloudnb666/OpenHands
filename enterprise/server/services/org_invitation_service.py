@@ -384,7 +384,7 @@ class OrgInvitationService:
             role_id=invitation.role_id,
             llm_api_key=llm_api_key,
             status='active',
-            agent_settings={},
+            agent_settings_diff={},
         )
 
         # Step 6: Mark invitation as accepted

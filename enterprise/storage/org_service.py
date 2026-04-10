@@ -9,7 +9,7 @@ from uuid import UUID as parse_uuid
 
 from server.constants import ORG_SETTINGS_VERSION, get_default_litellm_model
 
-from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 from server.routes.org_models import (
     LiteLLMIntegrationError,
     OrgAuthorizationError,
@@ -109,16 +109,16 @@ class OrgService:
         Returns:
             Org: New organization entity (not yet persisted)
         """
+        default_agent_settings = AgentSettings()
+        default_agent_settings.llm.model = get_default_litellm_model()
         return Org(
             id=org_id,
             name=name,
             contact_name=contact_name,
             contact_email=contact_email,
             org_version=ORG_SETTINGS_VERSION,
-            agent_settings={
-                'schema_version': AGENT_SETTINGS_SCHEMA_VERSION,
-                'llm': {'model': get_default_litellm_model()},
-            },
+            agent_settings=default_agent_settings.model_dump(mode='json'),
+            conversation_settings=ConversationSettings().model_dump(mode='json'),
         )
 
     @staticmethod
@@ -549,7 +549,7 @@ class OrgService:
             )
             return existing_org
 
-        restricted_fields = {'agent_settings', 'search_api_key', 'sandbox_api_key'}
+        restricted_fields = {'agent_settings_diff', 'search_api_key', 'sandbox_api_key'}
         if restricted_fields.intersection(
             update_dict
         ) and not await OrgService.has_admin_or_owner_role(user_id, org_id):

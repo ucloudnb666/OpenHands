@@ -2,7 +2,7 @@
 Store class for managing organizations.
 """
 
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from server.constants import (
@@ -46,11 +46,11 @@ class OrgStore:
     """Store for managing organizations."""
 
     @staticmethod
-    def get_agent_settings_from_org(org: Org) -> dict[str, object]:
+    def get_agent_settings_from_org(org: Org) -> dict[str, Any]:
         return dict(org.agent_settings)
 
     @staticmethod
-    def get_conversation_settings_from_org(org: Org) -> dict[str, object]:
+    def get_conversation_settings_from_org(org: Org) -> dict[str, Any]:
         return dict(org.conversation_settings)
 
     @staticmethod
@@ -133,7 +133,7 @@ class OrgStore:
                 org.id,
                 {
                     'org_version': ORG_SETTINGS_VERSION,
-                    "agent_settings": {
+                    "agent_settings_diff": {
                         "llm": {
                             "model": get_default_litellm_model(),
                             "base_url": LITE_LLM_API_URL,
@@ -226,22 +226,24 @@ class OrgStore:
             if 'id' in kwargs:
                 kwargs.pop('id')
 
-            agent_settings_updates = kwargs.pop("agent_settings", None)
-            conversation_settings_updates = kwargs.pop("conversation_settings", None)
+            agent_settings_diff = kwargs.pop("agent_settings_diff", None)
+            conversation_settings_diff = kwargs.pop(
+                "conversation_settings_diff", None
+            )
             for key, value in kwargs.items():
                 if hasattr(org, key):
                     setattr(org, key, value)
 
-            if agent_settings_updates is not None:
+            if agent_settings_diff is not None:
                 org.agent_settings = deep_merge(
                     org.agent_settings,
-                    agent_settings_updates,
+                    agent_settings_diff,
                 )
 
-            if conversation_settings_updates is not None:
+            if conversation_settings_diff is not None:
                 org.conversation_settings = deep_merge(
                     org.conversation_settings,
-                    conversation_settings_updates,
+                    conversation_settings_diff,
                 )
 
             await session.commit()
@@ -479,10 +481,10 @@ class OrgStore:
                 return None
 
             llm_settings.apply_to_org(org)
-            if llm_settings.agent_settings is not None:
+            if llm_settings.agent_settings_diff is not None:
                 org.agent_settings = deep_merge(
                     org.agent_settings,
-                    llm_settings.agent_settings,
+                    llm_settings.agent_settings_diff,
                 )
 
             # Propagate relevant settings to all org members

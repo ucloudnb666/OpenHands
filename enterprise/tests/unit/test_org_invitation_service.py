@@ -346,7 +346,7 @@ class TestAcceptInvitationEmailValidation:
             mock_add_user.assert_called_once()
             call_kwargs = mock_add_user.call_args.kwargs
             assert call_kwargs['llm_api_key'] == 'test-key'
-            assert call_kwargs['agent_settings'] == {}
+            assert call_kwargs['agent_settings_diff'] == {}
 
 
 class TestCreateInvitationsBatch:

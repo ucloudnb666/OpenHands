@@ -114,7 +114,7 @@ async def test_update_org(async_session_maker, mock_litellm_api):
             org_id=org_id,
             kwargs={
                 'name': 'updated-org',
-                'agent_settings': {'agent': 'PlannerAgent'},
+                'agent_settings_diff': {'agent': 'PlannerAgent'},
             },
         )
 

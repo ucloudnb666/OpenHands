@@ -219,8 +219,8 @@ class OrgUpdate(BaseModel):
     enable_solvability_analysis: bool | None = None
     v1_enabled: bool | None = None
     search_api_key: str | None = None
-    agent_settings: dict[str, Any] | None = None
-    conversation_settings: dict[str, Any] | None = None
+    agent_settings_diff: dict[str, Any] | None = None
+    conversation_settings_diff: dict[str, Any] | None = None
 
 
 class OrgLLMSettingsResponse(BaseModel):
@@ -257,8 +257,8 @@ class OrgLLMSettingsResponse(BaseModel):
 class OrgMemberLLMSettings(BaseModel):
     """Shared LLM settings that may be propagated to organization members."""
 
-    agent_settings: dict[str, Any] | None = None
-    conversation_settings: dict[str, Any] | None = None
+    agent_settings_diff: dict[str, Any] | None = None
+    conversation_settings_diff: dict[str, Any] | None = None
     llm_api_key: str | None = None
 
     def has_updates(self) -> bool:
@@ -271,8 +271,8 @@ class OrgMemberLLMSettings(BaseModel):
 class OrgLLMSettingsUpdate(BaseModel):
     """Request model for updating organization LLM settings."""
 
-    agent_settings: dict[str, Any] | None = None
-    conversation_settings: dict[str, Any] | None = None
+    agent_settings_diff: dict[str, Any] | None = None
+    conversation_settings_diff: dict[str, Any] | None = None
     search_api_key: str | None = None
     llm_api_key: str | None = None
 
@@ -321,7 +321,11 @@ class OrgMemberUpdate(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """Response model for the current user's membership in an organization."""
+    """Response model for the current user's membership in an organization.
+
+    ``agent_settings_diff`` and ``conversation_settings_diff`` carry the
+    member-level overrides on top of the organization defaults.
+    """
 
     org_id: str
     user_id: str
@@ -329,8 +333,8 @@ class MeResponse(BaseModel):
     role: str
     llm_api_key: str
     llm_api_key_for_byor: str | None = None
-    agent_settings: dict[str, Any] = Field(default_factory=dict)
-    conversation_settings: dict[str, Any] = Field(default_factory=dict)
+    agent_settings_diff: dict[str, Any] = Field(default_factory=dict)
+    conversation_settings_diff: dict[str, Any] = Field(default_factory=dict)
     status: str | None = None
 
     @staticmethod
@@ -360,8 +364,8 @@ class MeResponse(BaseModel):
             role=role.name,
             llm_api_key=cls._mask_key(member.llm_api_key),
             llm_api_key_for_byor=cls._mask_key(member.llm_api_key_for_byor) or None,
-            agent_settings=dict(member.agent_settings),
-            conversation_settings=dict(member.conversation_settings),
+            agent_settings_diff=dict(member.agent_settings),
+            conversation_settings_diff=dict(member.conversation_settings),
             status=member.status,
         )
 

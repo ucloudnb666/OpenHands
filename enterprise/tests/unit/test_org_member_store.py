@@ -67,7 +67,7 @@ def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides
     assert kwargs['agent_settings'] == {}
 
 
-def test_get_agent_settings_from_org_member_uses_canonical_snapshot_json():
+def test_get_agent_settings_diff_from_org_member_uses_canonical_snapshot_json():
     org_member = OrgMember(
         org_id=uuid.uuid4(),
         user_id=uuid.uuid4(),
@@ -83,7 +83,7 @@ def test_get_agent_settings_from_org_member_uses_canonical_snapshot_json():
         },
     )
 
-    assert OrgMemberStore.get_agent_settings_from_org_member(org_member) == {
+    assert OrgMemberStore.get_agent_settings_diff_from_org_member(org_member) == {
         'schema_version': 1,
         'agent': 'CodeActAgent',
         'llm.model': 'member-model',

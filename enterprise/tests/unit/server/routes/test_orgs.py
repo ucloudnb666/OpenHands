@@ -1892,7 +1892,7 @@ async def test_update_org_permission_denied_llm_settings(
     """
     # Arrange
     org_id = uuid.uuid4()
-    update_data = {'agent_settings': {'llm.model': 'claude-opus-4-5-20251101'}}
+    update_data = {'agent_settings_diff': {'llm.model': 'claude-opus-4-5-20251101'}}
 
     with (
         patch(
