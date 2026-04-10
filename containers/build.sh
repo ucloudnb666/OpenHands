@@ -48,7 +48,14 @@ if [[ -z "$image_name" ]]; then
     usage
 fi
 
-echo "Building: $image_name"
+# When --tags-only is set, redirect informational output to stderr so only tags go to stdout
+if [[ $tags_only -eq 1 ]]; then
+  log() { echo "$@" >&2; }
+else
+  log() { echo "$@"; }
+fi
+
+log "Building: $image_name"
 tags=()
 
 OPENHANDS_BUILD_VERSION="dev"
@@ -84,7 +91,7 @@ if [[ -n $tag_suffix ]]; then
   done
 fi
 
-echo "Tags (before arch suffix): ${tags[@]}"
+log "Tags (before arch suffix): ${tags[@]}"
 
 if [[ "$image_name" == "openhands" ]]; then
   dir="./containers/app"
@@ -131,9 +138,9 @@ fi
 
 DOCKER_REPOSITORY="$DOCKER_REGISTRY/$DOCKER_ORG/$DOCKER_IMAGE"
 DOCKER_REPOSITORY=${DOCKER_REPOSITORY,,} # lowercase
-echo "Repo: $DOCKER_REPOSITORY"
-echo "Base dir: $DOCKER_BASE_DIR"
-echo "Tags: ${tags[@]}"
+log "Repo: $DOCKER_REPOSITORY"
+log "Base dir: $DOCKER_BASE_DIR"
+log "Tags: ${tags[@]}"
 
 args=""
 full_tags=()
