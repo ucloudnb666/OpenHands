@@ -201,10 +201,10 @@ describe("Settings Screen", () => {
       expect(within(navbar).getByText("Billing")).toBeInTheDocument();
     });
     sectionsToInclude.forEach((section) => {
-      const sectionElements = within(navbar).getAllByText(section, {
+      const sectionElement = within(navbar).getByText(section, {
         exact: false, // case insensitive
       });
-      expect(sectionElements.length).toBeGreaterThan(0);
+      expect(sectionElement).toBeInTheDocument();
     });
     sectionsToExclude.forEach((section) => {
       const sectionElement = within(navbar).queryByText(section, {

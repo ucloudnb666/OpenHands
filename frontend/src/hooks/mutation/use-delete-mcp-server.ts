@@ -32,12 +32,15 @@ export function useDeleteMcpServer() {
         newConfig.shttp_servers.splice(index, 1);
       }
 
-      await SettingsService.saveSettings({
+      const apiSettings = {
         mcp_config: newConfig,
         v1_enabled: settings?.v1_enabled,
-      });
+      };
+
+      await SettingsService.saveSettings(apiSettings);
     },
     onSuccess: () => {
+      // Invalidate the settings query to trigger a refetch
       queryClient.invalidateQueries({
         queryKey: ["settings", organizationId],
       });

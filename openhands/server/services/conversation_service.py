@@ -106,6 +106,8 @@ async def start_conversation(
     if settings:
         session_init_args = settings.model_dump()
         agent_settings = settings.agent_settings
+        # We could use litellm.check_valid_key for a more accurate check,
+        # but that would run a tiny inference.
         model_name = agent_settings.llm.model
         llm_api_key = settings.llm_api_key
         is_bedrock_model = model_name.startswith('bedrock/')

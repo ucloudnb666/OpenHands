@@ -522,9 +522,11 @@ class SaasNestedConversationManager(ConversationManager):
 
         mcp_config = await self._get_mcp_config(user_id)
         if mcp_config:
+            # Merge with any MCP config from settings
             settings_mcp_config = settings.to_legacy_mcp_config()
             if settings_mcp_config:
                 mcp_config = mcp_config.merge(settings_mcp_config)
+            # Check again since theoretically merge could return None.
             if mcp_config:
                 init_conversation['mcp_config'] = mcp_config.model_dump()
 

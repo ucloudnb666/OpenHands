@@ -23,7 +23,7 @@ class TestDeviceCode:
         [
             (timedelta(minutes=5), False),  # Future expiry
             (timedelta(minutes=-5), True),  # Past expiry
-            (timedelta(seconds=5), False),  # Just future (not expired)
+            (timedelta(seconds=1), False),  # Just future (not expired)
         ],
     )
     def test_is_expired(self, expires_delta, expected):

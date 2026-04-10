@@ -8,9 +8,8 @@ function ConfirmationModeEnabled() {
   const { t } = useTranslation();
 
   const { data: settings } = useSettings();
-  const confirmationModeEnabled = settings?.confirmation_mode === true;
 
-  if (!confirmationModeEnabled) {
+  if (!settings?.confirmation_mode) {
     return null;
   }
 

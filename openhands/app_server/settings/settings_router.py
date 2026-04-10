@@ -85,7 +85,7 @@ async def store_llm_settings(
 
 
 def convert_to_settings(settings_with_token_data: Settings) -> Settings:
-    """Convert settings with token data to a plain ``Settings`` model."""
+    """Convert settings with token data to Settings model."""
     settings_data = settings_with_token_data.model_dump()
 
     # Filter out additional fields from `SettingsWithTokenData`
@@ -105,7 +105,9 @@ def convert_to_settings(settings_with_token_data: Settings) -> Settings:
     )
     filtered_settings_data['search_api_key'] = settings_with_token_data.search_api_key
 
-    return Settings(**filtered_settings_data)
+    # Create a new Settings instance
+    settings = Settings(**filtered_settings_data)
+    return settings
 
 
 # NOTE: We use response_model=None for endpoints that return JSONResponse directly.

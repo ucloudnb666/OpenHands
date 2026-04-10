@@ -1238,27 +1238,23 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
             updates['llm'] = updated_llm
 
-        # Update condenser LLM if it exists
+        # Update condenser LLM if it exists and is an openhands model
         if agent.condenser and hasattr(agent.condenser, 'llm'):
             condenser_llm = agent.condenser.llm
-            condenser_llm_updates: dict[str, Any] = {'usage_id': 'condenser'}
             if should_set_litellm_extra_body(condenser_llm.model):
                 condenser_metadata = get_llm_metadata(
                     model_name=condenser_llm.model,
-                    llm_type='condenser',
+                    llm_type=condenser_llm.usage_id or 'condenser',
                     conversation_id=conversation_id,
                     user_id=user_id,
                 )
-                condenser_llm_updates['litellm_extra_body'] = {
-                    'metadata': condenser_metadata
-                }
-            updated_condenser_llm = condenser_llm.model_copy(
-                update=condenser_llm_updates
-            )
-            updated_condenser = agent.condenser.model_copy(
-                update={'llm': updated_condenser_llm}
-            )
-            updates['condenser'] = updated_condenser
+                updated_condenser_llm = condenser_llm.model_copy(
+                    update={'litellm_extra_body': {'metadata': condenser_metadata}}
+                )
+                updated_condenser = agent.condenser.model_copy(
+                    update={'llm': updated_condenser_llm}
+                )
+                updates['condenser'] = updated_condenser
 
         # Return updated agent if there are changes
         if updates:
@@ -1473,7 +1469,8 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             agent=agent,
             workspace=workspace,
             confirmation_policy=self._select_confirmation_policy(
-                bool(user.conversation_settings.confirmation_mode), user.conversation_settings.security_analyzer
+                bool(user.conversation_settings.confirmation_mode),
+                user.conversation_settings.security_analyzer,
             ),
             initial_message=final_initial_message,
             secrets=secrets,

@@ -47,7 +47,7 @@ class OrgLLMSettingsStore:
     async def update_org_llm_settings(
         self, org_id: UUID, update_data: OrgLLMSettingsUpdate
     ) -> Org | None:
-        """Update organization default LLM settings.
+        """Update organization LLM settings.
 
         Uses flush() - commit happens at request end via DbSessionInjector.
 

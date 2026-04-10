@@ -55,6 +55,7 @@ class OrgMemberService:
         if role is None:
             raise RoleNotFoundError(org_member.role_id)
 
+        # Get user email
         user = await UserStore.get_user_by_id(str(user_id))
         email = user.email if user and user.email else ''
 

@@ -1,4 +1,6 @@
-"""SQLAlchemy model for organization-member relationships."""
+"""
+SQLAlchemy model for Organization-Member relationship.
+"""
 
 from pydantic import SecretStr
 from sqlalchemy import JSON, UUID, Boolean, Column, ForeignKey, Integer, String
@@ -23,15 +25,18 @@ class OrgMember(Base):  # type: ignore
     status = Column(String, nullable=True)
     mcp_config = Column(JSON, nullable=True)
 
+    # Relationships
     org = relationship('Org', back_populates='org_members')
     user = relationship('User', back_populates='org_members')
     role = relationship('Role', back_populates='org_members')
 
     def __init__(self, **kwargs):
+        # Handle known SQLAlchemy columns directly
         for key in list(kwargs):
             if hasattr(self.__class__, key):
                 setattr(self, key, kwargs.pop(key))
 
+        # Handle custom property-style fields
         if 'llm_api_key' in kwargs:
             self.llm_api_key = kwargs.pop('llm_api_key')
         if 'llm_api_key_for_byor' in kwargs:
@@ -42,7 +47,8 @@ class OrgMember(Base):  # type: ignore
 
     @property
     def llm_api_key(self) -> SecretStr:
-        return SecretStr(decrypt_value(self._llm_api_key))
+        decrypted = decrypt_value(self._llm_api_key)
+        return SecretStr(decrypted)
 
     @llm_api_key.setter
     def llm_api_key(self, value: str | SecretStr):

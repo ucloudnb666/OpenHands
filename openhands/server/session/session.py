@@ -187,8 +187,10 @@ class WebSession:
             f'MCP configuration before setup - self.config.mcp_config: {sanitize_dict(self.config.mcp.model_dump())}'
         )
 
+        # Check if settings has custom mcp_config
         custom_mcp_config = settings.to_legacy_mcp_config()
         if custom_mcp_config:
+            # Use the provided MCP SHTTP servers instead of default setup
             self.config.mcp = self.config.mcp.merge(custom_mcp_config)
             self.logger.debug(
                 f'Merged custom MCP Config: {sanitize_dict(custom_mcp_config.model_dump())}'
