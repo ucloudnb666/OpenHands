@@ -84,8 +84,6 @@ function AppContent() {
     }
   }, [conversation, isFetched, isAuthed, navigate, t]);
 
-  const isV0Conversation = conversation?.conversation_version === "V0";
-
   const content = (
     <ConversationSubscriptionsProvider>
       <EventHandler>
@@ -107,10 +105,7 @@ function AppContent() {
   // Render WebSocket provider immediately to avoid mount/remount cycles
   // The providers internally handle waiting for conversation data to be ready
   return (
-    <WebSocketProviderWrapper
-      version={isV0Conversation ? 0 : 1}
-      conversationId={conversationId}
-    >
+    <WebSocketProviderWrapper conversationId={conversationId}>
       {content}
     </WebSocketProviderWrapper>
   );
