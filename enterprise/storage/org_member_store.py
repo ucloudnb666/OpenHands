@@ -33,9 +33,11 @@ class OrgMemberStore:
         llm_api_key: str,
         status: Optional[str] = None,
         agent_settings: Optional[dict] = None,
+        conversation_settings: Optional[dict] = None,
     ) -> OrgMember:
         """Add a user to an organization with a specific role."""
         agent_settings = dict(agent_settings or {})
+        conversation_settings = dict(conversation_settings or {})
 
         async with a_session_maker() as session:
             org_member = OrgMember(
@@ -45,6 +47,7 @@ class OrgMemberStore:
                 llm_api_key=llm_api_key,
                 status=status,
                 agent_settings=agent_settings,
+                conversation_settings=conversation_settings,
             )
             session.add(org_member)
             await session.commit()
@@ -165,9 +168,7 @@ class OrgMemberStore:
         return {
             "llm_api_key": settings.get_secret_agent_setting("llm.api_key"),
             "agent_settings": {},
-            "conversation_settings": settings.conversation_settings.model_dump(
-                mode="json"
-            ),
+            "conversation_settings": {},
         }
 
     @staticmethod
@@ -205,7 +206,7 @@ class OrgMemberStore:
 
             if email_filter:
                 query = query.join(User, User.id == OrgMember.user_id).filter(
-                    User.email.ilike(f"%{email_filter}%")
+                    User.email.ilike(f'%{email_filter}%')
                 )
 
             result = await session.execute(query)
@@ -241,7 +242,7 @@ class OrgMemberStore:
 
             # Apply email filter if provided
             if email_filter:
-                query = query.filter(User.email.ilike(f"%{email_filter}%"))
+                query = query.filter(User.email.ilike(f'%{email_filter}%'))
 
             query = query.order_by(OrgMember.user_id).offset(offset).limit(limit + 1)
 

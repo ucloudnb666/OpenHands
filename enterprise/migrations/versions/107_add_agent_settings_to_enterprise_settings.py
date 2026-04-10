@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = '107'
-down_revision: Union[str, None] = '106'
+revision: str = "107"
+down_revision: Union[str, None] = "106"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -23,56 +23,56 @@ _EMPTY_JSON = sa.text("'{}'::json")
 
 def upgrade() -> None:
     op.add_column(
-        'user_settings',
+        "user_settings",
         sa.Column(
-            'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
+            "agent_settings", sa.JSON(), nullable=False, server_default=_EMPTY_JSON
         ),
     )
     op.add_column(
-        'user_settings',
+        "user_settings",
         sa.Column(
-            'conversation_settings',
+            "conversation_settings",
             sa.JSON(),
             nullable=False,
             server_default=_EMPTY_JSON,
         ),
     )
     op.add_column(
-        'org_member',
+        "org_member",
         sa.Column(
-            'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
+            "agent_settings", sa.JSON(), nullable=False, server_default=_EMPTY_JSON
         ),
     )
     op.add_column(
-        'org_member',
+        "org_member",
         sa.Column(
-            'conversation_settings',
+            "conversation_settings",
             sa.JSON(),
             nullable=False,
             server_default=_EMPTY_JSON,
         ),
     )
     op.add_column(
-        'org',
+        "org",
         sa.Column(
-            'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
+            "agent_settings", sa.JSON(), nullable=False, server_default=_EMPTY_JSON
         ),
     )
     op.add_column(
-        'org',
+        "org",
         sa.Column(
-            'conversation_settings',
+            "conversation_settings",
             sa.JSON(),
             nullable=False,
             server_default=_EMPTY_JSON,
         ),
     )
 
-    op.add_column('org', sa.Column('_llm_api_key', sa.String(), nullable=True))
+    op.add_column("org", sa.Column("_llm_api_key", sa.String(), nullable=True))
     op.add_column(
-        'org_member',
+        "org_member",
         sa.Column(
-            'has_custom_llm_api_key',
+            "has_custom_llm_api_key",
             sa.Boolean(),
             nullable=False,
             server_default=sa.false(),
@@ -136,122 +136,86 @@ def upgrade() -> None:
         )
     )
 
-    op.execute(
-        sa.text(
-            """
-            UPDATE user_settings AS us
-            SET llm_api_key_for_byor = om._llm_api_key_for_byor
-            FROM "user" AS u
-            JOIN org_member AS om
-              ON om.user_id = u.id
-             AND om.org_id = u.current_org_id
-            WHERE us.keycloak_user_id = u.id::text
-              AND us.llm_api_key_for_byor IS NULL
-              AND om._llm_api_key_for_byor IS NOT NULL
-            """
-        )
-    )
-    op.execute(
-        sa.text(
-            """
-            INSERT INTO user_settings (keycloak_user_id, llm_api_key_for_byor, agent_settings)
-            SELECT u.id::text, om._llm_api_key_for_byor, '{}'::json
-            FROM "user" AS u
-            JOIN org_member AS om
-              ON om.user_id = u.id
-             AND om.org_id = u.current_org_id
-            LEFT JOIN user_settings AS us
-              ON us.keycloak_user_id = u.id::text
-            WHERE us.id IS NULL
-              AND om._llm_api_key_for_byor IS NOT NULL
-            """
-        )
-    )
-
-    op.alter_column('user_settings', 'agent_settings', server_default=None)
-    op.alter_column('user_settings', 'conversation_settings', server_default=None)
-    op.alter_column('org_member', 'agent_settings', server_default=None)
-    op.alter_column('org_member', 'conversation_settings', server_default=None)
-    op.alter_column('org', 'agent_settings', server_default=None)
-    op.alter_column('org', 'conversation_settings', server_default=None)
-    op.alter_column('org_member', 'has_custom_llm_api_key', server_default=None)
-    op.drop_column('user_settings', 'agent')
-    op.drop_column('user_settings', 'max_iterations')
-    op.drop_column('user_settings', 'security_analyzer')
-    op.drop_column('user_settings', 'confirmation_mode')
-    op.drop_column('user_settings', 'llm_model')
-    op.drop_column('user_settings', 'llm_base_url')
-    op.drop_column('user_settings', 'enable_default_condenser')
-    op.drop_column('user_settings', 'condenser_max_size')
-    op.drop_column('org_member', 'max_iterations')
-    op.drop_column('org_member', 'llm_model')
-    op.drop_column('org_member', '_llm_api_key_for_byor')
-    op.drop_column('org_member', 'llm_base_url')
-    op.drop_column('org', 'agent')
-    op.drop_column('org', 'default_max_iterations')
-    op.drop_column('org', 'security_analyzer')
-    op.drop_column('org', 'confirmation_mode')
-    op.drop_column('org', 'default_llm_model')
-    op.drop_column('org', 'default_llm_base_url')
-    op.drop_column('org', 'enable_default_condenser')
-    op.drop_column('org', 'mcp_config')
-    op.drop_column('org', 'condenser_max_size')
+    op.alter_column("user_settings", "agent_settings", server_default=None)
+    op.alter_column("user_settings", "conversation_settings", server_default=None)
+    op.alter_column("org_member", "agent_settings", server_default=None)
+    op.alter_column("org_member", "conversation_settings", server_default=None)
+    op.alter_column("org", "agent_settings", server_default=None)
+    op.alter_column("org", "conversation_settings", server_default=None)
+    op.alter_column("org_member", "has_custom_llm_api_key", server_default=None)
+    op.drop_column("user_settings", "agent")
+    op.drop_column("user_settings", "max_iterations")
+    op.drop_column("user_settings", "security_analyzer")
+    op.drop_column("user_settings", "confirmation_mode")
+    op.drop_column("user_settings", "llm_model")
+    op.drop_column("user_settings", "llm_base_url")
+    op.drop_column("user_settings", "enable_default_condenser")
+    op.drop_column("user_settings", "condenser_max_size")
+    op.drop_column("org_member", "max_iterations")
+    op.drop_column("org_member", "llm_model")
+    op.drop_column("org_member", "llm_base_url")
+    op.drop_column("org", "agent")
+    op.drop_column("org", "default_max_iterations")
+    op.drop_column("org", "security_analyzer")
+    op.drop_column("org", "confirmation_mode")
+    op.drop_column("org", "default_llm_model")
+    op.drop_column("org", "default_llm_base_url")
+    op.drop_column("org", "enable_default_condenser")
+    op.drop_column("org", "mcp_config")
+    op.drop_column("org", "condenser_max_size")
 
 
 def downgrade() -> None:
-    op.add_column('user_settings', sa.Column('agent', sa.String(), nullable=True))
+    op.add_column("user_settings", sa.Column("agent", sa.String(), nullable=True))
     op.add_column(
-        'user_settings', sa.Column('max_iterations', sa.Integer(), nullable=True)
+        "user_settings", sa.Column("max_iterations", sa.Integer(), nullable=True)
     )
     op.add_column(
-        'user_settings', sa.Column('security_analyzer', sa.String(), nullable=True)
+        "user_settings", sa.Column("security_analyzer", sa.String(), nullable=True)
     )
     op.add_column(
-        'user_settings', sa.Column('confirmation_mode', sa.Boolean(), nullable=True)
+        "user_settings", sa.Column("confirmation_mode", sa.Boolean(), nullable=True)
     )
-    op.add_column('user_settings', sa.Column('llm_model', sa.String(), nullable=True))
+    op.add_column("user_settings", sa.Column("llm_model", sa.String(), nullable=True))
     op.add_column(
-        'user_settings', sa.Column('llm_base_url', sa.String(), nullable=True)
+        "user_settings", sa.Column("llm_base_url", sa.String(), nullable=True)
     )
     op.add_column(
-        'user_settings',
+        "user_settings",
         sa.Column(
-            'enable_default_condenser',
+            "enable_default_condenser",
             sa.Boolean(),
             nullable=False,
             server_default=sa.true(),
         ),
     )
     op.add_column(
-        'user_settings', sa.Column('condenser_max_size', sa.Integer(), nullable=True)
+        "user_settings", sa.Column("condenser_max_size", sa.Integer(), nullable=True)
     )
-    op.add_column('org_member', sa.Column('llm_base_url', sa.String(), nullable=True))
+    op.add_column("org_member", sa.Column("llm_base_url", sa.String(), nullable=True))
+    op.add_column("org_member", sa.Column("llm_model", sa.String(), nullable=True))
     op.add_column(
-        'org_member', sa.Column('_llm_api_key_for_byor', sa.String(), nullable=True)
+        "org_member", sa.Column("max_iterations", sa.Integer(), nullable=True)
     )
-    op.add_column('org_member', sa.Column('llm_model', sa.String(), nullable=True))
+    op.add_column("org", sa.Column("agent", sa.String(), nullable=True))
     op.add_column(
-        'org_member', sa.Column('max_iterations', sa.Integer(), nullable=True)
+        "org", sa.Column("default_max_iterations", sa.Integer(), nullable=True)
     )
-    op.add_column('org', sa.Column('agent', sa.String(), nullable=True))
+    op.add_column("org", sa.Column("security_analyzer", sa.String(), nullable=True))
+    op.add_column("org", sa.Column("confirmation_mode", sa.Boolean(), nullable=True))
+    op.add_column("org", sa.Column("default_llm_model", sa.String(), nullable=True))
+    op.add_column("org", sa.Column("default_llm_base_url", sa.String(), nullable=True))
     op.add_column(
-        'org', sa.Column('default_max_iterations', sa.Integer(), nullable=True)
-    )
-    op.add_column('org', sa.Column('security_analyzer', sa.String(), nullable=True))
-    op.add_column('org', sa.Column('confirmation_mode', sa.Boolean(), nullable=True))
-    op.add_column('org', sa.Column('default_llm_model', sa.String(), nullable=True))
-    op.add_column('org', sa.Column('default_llm_base_url', sa.String(), nullable=True))
-    op.add_column(
-        'org',
+        "org",
         sa.Column(
-            'enable_default_condenser',
+            "enable_default_condenser",
             sa.Boolean(),
             nullable=False,
             server_default=sa.true(),
         ),
     )
-    op.add_column('org', sa.Column('mcp_config', sa.JSON(), nullable=True))
-    op.add_column('org', sa.Column('condenser_max_size', sa.Integer(), nullable=True))
+    op.add_column("org", sa.Column("mcp_config", sa.JSON(), nullable=True))
+    op.add_column("org", sa.Column("condenser_max_size", sa.Integer(), nullable=True))
 
     op.execute(
         sa.text(
@@ -318,26 +282,11 @@ def downgrade() -> None:
             """
         )
     )
-    op.execute(
-        sa.text(
-            """
-            UPDATE org_member AS om
-            SET _llm_api_key_for_byor = us.llm_api_key_for_byor
-            FROM "user" AS u
-            JOIN user_settings AS us
-              ON us.keycloak_user_id = u.id::text
-            WHERE om.user_id = u.id
-              AND om.org_id = u.current_org_id
-              AND us.llm_api_key_for_byor IS NOT NULL
-            """
-        )
-    )
-
-    op.drop_column('org', 'agent_settings')
-    op.drop_column('org', 'conversation_settings')
-    op.drop_column('org', '_llm_api_key')
-    op.drop_column('org_member', 'agent_settings')
-    op.drop_column('org_member', 'conversation_settings')
-    op.drop_column('org_member', 'has_custom_llm_api_key')
-    op.drop_column('user_settings', 'agent_settings')
-    op.drop_column('user_settings', 'conversation_settings')
+    op.drop_column("org", "agent_settings")
+    op.drop_column("org", "conversation_settings")
+    op.drop_column("org", "_llm_api_key")
+    op.drop_column("org_member", "agent_settings")
+    op.drop_column("org_member", "conversation_settings")
+    op.drop_column("org_member", "has_custom_llm_api_key")
+    op.drop_column("user_settings", "agent_settings")
+    op.drop_column("user_settings", "conversation_settings")

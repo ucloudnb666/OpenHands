@@ -107,14 +107,14 @@ class OrgStore:
             )
             user = result.scalars().first()
             if not user:
-                logger.warning(f"User not found for ID {keycloak_user_id}")
+                logger.warning(f'User not found for ID {keycloak_user_id}')
                 return None
             org_id = user.current_org_id
             result = await session.execute(select(Org).filter(Org.id == org_id))
             org = result.scalars().first()
             if not org:
                 logger.warning(
-                    f"Org not found for ID {org_id} as the current org for user {keycloak_user_id}"
+                    f'Org not found for ID {org_id} as the current org for user {keycloak_user_id}'
                 )
                 return None
             return await OrgStore._validate_org_version(org)
@@ -134,7 +134,7 @@ class OrgStore:
             org = await OrgStore.update_org(
                 org.id,
                 {
-                    "org_version": ORG_SETTINGS_VERSION,
+                    'org_version': ORG_SETTINGS_VERSION,
                     "agent_settings": {
                         "llm.model": get_default_litellm_model(),
                         "llm.base_url": LITE_LLM_API_URL,
@@ -223,8 +223,8 @@ class OrgStore:
             if not org:
                 return None
 
-            if "id" in kwargs:
-                kwargs.pop("id")
+            if 'id' in kwargs:
+                kwargs.pop('id')
 
             agent_settings_updates = kwargs.pop("agent_settings", None)
             conversation_settings_updates = kwargs.pop("conversation_settings", None)
@@ -335,7 +335,7 @@ class OrgStore:
                         SELECT conversation_id FROM conversation_metadata_saas WHERE org_id = :org_id
                     )
                     """),
-                    {"org_id": str(org_id)},
+                    {'org_id': str(org_id)},
                 )
 
                 await session.execute(
@@ -345,39 +345,39 @@ class OrgStore:
                         SELECT conversation_id::uuid FROM conversation_metadata_saas WHERE org_id = :org_id
                     )
                     """),
-                    {"org_id": str(org_id)},
+                    {'org_id': str(org_id)},
                 )
 
                 # 2. Delete organization-owned data tables (direct org_id foreign keys)
                 await session.execute(
-                    text("DELETE FROM billing_sessions WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM billing_sessions WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
                 await session.execute(
                     text(
-                        "DELETE FROM conversation_metadata_saas WHERE org_id = :org_id"
+                        'DELETE FROM conversation_metadata_saas WHERE org_id = :org_id'
                     ),
-                    {"org_id": str(org_id)},
+                    {'org_id': str(org_id)},
                 )
                 await session.execute(
-                    text("DELETE FROM custom_secrets WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM custom_secrets WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
                 await session.execute(
-                    text("DELETE FROM api_keys WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM api_keys WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
                 await session.execute(
-                    text("DELETE FROM slack_conversation WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM slack_conversation WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
                 await session.execute(
-                    text("DELETE FROM slack_users WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM slack_users WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
                 await session.execute(
-                    text("DELETE FROM stripe_customers WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM stripe_customers WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
 
                 # 3. Handle users with this as current_org_id BEFORE deleting memberships
@@ -392,7 +392,7 @@ class OrgStore:
                             WHERE om.user_id = u.id AND om.org_id != :org_id
                         )
                     """),
-                    {"org_id": str(org_id)},
+                    {'org_id': str(org_id)},
                 )
                 orphaned_users = orphaned_result.fetchall()
 
@@ -410,13 +410,13 @@ class OrgStore:
                         )
                         WHERE "user".current_org_id = :org_id
                     """),
-                    {"org_id": str(org_id)},
+                    {'org_id': str(org_id)},
                 )
 
                 # 4. Delete organization memberships (now safe)
                 await session.execute(
-                    text("DELETE FROM org_member WHERE org_id = :org_id"),
-                    {"org_id": str(org_id)},
+                    text('DELETE FROM org_member WHERE org_id = :org_id'),
+                    {'org_id': str(org_id)},
                 )
 
                 # 5. Finally delete the organization
@@ -424,8 +424,8 @@ class OrgStore:
 
                 # 6. Clean up LiteLLM team before committing transaction
                 logger.info(
-                    "Deleting LiteLLM team within database transaction",
-                    extra={"org_id": str(org_id)},
+                    'Deleting LiteLLM team within database transaction',
+                    extra={'org_id': str(org_id)},
                 )
                 await LiteLlmManager.delete_team(str(org_id))
 
@@ -433,8 +433,8 @@ class OrgStore:
                 await session.commit()
 
                 logger.info(
-                    "Successfully deleted organization and all associated data including LiteLLM team",
-                    extra={"org_id": str(org_id), "org_name": org.name},
+                    'Successfully deleted organization and all associated data including LiteLLM team',
+                    extra={'org_id': str(org_id), 'org_name': org.name},
                 )
 
                 return org
@@ -442,8 +442,8 @@ class OrgStore:
             except Exception as e:
                 await session.rollback()
                 logger.error(
-                    "Failed to delete organization - transaction rolled back",
-                    extra={"org_id": str(org_id), "error": str(e)},
+                    'Failed to delete organization - transaction rolled back',
+                    extra={'org_id': str(org_id), 'error': str(e)},
                 )
                 raise
 

@@ -131,7 +131,7 @@ class SaasSettingsStore(SettingsStore):
     async def load(self) -> Settings | None:
         user = await UserStore.get_user_by_id(self.user_id)
         if not user:
-            logger.error(f"User not found for ID {self.user_id}")
+            logger.error(f'User not found for ID {self.user_id}')
             return None
 
         org_id = user.current_org_id
@@ -145,7 +145,7 @@ class SaasSettingsStore(SettingsStore):
         org = await OrgStore.get_org_by_id_async(org_id)
         if not org:
             logger.error(
-                f"Org not found for ID {org_id} as the current org for user {self.user_id}"
+                f'Org not found for ID {org_id} as the current org for user {self.user_id}'
             )
             return None
         org_agent_settings = OrgStore.get_agent_settings_from_org(org)
@@ -158,23 +158,23 @@ class SaasSettingsStore(SettingsStore):
                 normalized: getattr(org, c.name)
                 for c in Org.__table__.columns
                 if (
-                    normalized := c.name.removeprefix("_default_")
-                    .removeprefix("default_")
-                    .lstrip("_")
+                    normalized := c.name.removeprefix('_default_')
+                    .removeprefix('default_')
+                    .lstrip('_')
                 )
                 in Settings.model_fields
             },
             **{
                 normalized: getattr(user, c.name)
                 for c in User.__table__.columns
-                if (normalized := c.name.lstrip("_")) in Settings.model_fields
+                if (normalized := c.name.lstrip('_')) in Settings.model_fields
             },
         }
         effective_llm_api_key = self._get_effective_llm_api_key(org, org_member)
         if effective_llm_api_key is not None:
             kwargs["llm_api_key"] = effective_llm_api_key
         if org_member.mcp_config is not None:
-            kwargs["mcp_config"] = org_member.mcp_config
+            kwargs['mcp_config'] = org_member.mcp_config
         kwargs["agent_settings"] = merge_agent_settings(
             org_agent_settings,
             member_agent_settings,
@@ -188,10 +188,10 @@ class SaasSettingsStore(SettingsStore):
             member_conversation,
         )
         if org.v1_enabled is None:
-            kwargs["v1_enabled"] = True
+            kwargs['v1_enabled'] = True
         # Apply default if sandbox_grouping_strategy is None in the database
-        if kwargs.get("sandbox_grouping_strategy") is None:
-            kwargs.pop("sandbox_grouping_strategy", None)
+        if kwargs.get('sandbox_grouping_strategy') is None:
+            kwargs.pop('sandbox_grouping_strategy', None)
 
         settings = Settings(**kwargs)
         object.__setattr__(settings, "mcp_config", settings.to_legacy_mcp_config())
@@ -221,16 +221,16 @@ class SaasSettingsStore(SettingsStore):
                         self.user_id
                     )
                     if not user_info:
-                        logger.error(f"User info not found for ID {self.user_id}")
+                        logger.error(f'User info not found for ID {self.user_id}')
                         return None
                     user = await UserStore.migrate_user(
                         self.user_id, user_settings, user_info
                     )
                     if not user:
-                        logger.error(f"Failed to migrate user {self.user_id}")
+                        logger.error(f'Failed to migrate user {self.user_id}')
                         return None
                 else:
-                    logger.error(f"User not found for ID {self.user_id}")
+                    logger.error(f'User not found for ID {self.user_id}')
                     return None
 
             org_id = user.current_org_id
@@ -247,7 +247,7 @@ class SaasSettingsStore(SettingsStore):
             org = result.scalars().first()
             if not org:
                 logger.error(
-                    f"Org not found for ID {org_id} as the current org for user {self.user_id}"
+                    f'Org not found for ID {org_id} as the current org for user {self.user_id}'
                 )
                 return None
 
@@ -347,7 +347,7 @@ class SaasSettingsStore(SettingsStore):
         config: OpenHandsConfig,
         user_id: str,  # type: ignore[override]
     ) -> SaasSettingsStore:
-        logger.debug(f"saas_settings_store.get_instance::{user_id}")
+        logger.debug(f'saas_settings_store.get_instance::{user_id}')
         return SaasSettingsStore(user_id, config)
 
     async def _ensure_api_key(
@@ -373,7 +373,7 @@ class SaasSettingsStore(SettingsStore):
                     self.user_id,
                     org_id,
                     None,
-                    {"type": "openhands"},
+                    {'type': 'openhands'},
                 )
             else:
                 # Must delete any existing key with the same alias first
@@ -388,6 +388,6 @@ class SaasSettingsStore(SettingsStore):
 
             item.set_agent_setting("llm.api_key", SecretStr(generated_key))
             logger.info(
-                "saas_settings_store:store:generated_openhands_key",
-                extra={"user_id": self.user_id},
+                'saas_settings_store:store:generated_openhands_key',
+                extra={'user_id': self.user_id},
             )
