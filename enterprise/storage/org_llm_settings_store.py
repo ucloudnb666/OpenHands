@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from uuid import UUID
 
-from server.routes.org_models import OrgLLMSettingsUpdate
+from server.routes.org_models import OrgLLMSettingsUpdate, get_org_conversation_settings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from storage.agent_settings_utils import get_org_agent_settings, merge_agent_settings
@@ -67,14 +67,15 @@ class OrgLLMSettingsStore:
             return None
 
         update_data.apply_to_org(org)
-        combined_agent_settings = merge_agent_settings(
-            update_data.agent_settings,
-            update_data.conversation_settings,
-        )
-        if combined_agent_settings:
+        if update_data.agent_settings:
             org.agent_settings = merge_agent_settings(
                 get_org_agent_settings(org),
-                combined_agent_settings,
+                update_data.agent_settings,
+            )
+        if update_data.conversation_settings:
+            org.conversation_settings = merge_agent_settings(
+                get_org_conversation_settings(org),
+                update_data.conversation_settings,
             )
 
         # flush instead of commit - DbSessionInjector auto-commits at request end

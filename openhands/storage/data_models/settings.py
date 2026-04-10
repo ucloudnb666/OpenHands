@@ -45,9 +45,7 @@ _LEGACY_FLAT_TO_SDK: dict[str, str] = {
 }
 
 _CONVERSATION_SETTINGS_KEYS = frozenset(
-    f.key
-    for s in ConversationSettings.export_schema().sections
-    for f in s.fields
+    f.key for s in ConversationSettings.export_schema().sections for f in s.fields
 )
 
 
@@ -643,7 +641,7 @@ class Settings(BaseModel):
                     conversation_vals[flat_key] = value
 
         if conversation_vals:
-            data['conversation_settings'] = conversation_vals
+            data['conversation_settings'] = ConversationSettings(**conversation_vals)
 
         # --- Secrets store ---
         secrets_store = data.get('secrets_store')

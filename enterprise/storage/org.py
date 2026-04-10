@@ -30,6 +30,7 @@ class Org(Base):  # type: ignore
     sandbox_runtime_container_image = Column(String, nullable=True)
     org_version = Column(Integer, nullable=False, default=0)
     agent_settings = Column(JSON, nullable=False, default=dict)
+    conversation_settings = Column(JSON, nullable=False, default=dict)
     # encrypted column, don't set directly, set without the underscore
     _llm_api_key = Column(String, nullable=True)
     # encrypted column, don't set directly, set without the underscore

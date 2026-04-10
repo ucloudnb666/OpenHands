@@ -113,10 +113,6 @@ class SaasSettingsStore(SettingsStore):
             for key, value in normalized_agent_settings.items()
             if key not in {'llm.api_key', 'mcp_config'}
         }
-        # TODO: conversation_settings should be stored in a separate DB column
-        conv = item.conversation_settings.model_dump(mode='json')
-        conv.pop('schema_version', None)
-        effective_agent_settings.update(conv)
 
         for key, raw_value in item.raw_agent_settings.items():
             if key in {'schema_version', 'llm.api_key', 'mcp_config'}:
@@ -182,6 +178,14 @@ class SaasSettingsStore(SettingsStore):
         kwargs['agent_settings'] = merge_agent_settings(
             org_agent_settings,
             member_agent_settings,
+        )
+        org_conversation = dict(getattr(org, 'conversation_settings', {}) or {})
+        member_conversation = dict(
+            getattr(org_member, 'conversation_settings', {}) or {}
+        )
+        kwargs['conversation_settings'] = merge_agent_settings(
+            org_conversation,
+            member_conversation,
         )
         if org.v1_enabled is None:
             kwargs['v1_enabled'] = True
@@ -267,8 +271,20 @@ class SaasSettingsStore(SettingsStore):
                 effective_agent_settings,
             )
 
+            effective_conversation = item.conversation_settings.model_dump(
+                mode='json'
+            )
+            org_conversation = dict(
+                getattr(org, 'conversation_settings', {}) or {}
+            )
+            org.conversation_settings = merge_agent_settings(
+                org_conversation,
+                effective_conversation,
+            )
+
             kwargs = item.model_dump(context={'expose_secrets': True})
             kwargs.pop('agent_settings', None)
+            kwargs.pop('conversation_settings', None)
             legacy_mcp_config = item.to_legacy_mcp_config()
             kwargs['mcp_config'] = (
                 legacy_mcp_config.model_dump(mode='python')
@@ -287,6 +303,7 @@ class SaasSettingsStore(SettingsStore):
                     not in {
                         'llm_api_key',
                         'agent_settings',
+                        'conversation_settings',
                     }
                 ):
                     setattr(org, key, value)

@@ -16,27 +16,13 @@ from storage.org import Org
 from storage.org_member import OrgMember
 from storage.role import Role
 
-from openhands.sdk.settings import ConversationSettings
-
-
-_CONVERSATION_SETTINGS_KEYS = {
-    'max_iterations',
-    'confirmation_mode',
-    'security_analyzer',
-}
+from storage.agent_settings_utils import ensure_schema_version
 
 
 def get_org_conversation_settings(org: Org) -> dict[str, Any]:
-    agent_settings = get_org_agent_settings(org)
-    conversation_settings = {
-        key: value
-        for key, value in agent_settings.items()
-        if key in _CONVERSATION_SETTINGS_KEYS
-    }
-    conversation_settings['schema_version'] = ConversationSettings.model_fields[
-        'schema_version'
-    ].default
-    return conversation_settings
+    return ensure_schema_version(
+        dict(getattr(org, 'conversation_settings', {}) or {})
+    )
 
 
 class OrgCreationError(Exception):

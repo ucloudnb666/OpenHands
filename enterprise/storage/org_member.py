@@ -18,6 +18,7 @@ class OrgMember(Base):  # type: ignore
     _llm_api_key = Column(String, nullable=False)
     has_custom_llm_api_key = Column(Boolean, nullable=False, default=False)
     agent_settings = Column(JSON, nullable=False, default=dict)
+    conversation_settings = Column(JSON, nullable=False, default=dict)
     status = Column(String, nullable=True)
     mcp_config = Column(JSON, nullable=True)
 

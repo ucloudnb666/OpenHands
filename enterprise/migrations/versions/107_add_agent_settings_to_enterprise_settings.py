@@ -40,6 +40,24 @@ def upgrade() -> None:
             'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
         ),
     )
+    op.add_column(
+        'org_member',
+        sa.Column(
+            'conversation_settings',
+            sa.JSON(),
+            nullable=False,
+            server_default=_EMPTY_JSON,
+        ),
+    )
+    op.add_column(
+        'org',
+        sa.Column(
+            'conversation_settings',
+            sa.JSON(),
+            nullable=False,
+            server_default=_EMPTY_JSON,
+        ),
+    )
 
     op.add_column('org', sa.Column('_llm_api_key', sa.String(), nullable=True))
     op.add_column(
@@ -304,7 +322,9 @@ def downgrade() -> None:
     )
 
     op.drop_column('org', 'agent_settings')
+    op.drop_column('org', 'conversation_settings')
     op.drop_column('org', '_llm_api_key')
     op.drop_column('org_member', 'agent_settings')
+    op.drop_column('org_member', 'conversation_settings')
     op.drop_column('org_member', 'has_custom_llm_api_key')
     op.drop_column('user_settings', 'agent_settings')

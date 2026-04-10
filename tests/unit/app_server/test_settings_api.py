@@ -227,7 +227,7 @@ async def test_settings_api_endpoints(test_client):
         'language': 'en',
         'agent': 'test-agent',
         'max_iterations': 100,
-        'security_analyzer': 'default',
+        'security_analyzer': 'llm',
         'confirmation_mode': True,
         'llm.model': 'test-model',
         'llm.api_key': 'test-key',
@@ -272,13 +272,14 @@ async def test_settings_api_endpoints(test_client):
         assert vals['verification.enable_iterative_refinement'] is True
         assert vals['verification.critic_threshold'] == 0.7
         assert vals['verification.max_refinement_iterations'] == 4
-        assert response_data['confirmation_mode'] is True
-        assert response_data['security_analyzer'] == 'default'
-        assert response_data['conversation_settings'] == {
+        cs = response_data['conversation_settings']
+        assert cs['confirmation_mode'] is True
+        assert cs['security_analyzer'] == 'llm'
+        assert cs == {
             'schema_version': 1,
             'max_iterations': 100,
             'confirmation_mode': True,
-            'security_analyzer': 'default',
+            'security_analyzer': 'llm',
         }
         assert vals['llm.api_key'] == '<hidden>'
 
