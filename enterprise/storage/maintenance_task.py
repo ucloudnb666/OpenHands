@@ -3,12 +3,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Type
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import Column, DateTime, Integer, String, Text, text
+from sqlalchemy import DateTime, String, Text, text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.orm import Mapped, mapped_column
 from storage.base import Base
 
 from openhands.utils.import_utils import get_impl
@@ -30,7 +31,7 @@ class MaintenanceTaskProcessor(BaseModel, ABC):
     )
 
     @abstractmethod
-    async def __call__(self, task: MaintenanceTask) -> dict:
+    async def __call__(self, task: MaintenanceTask) -> dict[str, Any]:
         """
         Process a maintenance task.
 
@@ -52,30 +53,30 @@ class MaintenanceTaskStatus(Enum):
     ERROR = 'ERROR'
 
 
-class MaintenanceTask(Base):  # type: ignore
+class MaintenanceTask(Base):
     """
     Model for storing maintenance tasks that perform background operations.
     """
 
     __tablename__ = 'maintenance_tasks'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    status = Column(
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    status: Mapped[MaintenanceTaskStatus] = mapped_column(
         SQLEnum(MaintenanceTaskStatus),
         nullable=False,
         default=MaintenanceTaskStatus.INACTIVE,
     )
-    processor_type = Column(String, nullable=False)
-    processor_json = Column(Text, nullable=False)
-    delay = Column(Integer, server_default='0')
-    started_at = Column(DateTime, nullable=True)
-    info = Column(JSON, nullable=True)
-    created_at = Column(
+    processor_type: Mapped[str] = mapped_column(String, nullable=False)
+    processor_json: Mapped[str] = mapped_column(Text, nullable=False)
+    delay: Mapped[int | None] = mapped_column(server_default='0')
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    info: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=text('CURRENT_TIMESTAMP'),
         nullable=False,
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=text('CURRENT_TIMESTAMP'),
         onupdate=datetime.now,
@@ -90,10 +91,10 @@ class MaintenanceTask(Base):  # type: ignore
             MaintenanceTaskProcessor: The processor instance
         """
         # Import the processor class dynamically
-        processor_type: Type[MaintenanceTaskProcessor] = get_impl(
+        processor_class: type[MaintenanceTaskProcessor] = get_impl(
             MaintenanceTaskProcessor, self.processor_type
         )
-        processor = processor_type.model_validate_json(self.processor_json)
+        processor = processor_class.model_validate_json(self.processor_json)
         return processor
 
     def set_processor(self, processor: MaintenanceTaskProcessor) -> None:
