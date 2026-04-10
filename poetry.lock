@@ -6390,8 +6390,8 @@ wsproto = ">=1.2.0"
 [package.source]
 type = "git"
 url = "https://github.com/OpenHands/software-agent-sdk.git"
-reference = "main"
-resolved_reference = "b63d13797b47958a12299beee5515b560ea88a6a"
+reference = "openhands/issue-2788-agent-settings-migrations"
+resolved_reference = "5ee469c68decf0c2527c4d562b480c1d89d3ac48"
 subdirectory = "openhands-agent-server"
 
 [[package]]
@@ -6425,8 +6425,8 @@ boto3 = ["boto3 (>=1.35.0)"]
 [package.source]
 type = "git"
 url = "https://github.com/OpenHands/software-agent-sdk.git"
-reference = "main"
-resolved_reference = "b63d13797b47958a12299beee5515b560ea88a6a"
+reference = "openhands/issue-2788-agent-settings-migrations"
+resolved_reference = "5ee469c68decf0c2527c4d562b480c1d89d3ac48"
 subdirectory = "openhands-sdk"
 
 [[package]]
