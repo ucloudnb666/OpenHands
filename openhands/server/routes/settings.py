@@ -134,7 +134,7 @@ def _apply_settings_payload(
 app = APIRouter(prefix='/api', dependencies=get_dependencies())
 
 
-@app.get('/settings/schema', deprecated=True)
+@app.get('/settings/agent-schema', deprecated=True)
 async def load_settings_schema() -> dict[str, Any]:
     return _get_agent_settings_schema()
 

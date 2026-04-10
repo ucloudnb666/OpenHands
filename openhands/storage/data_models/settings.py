@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from enum import Enum
 from functools import lru_cache
 from typing import Annotated, Any
@@ -21,6 +22,7 @@ from openhands.core.config.mcp_config import MCPConfig as LegacyMCPConfig
 from openhands.core.config.utils import load_openhands_config
 from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.storage.data_models.secrets import Secrets
+from openhands.utils.jsonpatch_compat import make_patch
 
 
 def _assign_dotted_value(target: dict[str, Any], dotted_key: str, value: Any) -> None:
@@ -107,6 +109,34 @@ def _remove_dotted_value(target: dict[str, Any], dotted_key: str) -> None:
         child = parent.get(part)
         if isinstance(child, dict) and not child:
             parent.pop(part, None)
+
+
+def _nested_agent_settings_payload(source: dict[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
+    for key, value in source.items():
+        coerced_value = _coerce_agent_setting_value(value)
+        if key == 'schema_version':
+            normalized[key] = coerced_value
+            continue
+        if '.' in key:
+            _assign_dotted_value(normalized, key, coerced_value)
+            continue
+        normalized[key] = coerced_value
+    return normalized
+
+
+def _set_model_dump_value(target: dict[str, Any], dotted_key: str, value: Any) -> None:
+    if value is None:
+        if '.' in dotted_key:
+            _remove_dotted_value(target, dotted_key)
+        else:
+            target.pop(dotted_key, None)
+        return
+
+    if '.' in dotted_key:
+        _assign_dotted_value(target, dotted_key, value)
+    else:
+        target[dotted_key] = value
 
 
 def _normalize_persisted_sdk_value(dotted_key: str, value: Any) -> Any:
@@ -344,7 +374,9 @@ class Settings(BaseModel):
         return _legacy_mcp_config_from_value(self.agent_settings.mcp_config)
 
     def _reload_agent_settings(self) -> None:
-        self._agent_settings = AgentSettings.from_persisted(self.raw_agent_settings)
+        self._agent_settings = AgentSettings.model_validate(
+            _nested_agent_settings_payload(self.raw_agent_settings)
+        )
 
     def _extra_agent_settings_payload(self) -> dict[str, Any]:
         field_keys, _ = _sdk_schema_field_metadata()
@@ -400,7 +432,14 @@ class Settings(BaseModel):
             self.normalize_agent_settings()
             return
 
-        self._agent_settings = self.agent_settings.patch({key: normalized_value})
+        base_payload = self.agent_settings.model_dump(
+            mode='json', context={'expose_secrets': True}
+        )
+        target_payload = deepcopy(base_payload)
+        _set_model_dump_value(target_payload, key, normalized_value)
+        self._agent_settings = AgentSettings.model_validate(
+            make_patch(base_payload, target_payload).apply(base_payload)
+        )
         object.__setattr__(
             self,
             'raw_agent_settings',

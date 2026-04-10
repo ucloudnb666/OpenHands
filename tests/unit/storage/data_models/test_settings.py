@@ -125,7 +125,7 @@ def test_settings_preserve_agent_settings():
     )
     persisted = settings.normalized_agent_settings()
 
-    assert persisted['schema_version'] == 2
+    assert persisted['schema_version'] == 1
     assert persisted['llm']['model'] == 'test-model'
     assert persisted['llm']['api_key'] == 'test-key'
     assert persisted['verification']['critic_enabled'] is True

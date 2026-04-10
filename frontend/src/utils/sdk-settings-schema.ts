@@ -161,7 +161,7 @@ export function buildInitialSettingsFormValues(
 ): SettingsFormValues {
   const schema =
     schemaOverride ??
-    (source === "conversation"
+    (source === "conversation_settings"
       ? settings.conversation_settings_schema
       : settings.agent_settings_schema);
   if (!schema) {
@@ -185,7 +185,7 @@ export function inferInitialView(
 ): SettingsView {
   const schema =
     schemaOverride ??
-    (source === "conversation"
+    (source === "conversation_settings"
       ? settings.conversation_settings_schema
       : settings.agent_settings_schema);
   if (!schema) {

@@ -300,7 +300,7 @@ export const SETTINGS_HANDLERS = [
     return HttpResponse.json(settings);
   }),
 
-  http.get("/api/settings/schema", async () => {
+  http.get("/api/settings/agent-schema", async () => {
     await delay();
     return HttpResponse.json(MOCK_AGENT_SETTINGS_SCHEMA);
   }),

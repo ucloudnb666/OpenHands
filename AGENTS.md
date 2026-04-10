@@ -72,6 +72,12 @@ When regenerating lockfiles (poetry.lock, uv.lock, etc.), you MUST use the same 
 
 This ensures that lockfile updates only contain actual dependency changes, not tool version migration artifacts.
 
+### Git SDK Dependency Pins
+
+- When `pyproject.toml` pins `openhands-sdk` / `openhands-agent-server` to a git branch in `software-agent-sdk`, pushing new commits to that SDK branch is not enough for this repo: you must also run `poetry update openhands-sdk openhands-agent-server` so `poetry.lock` records the new git SHA.
+- If enterprise tests are run from the separate `enterprise/` Poetry environment before that environment is refreshed, they may still import the older installed SDK; in that case, validate with the local SDK source on `PYTHONPATH` or refresh the enterprise env before treating the result as a product bug.
+
+
 ## PR-Specific Artifacts (`.pr/` directory)
 
 When working on a PR that requires design documents, scripts meant for development-only, or other temporary artifacts that should NOT be merged to main, store them in a `.pr/` directory at the repository root.

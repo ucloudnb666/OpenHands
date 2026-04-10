@@ -18,7 +18,7 @@ class SettingsService {
    */
   static async getSettingsSchema(): Promise<SettingsSchema> {
     const { data } = await openHands.get<SettingsSchema>(
-      "/api/settings/schema",
+      "/api/settings/agent-schema",
     );
     return data;
   }

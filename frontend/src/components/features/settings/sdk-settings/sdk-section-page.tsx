@@ -97,11 +97,11 @@ export function SdkSectionPage({
     settings?.conversation_settings_schema,
   );
   const schema =
-    settingsSource === "conversation"
+    settingsSource === "conversation_settings"
       ? conversationSchemaQuery.data
       : agentSchemaQuery.data;
   const isSchemaLoading =
-    settingsSource === "conversation"
+    settingsSource === "conversation_settings"
       ? conversationSchemaQuery.isLoading
       : agentSchemaQuery.isLoading;
   const { data: config } = useConfig();
@@ -199,7 +199,7 @@ export function SdkSectionPage({
         view,
       );
       const defaultPayload =
-        settingsSource === "conversation"
+        settingsSource === "conversation_settings"
           ? { conversation_settings: basePayload }
           : basePayload;
       payload = buildPayload

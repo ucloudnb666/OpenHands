@@ -183,7 +183,7 @@ export function VerificationSettingsScreen({
   return (
     <SdkSectionPage
       scope={scope}
-      settingsSource="conversation"
+      settingsSource="conversation_settings"
       sectionKeys={["verification"]}
       excludeKeys={VERIFICATION_SCHEMA_EXCLUDE_KEYS}
       header={buildHeader}

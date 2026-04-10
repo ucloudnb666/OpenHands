@@ -3,7 +3,12 @@ import { usePostHog } from "posthog-js/react";
 import { useSelectedOrganizationId } from "#/context/use-selected-organization";
 import { organizationService } from "#/api/organization-service/organization-service.api";
 import SettingsService from "#/api/settings-service/settings-service.api";
-import { MCPConfig, Settings, SettingsScope } from "#/types/settings";
+import {
+  MCPConfig,
+  Settings,
+  SettingsScope,
+  SettingsValue,
+} from "#/types/settings";
 import { useSettings } from "../query/use-settings";
 
 type SettingsUpdate = Partial<Settings> & Record<string, unknown>;
@@ -43,9 +48,11 @@ const saveSettingsMutationFn = async (
     }
   }
 
-  const conversationSettings = {
-    ...((settingsToSave.conversation_settings as Record<string, unknown>) ??
-      {}),
+  const conversationSettings: Record<string, SettingsValue> = {
+    ...((settingsToSave.conversation_settings as Record<
+      string,
+      SettingsValue
+    >) ?? {}),
   };
 
   for (const [legacyKey, conversationKey] of Object.entries(
@@ -55,7 +62,9 @@ const saveSettingsMutationFn = async (
     const hasConversationValue = conversationKey in conversationSettings;
 
     if (hasLegacyValue && !hasConversationValue) {
-      conversationSettings[conversationKey] = settingsToSave[legacyKey];
+      conversationSettings[conversationKey] = settingsToSave[
+        legacyKey
+      ] as SettingsValue;
       delete settingsToSave[legacyKey];
     }
   }

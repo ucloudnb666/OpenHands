@@ -88,7 +88,7 @@ def test_client():
 
 
 def test_get_agent_settings_schema_includes_critic_verification_fields(test_client):
-    response = test_client.get('/api/settings/schema')
+    response = test_client.get('/api/settings/agent-schema')
 
     assert response.status_code == 200
     schema = response.json()
