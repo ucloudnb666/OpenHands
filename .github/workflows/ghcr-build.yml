@@ -10,7 +10,7 @@ on:
     branches:
       - main
       - "saas-rel-*"
-      - "jl/enterprise-arm64-build"
+      - "jl/native-arm64-builds"
     tags:
       - "*"
   pull_request:
