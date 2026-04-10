@@ -8,7 +8,7 @@ from storage.encrypt_utils import decrypt_legacy_value, encrypt_legacy_value
 
 
 class UserSettings(Base):  # type: ignore
-    __tablename__ = 'user_settings'
+    __tablename__ = "user_settings"
     id = Column(Integer, Identity(), primary_key=True)
     keycloak_user_id = Column(String, nullable=True, index=True)
     language = Column(String, nullable=True)
@@ -38,6 +38,7 @@ class UserSettings(Base):  # type: ignore
     git_user_email = Column(String, nullable=True)
     v1_enabled = Column(Boolean, nullable=True)
     agent_settings = Column(JSON, nullable=False, default=dict)
+    conversation_settings = Column(JSON, nullable=False, default=dict)
 
     @property
     def llm_api_key_for_byor_secret(self) -> SecretStr | None:
@@ -64,4 +65,7 @@ class UserSettings(Base):  # type: ignore
     def to_settings(self):
         from openhands.storage.data_models.settings import Settings
 
-        return Settings(agent_settings=dict(self.agent_settings or {}))
+        return Settings(
+            agent_settings=dict(self.agent_settings or {}),
+            conversation_settings=dict(self.conversation_settings or {}),
+        )

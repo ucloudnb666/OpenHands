@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from storage.agent_settings_utils import (
     get_org_member_agent_settings,
+    get_org_member_conversation_settings,
     merge_agent_settings,
 )
 from storage.database import a_session_maker
@@ -154,20 +155,33 @@ class OrgMemberStore:
         return get_org_member_agent_settings(org_member)
 
     @staticmethod
+    def get_conversation_settings_from_org_member(
+        org_member: OrgMember,
+    ) -> dict[str, object]:
+        return get_org_member_conversation_settings(org_member)
+
+    @staticmethod
     def get_kwargs_from_settings(settings: Settings):
         return {
-            'llm_api_key': settings.get_secret_agent_setting('llm.api_key'),
-            'agent_settings': {},
+            "llm_api_key": settings.get_secret_agent_setting("llm.api_key"),
+            "agent_settings": {},
+            "conversation_settings": settings.conversation_settings.model_dump(
+                mode="json"
+            ),
         }
 
     @staticmethod
     def get_kwargs_from_user_settings(user_settings: UserSettings):
         agent_settings = dict(user_settings.agent_settings or {})
-        if agent_settings and 'schema_version' not in agent_settings:
-            agent_settings['schema_version'] = 1
+        if agent_settings and "schema_version" not in agent_settings:
+            agent_settings["schema_version"] = 1
+        conversation_settings = dict(user_settings.conversation_settings or {})
+        if conversation_settings and "schema_version" not in conversation_settings:
+            conversation_settings["schema_version"] = 1
         return {
-            'llm_api_key': user_settings.llm_api_key,
-            'agent_settings': agent_settings,
+            "llm_api_key": user_settings.llm_api_key,
+            "agent_settings": agent_settings,
+            "conversation_settings": conversation_settings,
         }
 
     @staticmethod
@@ -191,7 +205,7 @@ class OrgMemberStore:
 
             if email_filter:
                 query = query.join(User, User.id == OrgMember.user_id).filter(
-                    User.email.ilike(f'%{email_filter}%')
+                    User.email.ilike(f"%{email_filter}%")
                 )
 
             result = await session.execute(query)
@@ -227,7 +241,7 @@ class OrgMemberStore:
 
             # Apply email filter if provided
             if email_filter:
-                query = query.filter(User.email.ilike(f'%{email_filter}%'))
+                query = query.filter(User.email.ilike(f"%{email_filter}%"))
 
             query = query.order_by(OrgMember.user_id).offset(offset).limit(limit + 1)
 
@@ -264,8 +278,9 @@ class OrgMemberStore:
         )
         org_members = list(result.scalars().all())
 
-        raw_key = values.pop('llm_api_key', None)
-        agent_settings_updates = values.pop('agent_settings', None)
+        raw_key = values.pop("llm_api_key", None)
+        agent_settings_updates = values.pop("agent_settings", None)
+        conversation_settings_updates = values.pop("conversation_settings", None)
 
         for org_member in org_members:
             if raw_key is not None:
@@ -275,6 +290,12 @@ class OrgMemberStore:
                 org_member.agent_settings = merge_agent_settings(
                     get_org_member_agent_settings(org_member),
                     agent_settings_updates,
+                )
+
+            if conversation_settings_updates is not None:
+                org_member.conversation_settings = merge_agent_settings(
+                    get_org_member_conversation_settings(org_member),
+                    conversation_settings_updates,
                 )
 
             for key, value in values.items():

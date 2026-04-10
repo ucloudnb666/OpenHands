@@ -6,10 +6,14 @@ import uuid
 from dataclasses import dataclass
 from uuid import UUID
 
-from server.routes.org_models import OrgLLMSettingsUpdate, get_org_conversation_settings
+from server.routes.org_models import OrgLLMSettingsUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.agent_settings_utils import get_org_agent_settings, merge_agent_settings
+from storage.agent_settings_utils import (
+    get_org_agent_settings,
+    get_org_conversation_settings,
+    merge_agent_settings,
+)
 from storage.org import Org
 from storage.user import User
 

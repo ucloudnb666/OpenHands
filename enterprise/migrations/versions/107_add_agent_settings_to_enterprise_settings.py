@@ -29,13 +29,16 @@ def upgrade() -> None:
         ),
     )
     op.add_column(
-        'org_member',
+        'user_settings',
         sa.Column(
-            'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
+            'conversation_settings',
+            sa.JSON(),
+            nullable=False,
+            server_default=_EMPTY_JSON,
         ),
     )
     op.add_column(
-        'org',
+        'org_member',
         sa.Column(
             'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
         ),
@@ -47,6 +50,12 @@ def upgrade() -> None:
             sa.JSON(),
             nullable=False,
             server_default=_EMPTY_JSON,
+        ),
+    )
+    op.add_column(
+        'org',
+        sa.Column(
+            'agent_settings', sa.JSON(), nullable=False, server_default=_EMPTY_JSON
         ),
     )
     op.add_column(
@@ -160,8 +169,11 @@ def upgrade() -> None:
     )
 
     op.alter_column('user_settings', 'agent_settings', server_default=None)
+    op.alter_column('user_settings', 'conversation_settings', server_default=None)
     op.alter_column('org_member', 'agent_settings', server_default=None)
+    op.alter_column('org_member', 'conversation_settings', server_default=None)
     op.alter_column('org', 'agent_settings', server_default=None)
+    op.alter_column('org', 'conversation_settings', server_default=None)
     op.alter_column('org_member', 'has_custom_llm_api_key', server_default=None)
     op.drop_column('user_settings', 'agent')
     op.drop_column('user_settings', 'max_iterations')
@@ -328,3 +340,4 @@ def downgrade() -> None:
     op.drop_column('org_member', 'conversation_settings')
     op.drop_column('org_member', 'has_custom_llm_api_key')
     op.drop_column('user_settings', 'agent_settings')
+    op.drop_column('user_settings', 'conversation_settings')
