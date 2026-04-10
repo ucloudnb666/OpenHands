@@ -70,9 +70,18 @@ async def test_store_and_load_data(file_settings_store):
     assert loaded_data.get_agent_setting('agent') == init_data.get_agent_setting(
         'agent'
     )
-    assert loaded_data.max_iterations == init_data.max_iterations
-    assert loaded_data.security_analyzer == init_data.security_analyzer
-    assert loaded_data.confirmation_mode == init_data.confirmation_mode
+    assert (
+        loaded_data.conversation_settings.max_iterations
+        == init_data.conversation_settings.max_iterations
+    )
+    assert (
+        loaded_data.conversation_settings.security_analyzer
+        == init_data.conversation_settings.security_analyzer
+    )
+    assert (
+        loaded_data.conversation_settings.confirmation_mode
+        == init_data.conversation_settings.confirmation_mode
+    )
     assert loaded_data.get_agent_setting('llm.model') == init_data.get_agent_setting(
         'llm.model'
     )

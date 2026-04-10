@@ -385,7 +385,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 agent_server_url,
                 sandbox.session_api_key,
                 info.id,
-                user.security_analyzer,
+                user.conversation_settings.security_analyzer,
                 self.httpx_client,
             )
 
@@ -1473,7 +1473,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             agent=agent,
             workspace=workspace,
             confirmation_policy=self._select_confirmation_policy(
-                bool(user.confirmation_mode), user.security_analyzer
+                bool(user.conversation_settings.confirmation_mode), user.conversation_settings.security_analyzer
             ),
             initial_message=final_initial_message,
             secrets=secrets,

@@ -40,9 +40,9 @@ def test_settings_from_config():
         assert settings is not None
         assert settings.language == 'en'
         assert settings.get_agent_setting('agent') == 'test-agent'
-        assert settings.max_iterations == 100
-        assert settings.security_analyzer == 'llm'
-        assert settings.confirmation_mode is True
+        assert settings.conversation_settings.max_iterations == 100
+        assert settings.conversation_settings.security_analyzer == 'llm'
+        assert settings.conversation_settings.confirmation_mode is True
         assert settings.get_agent_setting('llm.model') == 'test-model'
         assert (
             settings.get_secret_agent_setting('llm.api_key').get_secret_value()

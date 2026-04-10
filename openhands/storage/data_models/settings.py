@@ -44,21 +44,11 @@ _LEGACY_FLAT_TO_SDK: dict[str, str] = {
     'condenser_max_size': 'condenser.max_size',
 }
 
-_CONVERSATION_SETTINGS_FIELD_MAP: dict[str, str] = {
-    'max_iterations': 'max_iterations',
-    'confirmation_mode': 'confirmation_mode',
-    'security_analyzer': 'security_analyzer',
-}
-
-_CONVERSATION_SETTINGS_REVERSE_FIELD_MAP: dict[str, str] = {
-    value: key for key, value in _CONVERSATION_SETTINGS_FIELD_MAP.items()
-}
-
-
-@lru_cache(maxsize=1)
-def _conversation_schema_field_keys() -> set[str]:
-    schema = ConversationSettings.export_schema()
-    return {field.key for section in schema.sections for field in section.fields}
+_CONVERSATION_SETTINGS_KEYS = frozenset(
+    f.key
+    for s in ConversationSettings.export_schema().sections
+    for f in s.fields
+)
 
 
 @lru_cache(maxsize=1)
@@ -321,9 +311,10 @@ class SandboxGroupingStrategy(str, Enum):
 class Settings(BaseModel):
     """Persisted settings for OpenHands sessions.
 
-    SDK-managed fields (agent, llm, mcp, condenser, verification) live
-    exclusively in ``agent_settings``. Non-agent product settings remain as
-    top-level fields on this model.
+    Agent settings (agent, llm, mcp, condenser) live in ``raw_agent_settings``.
+    Conversation settings (max_iterations, confirmation_mode, security_analyzer)
+    are direct fields — serialized under ``conversation_settings`` for the API.
+    Product settings remain as top-level fields.
     """
 
     language: str | None = None
@@ -342,9 +333,6 @@ class Settings(BaseModel):
     disabled_skills: list[str] | None = None
     search_api_key: SecretStr | None = None
     sandbox_api_key: SecretStr | None = None
-    confirmation_mode: bool | None = None
-    security_analyzer: str | None = None
-    max_iterations: int | None = None
     max_budget_per_task: float | None = None
     email: str | None = None
     email_verified: bool | None = None
@@ -354,8 +342,8 @@ class Settings(BaseModel):
     raw_agent_settings: dict[str, Any] = Field(
         default_factory=dict, alias='agent_settings'
     )
-    raw_conversation_settings: dict[str, Any] = Field(
-        default_factory=dict, alias='conversation_settings'
+    conversation_settings: ConversationSettings = Field(
+        default_factory=ConversationSettings
     )
     sandbox_grouping_strategy: SandboxGroupingStrategy = (
         SandboxGroupingStrategy.NO_GROUPING
@@ -451,41 +439,6 @@ class Settings(BaseModel):
         if not value:
             return None
         return SecretStr(str(value))
-
-    def conversation_settings_values(self) -> dict[str, Any]:
-        values = {
-            key: value
-            for key, value in self.raw_conversation_settings.items()
-            if key != 'schema_version' and key not in _conversation_schema_field_keys()
-        }
-        values['schema_version'] = ConversationSettings.model_fields[
-            'schema_version'
-        ].default
-        for key, field_name in _CONVERSATION_SETTINGS_FIELD_MAP.items():
-            value = getattr(self, field_name)
-            if value is not None:
-                values[key] = value
-        return values
-
-    def get_conversation_setting(self, key: str, default: Any = None) -> Any:
-        field_name = _CONVERSATION_SETTINGS_FIELD_MAP.get(key)
-        if field_name is not None:
-            value = getattr(self, field_name)
-            return default if value is None else value
-        return self.raw_conversation_settings.get(key, default)
-
-    def set_conversation_setting(self, key: str, value: Any) -> None:
-        field_name = _CONVERSATION_SETTINGS_FIELD_MAP.get(key)
-        if field_name is not None:
-            setattr(self, field_name, value)
-            return
-
-        updated = dict(self.raw_conversation_settings)
-        if value is None:
-            updated.pop(key, None)
-        else:
-            updated[key] = value
-        object.__setattr__(self, 'raw_conversation_settings', updated)
 
     @property
     def agent(self) -> str | None:
@@ -592,12 +545,6 @@ class Settings(BaseModel):
             object.__setattr__(self, 'raw_agent_settings', normalized)
         return changed
 
-    @field_serializer('raw_conversation_settings')
-    def raw_conversation_settings_field_serializer(
-        self, values: dict[str, Any], info: SerializationInfo
-    ) -> dict[str, Any]:
-        return self.conversation_settings_values()
-
     @field_serializer('search_api_key')
     def api_key_serializer(self, api_key: SecretStr | None, info: SerializationInfo):
         if api_key is None:
@@ -635,10 +582,11 @@ class Settings(BaseModel):
     @model_validator(mode='before')
     @classmethod
     def _migrate_legacy_fields(cls, data: dict | object) -> dict | object:
-        """Migrate legacy flat fields into ``agent_settings``."""
+        """Migrate legacy flat fields into ``agent_settings`` and ``conversation_settings``."""
         if not isinstance(data, dict):
             return data
 
+        # --- Agent settings ---
         raw_agent_settings = data.pop('raw_agent_settings', None)
         agent_settings = data.pop('agent_settings', None)
         agent_vals: dict[str, Any] = dict(raw_agent_settings or agent_settings or {})
@@ -670,27 +618,34 @@ class Settings(BaseModel):
                         continue
                     agent_vals[sdk_key] = _normalize_agent_setting_value(sdk_key, value)
 
-        raw_conversation_settings = data.pop('raw_conversation_settings', None)
-        conversation_settings = data.pop('conversation_settings', None)
-        conversation_vals: dict[str, Any] = dict(
-            raw_conversation_settings or conversation_settings or {}
-        )
-
-        missing = object()
-        for (
-            field_name,
-            conversation_key,
-        ) in _CONVERSATION_SETTINGS_REVERSE_FIELD_MAP.items():
-            conversation_value = conversation_vals.get(conversation_key, missing)
-            if conversation_value is not missing and data.get(field_name) is None:
-                data[field_name] = conversation_value
+        # Strip conversation settings keys that may have leaked into agent_settings
+        for conv_key in _CONVERSATION_SETTINGS_KEYS:
+            agent_vals.pop(conv_key, None)
 
         for flat_key in _LEGACY_FLAT_TO_SDK:
             data.pop(flat_key, None)
 
         data['raw_agent_settings'] = agent_vals
-        data['raw_conversation_settings'] = conversation_vals
 
+        # --- Conversation settings ---
+        conversation_settings = data.pop('conversation_settings', None)
+        conversation_vals: dict[str, Any] = {}
+        if isinstance(conversation_settings, dict):
+            conversation_vals = conversation_settings
+        elif isinstance(conversation_settings, ConversationSettings):
+            conversation_vals = conversation_settings.model_dump(mode='json')
+
+        # Migrate legacy flat fields into conversation_settings
+        for flat_key in _CONVERSATION_SETTINGS_KEYS:
+            if flat_key in data:
+                value = data.pop(flat_key)
+                if value is not None and flat_key not in conversation_vals:
+                    conversation_vals[flat_key] = value
+
+        if conversation_vals:
+            data['conversation_settings'] = conversation_vals
+
+        # --- Secrets store ---
         secrets_store = data.get('secrets_store')
         if isinstance(secrets_store, dict):
             custom_secrets = secrets_store.get('custom_secrets')
@@ -713,9 +668,6 @@ class Settings(BaseModel):
     @model_validator(mode='after')
     def _normalize_agent_settings_after(self) -> 'Settings':
         self.normalize_agent_settings()
-        object.__setattr__(
-            self, 'raw_conversation_settings', self.conversation_settings_values()
-        )
         return self
 
     @field_serializer('secrets_store')
@@ -734,14 +686,16 @@ class Settings(BaseModel):
             remote_runtime_resource_factor=app_config.sandbox.remote_runtime_resource_factor,
             search_api_key=app_config.search_api_key,
             max_budget_per_task=app_config.max_budget_per_task,
+            conversation_settings=ConversationSettings(
+                confirmation_mode=bool(app_config.security.confirmation_mode),
+                security_analyzer=app_config.security.security_analyzer,
+                max_iterations=app_config.max_iterations,
+            ),
         )
         settings.set_agent_setting('agent', app_config.default_agent)
         settings.set_agent_setting('llm.model', llm_config.model)
         settings.set_agent_setting('llm.api_key', llm_config.api_key)
         settings.set_agent_setting('llm.base_url', llm_config.base_url)
-        settings.confirmation_mode = app_config.security.confirmation_mode
-        settings.security_analyzer = app_config.security.security_analyzer
-        settings.max_iterations = app_config.max_iterations
         if hasattr(app_config, 'mcp'):
             settings.set_agent_setting('mcp_config', app_config.mcp)
         return settings

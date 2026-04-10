@@ -113,7 +113,10 @@ class SaasSettingsStore(SettingsStore):
             for key, value in normalized_agent_settings.items()
             if key not in {'llm.api_key', 'mcp_config'}
         }
-        effective_agent_settings.update(item.legacy_conversation_settings_payload())
+        # TODO: conversation_settings should be stored in a separate DB column
+        conv = item.conversation_settings.model_dump(mode='json')
+        conv.pop('schema_version', None)
+        effective_agent_settings.update(conv)
 
         for key, raw_value in item.raw_agent_settings.items():
             if key in {'schema_version', 'llm.api_key', 'mcp_config'}:

@@ -100,8 +100,8 @@ def convert_to_settings(settings_with_token_data: Settings) -> Settings:
     filtered_settings_data['raw_agent_settings'] = dict(
         settings_with_token_data.raw_agent_settings
     )
-    filtered_settings_data['raw_conversation_settings'] = dict(
-        settings_with_token_data.raw_conversation_settings
+    filtered_settings_data['conversation_settings'] = (
+        settings_with_token_data.conversation_settings
     )
     filtered_settings_data['search_api_key'] = settings_with_token_data.search_api_key
 
@@ -236,15 +236,10 @@ async def store_settings(
             if settings.disabled_skills is None:
                 settings.disabled_skills = existing_settings.disabled_skills
 
-            for field_name in (
-                'confirmation_mode',
-                'security_analyzer',
-                'max_iterations',
-            ):
-                if field_name not in settings.model_fields_set:
-                    setattr(
-                        settings, field_name, getattr(existing_settings, field_name)
-                    )
+            if 'conversation_settings' not in settings.model_fields_set:
+                settings.conversation_settings = (
+                    existing_settings.conversation_settings.model_copy()
+                )
 
         # Update sandbox config with new settings
         if settings.remote_runtime_resource_factor is not None:

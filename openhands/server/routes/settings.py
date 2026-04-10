@@ -116,14 +116,12 @@ def _apply_settings_payload(
             settings.set_agent_setting(key, value)
             continue
         if key in conversation_field_keys:
-            settings.set_conversation_setting(key, value)
+            setattr(settings.conversation_settings, key, value)
             continue
         if key == 'conversation_settings' and isinstance(value, dict):
-            for conversation_key, conversation_value in value.items():
-                if conversation_key in conversation_field_keys:
-                    settings.set_conversation_setting(
-                        conversation_key, conversation_value
-                    )
+            for conv_key, conv_value in value.items():
+                if conv_key in conversation_field_keys:
+                    setattr(settings.conversation_settings, conv_key, conv_value)
             continue
         if key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
             setattr(settings, key, value)
@@ -184,7 +182,7 @@ async def load_settings(
 
         agent_vals = _extract_agent_settings(settings, _get_agent_settings_schema())
         settings_payload = settings.model_dump(
-            mode='json', exclude={'raw_agent_settings', 'raw_conversation_settings'}
+            mode='json', exclude={'raw_agent_settings', 'conversation_settings'}
         )
         settings_payload.update(
             {
@@ -193,7 +191,9 @@ async def load_settings(
                 and bool(settings.search_api_key),
                 'provider_tokens_set': provider_tokens_set,
                 'agent_settings': agent_vals,
-                'conversation_settings': settings.conversation_settings_values(),
+                'conversation_settings': settings.conversation_settings.model_dump(
+                    mode='json'
+                ),
                 'llm_api_key': None,
                 'search_api_key': None,
                 'sandbox_api_key': None,

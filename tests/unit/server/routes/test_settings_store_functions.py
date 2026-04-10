@@ -386,8 +386,8 @@ def test_apply_payload_conversation_settings_stored_top_level():
         payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
     )
 
-    assert result.confirmation_mode is True
-    assert result.security_analyzer == 'llm'
+    assert result.conversation_settings.confirmation_mode is True
+    assert result.conversation_settings.security_analyzer == 'llm'
     assert 'confirmation_mode' not in result.agent_settings_values()
 
 
@@ -407,7 +407,7 @@ def test_legacy_flat_fields_migrate_to_agent_vals():
     assert _persisted_value(s, 'llm.api_key') == 'my-key'
     assert _persisted_value(s, 'llm.base_url') == 'https://example.com'
     assert _persisted_value(s, 'agent') == 'CodeActAgent'
-    assert s.confirmation_mode is True
+    assert s.conversation_settings.confirmation_mode is True
     assert _agent_value(s, 'llm.model') == 'gpt-4'
     assert _agent_value(s, 'agent') == 'CodeActAgent'
 
@@ -422,8 +422,8 @@ def test_agent_settings_normalized_with_schema_version_and_extras():
 
     assert s.raw_agent_settings['schema_version'] == 1
     assert _persisted_value(s, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
-    assert s.confirmation_mode is True
-    assert s.max_iterations == 64
+    assert s.conversation_settings.confirmation_mode is True
+    assert s.conversation_settings.max_iterations == 64
     assert s.raw_agent_settings['custom.extra'] == 'keep-me'
 
 
@@ -440,7 +440,7 @@ def test_agent_settings_persistence_strips_secret_values():
     assert persisted['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
     assert 'max_iterations' not in persisted
     assert 'api_key' not in persisted['llm']
-    assert s.max_iterations == 64
+    assert s.conversation_settings.max_iterations == 64
 
 
 def test_openhands_model_settings_remain_user_facing():
