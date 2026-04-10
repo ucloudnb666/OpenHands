@@ -173,16 +173,10 @@ class OrgMemberStore:
 
     @staticmethod
     def get_kwargs_from_user_settings(user_settings: UserSettings):
-        agent_settings = dict(user_settings.agent_settings or {})
-        if agent_settings and "schema_version" not in agent_settings:
-            agent_settings["schema_version"] = 1
-        conversation_settings = dict(user_settings.conversation_settings or {})
-        if conversation_settings and "schema_version" not in conversation_settings:
-            conversation_settings["schema_version"] = 1
         return {
             "llm_api_key": user_settings.llm_api_key,
-            "agent_settings": agent_settings,
-            "conversation_settings": conversation_settings,
+            "agent_settings": dict(user_settings.agent_settings or {}),
+            "conversation_settings": dict(user_settings.conversation_settings or {}),
         }
 
     @staticmethod
