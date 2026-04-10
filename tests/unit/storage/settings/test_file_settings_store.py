@@ -53,9 +53,7 @@ async def test_store_and_load_data(file_settings_store):
     await file_settings_store.store(init_data)
 
     # Verify store called with correct JSON
-    expected_json = init_data.model_dump_json(
-        context={'expose_secrets': True, 'persist_settings': True}
-    )
+    expected_json = init_data.model_dump_json(context={'expose_secrets': True})
     file_settings_store.file_store.write.assert_called_once_with(
         'settings.json', expected_json
     )
@@ -70,9 +68,15 @@ async def test_store_and_load_data(file_settings_store):
     assert loaded_data.get_agent_setting('agent') == init_data.get_agent_setting(
         'agent'
     )
-    assert loaded_data.max_iterations == init_data.max_iterations
-    assert loaded_data.security_analyzer == init_data.security_analyzer
-    assert loaded_data.confirmation_mode == init_data.confirmation_mode
+    assert loaded_data.get_agent_setting(
+        'max_iterations'
+    ) == init_data.get_agent_setting('max_iterations')
+    assert loaded_data.get_agent_setting(
+        'verification.security_analyzer'
+    ) == init_data.get_agent_setting('verification.security_analyzer')
+    assert loaded_data.get_agent_setting(
+        'verification.confirmation_mode'
+    ) == init_data.get_agent_setting('verification.confirmation_mode')
     assert loaded_data.get_agent_setting('llm.model') == init_data.get_agent_setting(
         'llm.model'
     )

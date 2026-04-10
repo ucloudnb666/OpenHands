@@ -40,9 +40,9 @@ def test_settings_from_config():
         assert settings is not None
         assert settings.language == 'en'
         assert settings.get_agent_setting('agent') == 'test-agent'
-        assert settings.max_iterations == 100
-        assert settings.security_analyzer == 'llm'
-        assert settings.confirmation_mode is True
+        assert settings.get_agent_setting('max_iterations') == 100
+        assert settings.get_agent_setting('verification.security_analyzer') == 'llm'
+        assert settings.get_agent_setting('verification.confirmation_mode') is True
         assert settings.get_agent_setting('llm.model') == 'test-model'
         assert (
             settings.get_secret_agent_setting('llm.api_key').get_secret_value()
@@ -123,14 +123,14 @@ def test_settings_preserve_agent_settings():
         settings.get_secret_agent_setting('llm.api_key').get_secret_value()
         == 'test-key'
     )
-    persisted = settings.normalized_agent_settings()
-
-    assert persisted['schema_version'] == 2
-    assert persisted['llm']['model'] == 'test-model'
-    assert persisted['llm']['api_key'] == 'test-key'
-    assert persisted['verification']['critic_enabled'] is True
-    assert persisted['verification']['critic_mode'] == 'all_actions'
-    assert persisted['llm']['litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
+    assert settings.raw_agent_settings == {
+        'schema_version': 1,
+        'llm.model': 'test-model',
+        'llm.api_key': 'test-key',
+        'verification.critic_enabled': True,
+        'verification.critic_mode': 'all_actions',
+        'llm.litellm_extra_body': {'metadata': {'tier': 'pro'}},
+    }
 
 
 def test_settings_to_agent_settings_uses_agent_vals():

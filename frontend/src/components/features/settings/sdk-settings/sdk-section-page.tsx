@@ -5,10 +5,7 @@ import { BrandButton } from "#/components/features/settings/brand-button";
 import { LlmSettingsInputsSkeleton } from "#/components/features/settings/llm-settings/llm-settings-inputs-skeleton";
 import { useSaveSettings } from "#/hooks/mutation/use-save-settings";
 import { usePermission } from "#/hooks/organizations/use-permissions";
-import {
-  useAgentSettingsSchema,
-  useConversationSettingsSchema,
-} from "#/hooks/query/use-agent-settings-schema";
+import { useAgentSettingsSchema } from "#/hooks/query/use-agent-settings-schema";
 import { useConfig } from "#/hooks/query/use-config";
 import { useMe } from "#/hooks/query/use-me";
 import { useSettings } from "#/hooks/query/use-settings";
@@ -29,7 +26,6 @@ import {
   inferInitialView,
   SettingsDirtyState,
   SettingsFormValues,
-  type SettingsValueSource,
   type SettingsView,
 } from "#/utils/sdk-settings-schema";
 import { SchemaField } from "./schema-field";
@@ -57,7 +53,6 @@ export function SdkSectionPage({
   sectionKeys,
   excludeKeys = EMPTY_EXCLUDE_KEYS,
   scope = "personal",
-  settingsSource = "agent_settings",
   header,
   extraDirty = false,
   buildPayload,
@@ -68,7 +63,6 @@ export function SdkSectionPage({
   sectionKeys: string[];
   excludeKeys?: Set<string>;
   scope?: SettingsScope;
-  settingsSource?: SettingsValueSource;
 
   header?: (props: SdkSectionHeaderProps) => React.ReactNode;
   extraDirty?: boolean;
@@ -90,20 +84,9 @@ export function SdkSectionPage({
   const { t } = useTranslation();
   const { mutate: saveSettings, isPending } = useSaveSettings(scope);
   const { data: settings, isLoading, isFetching } = useSettings(scope);
-  const agentSchemaQuery = useAgentSettingsSchema(
+  const { data: schema, isLoading: isSchemaLoading } = useAgentSettingsSchema(
     settings?.agent_settings_schema,
   );
-  const conversationSchemaQuery = useConversationSettingsSchema(
-    settings?.conversation_settings_schema,
-  );
-  const schema =
-    settingsSource === "conversation"
-      ? conversationSchemaQuery.data
-      : agentSchemaQuery.data;
-  const isSchemaLoading =
-    settingsSource === "conversation"
-      ? conversationSchemaQuery.isLoading
-      : agentSchemaQuery.isLoading;
   const { data: config } = useConfig();
   const { data: me } = useMe();
   const { hasPermission } = usePermission(me?.role ?? "member");
@@ -140,19 +123,15 @@ export function SdkSectionPage({
 
   const initialValues = React.useMemo(() => {
     if (!settings || !filteredSchema) return null;
-    return buildInitialSettingsFormValues(
-      settings,
-      filteredSchema,
-      settingsSource,
-    );
-  }, [settings, filteredSchema, settingsSource]);
+    return buildInitialSettingsFormValues(settings, filteredSchema);
+  }, [settings, filteredSchema]);
 
   const initialView = React.useMemo(() => {
     if (!settings || !filteredSchema) return null;
     return getInitialView
       ? getInitialView(settings, filteredSchema)
-      : inferInitialView(settings, filteredSchema, settingsSource);
-  }, [settings, filteredSchema, getInitialView, settingsSource]);
+      : inferInitialView(settings, filteredSchema);
+  }, [settings, filteredSchema, getInitialView]);
 
   React.useEffect(() => {
     if (!initialValues || !initialView) return;
@@ -198,13 +177,9 @@ export function SdkSectionPage({
         dirty,
         view,
       );
-      const defaultPayload =
-        settingsSource === "conversation"
-          ? { conversation_settings: basePayload }
-          : basePayload;
       payload = buildPayload
         ? buildPayload(basePayload, { values, dirty, view })
-        : defaultPayload;
+        : basePayload;
     } catch (error) {
       displayErrorToast(
         error instanceof Error ? error.message : t(I18nKey.ERROR$GENERIC),

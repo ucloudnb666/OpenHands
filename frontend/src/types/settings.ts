@@ -120,7 +120,6 @@ export type Settings = {
   search_api_key_set: boolean;
   confirmation_mode: boolean;
   security_analyzer: string | null;
-  max_iterations: number | null;
   remote_runtime_resource_factor: number | null;
   provider_tokens_set: Partial<Record<Provider, string | null>>;
   enable_default_condenser: boolean;
@@ -141,7 +140,5 @@ export type Settings = {
   v1_enabled?: boolean;
   agent_settings_schema?: SettingsSchema | null;
   agent_settings?: Record<string, SettingsValue> | null;
-  conversation_settings_schema?: SettingsSchema | null;
-  conversation_settings?: Record<string, SettingsValue> | null;
   sandbox_grouping_strategy?: SandboxGroupingStrategy;
 };

@@ -122,7 +122,7 @@ async def auto_generate_title(
                     )
                     llm_config = LLMConfig(
                         model=agent_settings.llm.model,
-                        api_key=settings.llm_api_key,
+                        api_key=agent_settings.llm.api_key,
                         base_url=effective_base_url,
                     )
 

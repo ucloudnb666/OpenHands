@@ -53,44 +53,6 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     string,
     SettingsValue
   >;
-  const conversationSettings = {
-    ...(DEFAULT_SETTINGS.conversation_settings ?? {}),
-    ...((settings.conversation_settings ?? {}) as Record<
-      string,
-      SettingsValue
-    >),
-  };
-
-  if (
-    !hasAgentSettingKey(conversationSettings, "verification.confirmation_mode")
-  ) {
-    const confirmationMode = pickFirstBoolean(
-      settings.confirmation_mode,
-      agentSettings["verification.confirmation_mode"],
-    );
-    if (confirmationMode !== undefined) {
-      conversationSettings["verification.confirmation_mode"] = confirmationMode;
-    }
-  }
-
-  if (
-    !hasAgentSettingKey(conversationSettings, "verification.security_analyzer")
-  ) {
-    const securityAnalyzer = pickNullableString(
-      settings.security_analyzer,
-      agentSettings["verification.security_analyzer"],
-    );
-    if (securityAnalyzer !== undefined) {
-      conversationSettings["verification.security_analyzer"] = securityAnalyzer;
-    }
-  }
-
-  if (!hasAgentSettingKey(conversationSettings, "max_iterations")) {
-    const maxIterations = pickFirstNumber(settings.max_iterations);
-    if (maxIterations !== undefined) {
-      conversationSettings.max_iterations = maxIterations;
-    }
-  }
 
   return {
     ...DEFAULT_SETTINGS,
@@ -118,21 +80,14 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     llm_api_key_set: settings.llm_api_key_set ?? false,
     confirmation_mode:
       pickFirstBoolean(
-        conversationSettings["verification.confirmation_mode"],
-        settings.confirmation_mode,
         agentSettings["verification.confirmation_mode"],
+        settings.confirmation_mode,
       ) ?? DEFAULT_SETTINGS.confirmation_mode,
     security_analyzer:
       pickNullableString(
-        conversationSettings["verification.security_analyzer"],
-        settings.security_analyzer,
         agentSettings["verification.security_analyzer"],
+        settings.security_analyzer,
       ) ?? DEFAULT_SETTINGS.security_analyzer,
-    max_iterations:
-      pickFirstNumber(
-        conversationSettings.max_iterations,
-        settings.max_iterations,
-      ) ?? DEFAULT_SETTINGS.max_iterations,
     enable_default_condenser:
       pickFirstBoolean(
         agentSettings["condenser.enabled"],
@@ -154,10 +109,6 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     v1_enabled: settings.v1_enabled ?? DEFAULT_SETTINGS.v1_enabled,
     agent_settings_schema: settings.agent_settings_schema ?? null,
     agent_settings: settings.agent_settings ?? DEFAULT_SETTINGS.agent_settings,
-    conversation_settings_schema:
-      settings.conversation_settings_schema ??
-      DEFAULT_SETTINGS.conversation_settings_schema,
-    conversation_settings,
     sandbox_grouping_strategy:
       settings.sandbox_grouping_strategy ??
       DEFAULT_SETTINGS.sandbox_grouping_strategy,

@@ -16,7 +16,7 @@ from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import (
     PROVIDER_TOKEN_TYPE,
 )
-from openhands.sdk.settings import AgentSettings, ConversationSettings
+from openhands.sdk.settings import AgentSettings
 from openhands.server.routes.secrets import invalidate_legacy_secrets_store
 from openhands.server.settings import (
     GETSettingsModel,
@@ -36,11 +36,6 @@ from openhands.storage.settings.settings_store import SettingsStore
 def _get_agent_settings_schema() -> dict[str, Any]:
     """Return the SDK agent settings schema for the legacy V0 settings API."""
     return AgentSettings.export_schema().model_dump(mode='json')
-
-
-def _get_conversation_settings_schema() -> dict[str, Any]:
-    """Return the SDK conversation settings schema for the legacy V0 settings API."""
-    return ConversationSettings.export_schema().model_dump(mode='json')
 
 
 def _get_schema_field_keys(schema: dict[str, Any] | None) -> set[str]:
@@ -92,7 +87,6 @@ def _apply_settings_payload(
     payload: dict[str, Any],
     existing_settings: Settings | None,
     agent_schema: dict[str, Any] | None,
-    conversation_schema: dict[str, Any] | None,
 ) -> Settings:
     """Apply an incoming settings payload.
 
@@ -104,29 +98,34 @@ def _apply_settings_payload(
 
     schema_field_keys = _get_schema_field_keys(agent_schema)
     secret_field_keys = _get_schema_secret_field_keys(agent_schema)
-    conversation_field_keys = _get_schema_field_keys(conversation_schema)
+    agent_settings = dict(settings.raw_agent_settings)
+    explicit_null_sdk_keys: set[str] = set()
 
     for key, value in payload.items():
         if key in schema_field_keys:
-            if key in secret_field_keys and value == _SECRET_REDACTED:
-                continue
-            if key in secret_field_keys and (value is None or value == ''):
-                settings.set_agent_setting(key, None)
-                continue
-            settings.set_agent_setting(key, value)
-            continue
-        if key in conversation_field_keys:
-            settings.set_conversation_setting(key, value)
-            continue
-        if key == 'conversation_settings' and isinstance(value, dict):
-            for conversation_key, conversation_value in value.items():
-                if conversation_key in conversation_field_keys:
-                    settings.set_conversation_setting(
-                        conversation_key, conversation_value
-                    )
-            continue
-        if key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
+            if key in secret_field_keys:
+                if value == _SECRET_REDACTED:
+                    continue
+                if value is None or value == '':
+                    agent_settings.pop(key, None)
+                else:
+                    agent_settings[key] = value
+            elif value is None:
+                agent_settings[key] = None
+                explicit_null_sdk_keys.add(key)
+            else:
+                agent_settings[key] = value
+        elif key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
             setattr(settings, key, value)
+
+    object.__setattr__(settings, 'raw_agent_settings', agent_settings)
+    settings.normalize_agent_settings()
+
+    if explicit_null_sdk_keys:
+        normalized_agent_settings = dict(settings.raw_agent_settings)
+        for key in explicit_null_sdk_keys:
+            normalized_agent_settings[key] = None
+        object.__setattr__(settings, 'raw_agent_settings', normalized_agent_settings)
 
     return settings
 
@@ -137,11 +136,6 @@ app = APIRouter(prefix='/api', dependencies=get_dependencies())
 @app.get('/settings/schema', deprecated=True)
 async def load_settings_schema() -> dict[str, Any]:
     return _get_agent_settings_schema()
-
-
-@app.get('/settings/conversation-schema', deprecated=True)
-async def load_conversation_settings_schema() -> dict[str, Any]:
-    return _get_conversation_settings_schema()
 
 
 @app.get(
@@ -184,7 +178,7 @@ async def load_settings(
 
         agent_vals = _extract_agent_settings(settings, _get_agent_settings_schema())
         settings_payload = settings.model_dump(
-            mode='json', exclude={'raw_agent_settings', 'raw_conversation_settings'}
+            mode='json', exclude={'raw_agent_settings'}
         )
         settings_payload.update(
             {
@@ -193,7 +187,6 @@ async def load_settings(
                 and bool(settings.search_api_key),
                 'provider_tokens_set': provider_tokens_set,
                 'agent_settings': agent_vals,
-                'conversation_settings': settings.conversation_settings_values(),
                 'llm_api_key': None,
                 'search_api_key': None,
                 'sandbox_api_key': None,
@@ -232,12 +225,8 @@ async def store_settings(
     try:
         existing_settings = await settings_store.load()
         agent_settings_schema = _get_agent_settings_schema()
-        conversation_settings_schema = _get_conversation_settings_schema()
         settings = _apply_settings_payload(
-            payload,
-            existing_settings,
-            agent_settings_schema,
-            conversation_settings_schema,
+            payload, existing_settings, agent_settings_schema
         )
 
         if existing_settings:

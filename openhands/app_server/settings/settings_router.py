@@ -95,13 +95,10 @@ def convert_to_settings(settings_with_token_data: Settings) -> Settings:
         if key in Settings.model_fields  # Ensures only `Settings` fields are included
     }
 
-    # `model_dump()` exposes transport fields under their aliases, so preserve the
-    # underlying raw payloads explicitly when round-tripping into `Settings`.
+    # `model_dump()` exposes SDK-managed values under `agent_settings`, so preserve the
+    # actual raw payload explicitly when round-tripping into `Settings`.
     filtered_settings_data['raw_agent_settings'] = dict(
         settings_with_token_data.raw_agent_settings
-    )
-    filtered_settings_data['raw_conversation_settings'] = dict(
-        settings_with_token_data.raw_conversation_settings
     )
     filtered_settings_data['search_api_key'] = settings_with_token_data.search_api_key
 
@@ -235,16 +232,6 @@ async def store_settings(
             # Keep existing disabled_skills if not provided
             if settings.disabled_skills is None:
                 settings.disabled_skills = existing_settings.disabled_skills
-
-            for field_name in (
-                'confirmation_mode',
-                'security_analyzer',
-                'max_iterations',
-            ):
-                if field_name not in settings.model_fields_set:
-                    setattr(
-                        settings, field_name, getattr(existing_settings, field_name)
-                    )
 
         # Update sandbox config with new settings
         if settings.remote_runtime_resource_factor is not None:

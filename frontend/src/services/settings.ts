@@ -12,7 +12,6 @@ export const DEFAULT_SETTINGS: Settings = {
   search_api_key_set: false,
   confirmation_mode: false,
   security_analyzer: "llm",
-  max_iterations: null,
   remote_runtime_resource_factor: 1,
   provider_tokens_set: {},
   enable_default_condenser: true,
@@ -41,6 +40,8 @@ export const DEFAULT_SETTINGS: Settings = {
     schema_version: 1,
     agent: "CodeActAgent",
     "llm.model": "openhands/claude-opus-4-5-20251101",
+    "verification.confirmation_mode": false,
+    "verification.security_analyzer": "llm",
     "condenser.enabled": true,
     "condenser.max_size": 240,
     mcp_config: {
@@ -48,12 +49,6 @@ export const DEFAULT_SETTINGS: Settings = {
       stdio_servers: [],
       shttp_servers: [],
     },
-  },
-  conversation_settings_schema: null,
-  conversation_settings: {
-    schema_version: 1,
-    "verification.confirmation_mode": false,
-    "verification.security_analyzer": "llm",
   },
 };
 

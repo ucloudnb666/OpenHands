@@ -113,7 +113,6 @@ class SaasSettingsStore(SettingsStore):
             for key, value in normalized_agent_settings.items()
             if key not in {'llm.api_key', 'mcp_config'}
         }
-        effective_agent_settings.update(item.legacy_conversation_settings_payload())
 
         for key, raw_value in item.raw_agent_settings.items():
             if key in {'schema_version', 'llm.api_key', 'mcp_config'}:
