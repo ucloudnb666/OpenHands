@@ -23,19 +23,19 @@ class OrgMember(Base):  # type: ignore
     status = Column(String, nullable=True)
     mcp_config = Column(JSON, nullable=True)
 
-    org = relationship("Org", back_populates="org_members")
-    user = relationship("User", back_populates="org_members")
-    role = relationship("Role", back_populates="org_members")
+    org = relationship('Org', back_populates='org_members')
+    user = relationship('User', back_populates='org_members')
+    role = relationship('Role', back_populates='org_members')
 
     def __init__(self, **kwargs):
         for key in list(kwargs):
             if hasattr(self.__class__, key):
                 setattr(self, key, kwargs.pop(key))
 
-        if "llm_api_key" in kwargs:
-            self.llm_api_key = kwargs.pop("llm_api_key")
-        if "llm_api_key_for_byor" in kwargs:
-            self.llm_api_key_for_byor = kwargs.pop("llm_api_key_for_byor")
+        if 'llm_api_key' in kwargs:
+            self.llm_api_key = kwargs.pop('llm_api_key')
+        if 'llm_api_key_for_byor' in kwargs:
+            self.llm_api_key_for_byor = kwargs.pop('llm_api_key_for_byor')
 
         if kwargs:
             raise TypeError(f'Unexpected keyword arguments: {list(kwargs.keys())}')
