@@ -11,7 +11,7 @@ from server.logger import logger
 from server.routes.org_models import OrgMemberLLMSettings
 from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
-from storage.agent_settings_utils import merge_agent_settings
+from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager, get_openhands_cloud_key_alias
 from storage.org import Org
@@ -105,28 +105,9 @@ class SaasSettingsStore(SettingsStore):
 
     @staticmethod
     def _get_persisted_agent_settings(item: Settings) -> dict[str, Any]:
-        normalized_agent_settings = item.normalized_agent_settings(
-            strip_secret_values=True
-        )
-        effective_agent_settings = {
-            key: value
-            for key, value in normalized_agent_settings.items()
-            if key not in {"llm.api_key", "mcp_config"}
-        }
-
-        for key, raw_value in item.raw_agent_settings.items():
-            if key in {"schema_version", "llm.api_key", "mcp_config"}:
-                continue
-            if raw_value is None:
-                effective_agent_settings[key] = None
-                continue
-
-            normalized_value = item.get_agent_setting(key)
-            effective_agent_settings[key] = (
-                raw_value if normalized_value is None else normalized_value
-            )
-
-        return effective_agent_settings
+        settings = item.normalized_agent_settings(strip_secret_values=True)
+        settings.pop("mcp_config", None)
+        return settings
 
     async def load(self) -> Settings | None:
         user = await UserStore.get_user_by_id(self.user_id)
@@ -175,7 +156,7 @@ class SaasSettingsStore(SettingsStore):
             kwargs["llm_api_key"] = effective_llm_api_key
         if org_member.mcp_config is not None:
             kwargs['mcp_config'] = org_member.mcp_config
-        kwargs["agent_settings"] = merge_agent_settings(
+        kwargs["agent_settings"] = deep_merge(
             org_agent_settings,
             member_agent_settings,
         )
@@ -183,7 +164,7 @@ class SaasSettingsStore(SettingsStore):
         member_conversation = dict(
             getattr(org_member, "conversation_settings", {}) or {}
         )
-        kwargs["conversation_settings"] = merge_agent_settings(
+        kwargs["conversation_settings"] = deep_merge(
             org_conversation,
             member_conversation,
         )
@@ -266,14 +247,14 @@ class SaasSettingsStore(SettingsStore):
                 )
 
             effective_agent_settings = self._get_persisted_agent_settings(item)
-            org.agent_settings = merge_agent_settings(
+            org.agent_settings = deep_merge(
                 OrgStore.get_agent_settings_from_org(org),
                 effective_agent_settings,
             )
 
             effective_conversation = item.conversation_settings.model_dump(mode="json")
             org_conversation = dict(getattr(org, "conversation_settings", {}) or {})
-            org.conversation_settings = merge_agent_settings(
+            org.conversation_settings = deep_merge(
                 org_conversation,
                 effective_conversation,
             )

@@ -14,7 +14,7 @@ from server.constants import (
 from server.routes.org_models import OrgLLMSettingsUpdate, OrphanedUserError
 from sqlalchemy import select, text
 from sqlalchemy.orm import joinedload
-from storage.agent_settings_utils import merge_agent_settings
+from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager
 from storage.org import Org
@@ -69,11 +69,13 @@ class OrgStore:
         async with a_session_maker() as session:
             org = Org(**kwargs)
             org.org_version = ORG_SETTINGS_VERSION
-            org.agent_settings = merge_agent_settings(
+            org.agent_settings = deep_merge(
                 org.agent_settings,
                 {
-                    "llm.model": org.agent_settings.get("llm.model")
-                    or get_default_litellm_model()
+                    "llm": {
+                        "model": org.agent_settings.get("llm", {}).get("model")
+                        or get_default_litellm_model()
+                    }
                 },
             )
             if org.v1_enabled is None:
@@ -132,8 +134,10 @@ class OrgStore:
                 {
                     'org_version': ORG_SETTINGS_VERSION,
                     "agent_settings": {
-                        "llm.model": get_default_litellm_model(),
-                        "llm.base_url": LITE_LLM_API_URL,
+                        "llm": {
+                            "model": get_default_litellm_model(),
+                            "base_url": LITE_LLM_API_URL,
+                        },
                     },
                 },
             )
@@ -229,13 +233,13 @@ class OrgStore:
                     setattr(org, key, value)
 
             if agent_settings_updates is not None:
-                org.agent_settings = merge_agent_settings(
+                org.agent_settings = deep_merge(
                     org.agent_settings,
                     agent_settings_updates,
                 )
 
             if conversation_settings_updates is not None:
-                org.conversation_settings = merge_agent_settings(
+                org.conversation_settings = deep_merge(
                     org.conversation_settings,
                     conversation_settings_updates,
                 )
@@ -476,7 +480,7 @@ class OrgStore:
 
             llm_settings.apply_to_org(org)
             if llm_settings.agent_settings is not None:
-                org.agent_settings = merge_agent_settings(
+                org.agent_settings = deep_merge(
                     org.agent_settings,
                     llm_settings.agent_settings,
                 )

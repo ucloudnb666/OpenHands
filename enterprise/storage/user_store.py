@@ -236,8 +236,10 @@ class UserStore:
             if custom_settings:
                 org_kwargs["agent_settings"] = {
                     "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
-                    "llm.model": get_default_litellm_model(),
-                    "llm.base_url": LITE_LLM_API_URL,
+                    "llm": {
+                        "model": get_default_litellm_model(),
+                        "base_url": LITE_LLM_API_URL,
+                    },
                 }
                 org_kwargs["org_version"] = ORG_SETTINGS_VERSION
 

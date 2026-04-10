@@ -13,7 +13,7 @@ from server.constants import (
 from server.routes.org_models import OrgAppSettingsUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from storage.agent_settings_utils import merge_agent_settings
+from openhands.utils.jsonpatch_compat import deep_merge
 from storage.org import Org
 from storage.user import User
 
@@ -66,11 +66,13 @@ class OrgAppSettingsStore:
         """
         if org.org_version < ORG_SETTINGS_VERSION:
             org.org_version = ORG_SETTINGS_VERSION
-            org.agent_settings = merge_agent_settings(
+            org.agent_settings = deep_merge(
                 org.agent_settings,
                 {
-                    'llm.model': get_default_litellm_model(),
-                    'llm.base_url': LITE_LLM_API_URL,
+                    "llm": {
+                        "model": get_default_litellm_model(),
+                        "base_url": LITE_LLM_API_URL,
+                    },
                 },
             )
             await self.db_session.flush()

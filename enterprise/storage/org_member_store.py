@@ -9,7 +9,7 @@ from server.routes.org_models import OrgMemberLLMSettings
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from storage.agent_settings_utils import merge_agent_settings
+from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.org_member import OrgMember
 from storage.user import User
@@ -196,7 +196,7 @@ class OrgMemberStore:
 
             if email_filter:
                 query = query.join(User, User.id == OrgMember.user_id).filter(
-                    User.email.ilike(f'%{email_filter}%')
+                    User.email.ilike(f"%{email_filter}%")
                 )
 
             result = await session.execute(query)
@@ -232,7 +232,7 @@ class OrgMemberStore:
 
             # Apply email filter if provided
             if email_filter:
-                query = query.filter(User.email.ilike(f'%{email_filter}%'))
+                query = query.filter(User.email.ilike(f"%{email_filter}%"))
 
             query = query.order_by(OrgMember.user_id).offset(offset).limit(limit + 1)
 
@@ -278,13 +278,13 @@ class OrgMemberStore:
                 org_member.llm_api_key = raw_key
 
             if agent_settings_updates is not None:
-                org_member.agent_settings = merge_agent_settings(
+                org_member.agent_settings = deep_merge(
                     org_member.agent_settings,
                     agent_settings_updates,
                 )
 
             if conversation_settings_updates is not None:
-                org_member.conversation_settings = merge_agent_settings(
+                org_member.conversation_settings = deep_merge(
                     org_member.conversation_settings,
                     conversation_settings_updates,
                 )

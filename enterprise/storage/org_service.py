@@ -117,7 +117,7 @@ class OrgService:
             org_version=ORG_SETTINGS_VERSION,
             agent_settings={
                 'schema_version': AGENT_SETTINGS_SCHEMA_VERSION,
-                'llm.model': get_default_litellm_model(),
+                'llm': {'model': get_default_litellm_model()},
             },
         )
 
