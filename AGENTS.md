@@ -72,12 +72,6 @@ When regenerating lockfiles (poetry.lock, uv.lock, etc.), you MUST use the same 
 
 This ensures that lockfile updates only contain actual dependency changes, not tool version migration artifacts.
 
-### Git SDK Dependency Pins
-
-- When `pyproject.toml` pins `openhands-sdk` / `openhands-agent-server` to a git branch in `software-agent-sdk`, pushing new commits to that SDK branch is not enough for this repo: you must also run `poetry update openhands-sdk openhands-agent-server` so `poetry.lock` records the new git SHA.
-- If enterprise tests are run from the separate `enterprise/` Poetry environment before that environment is refreshed, they may still import the older installed SDK; in that case, validate with the local SDK source on `PYTHONPATH` or refresh the enterprise env before treating the result as a product bug.
-
-
 ## PR-Specific Artifacts (`.pr/` directory)
 
 When working on a PR that requires design documents, scripts meant for development-only, or other temporary artifacts that should NOT be merged to main, store them in a `.pr/` directory at the repository root.
@@ -120,17 +114,7 @@ Backend:
 - Testing:
   - All tests are in `tests/unit/test_*.py`
   - To test new code, run `poetry run pytest tests/unit/test_xxx.py` where `xxx` is the appropriate file for the current functionality
-  - In this repo's Poetry env, backend tests may need `PYTHONPATH=.` prefixed (for example `PYTHONPATH=. poetry run pytest ...`) so imports like `openhands.app_server.*` resolve correctly during collection
   - Write all tests with pytest
-
-  - Backend tests currently assume Python 3.12; under Python 3.13 some legacy imports (for example `aifc` via `openhands/core/logger.py`) break test collection. Prefer Python 3.12 for backend validation unless that import path is updated.
-  - The `Settings` model now stores SDK-managed values in `raw_agent_settings`, but legacy route code still expects flat attributes like `llm_model`, `llm_base_url`, and `llm_api_key`; preserve or update those compatibility accessors when touching settings routes to avoid breaking V0/V1 endpoints and mypy.
-  - For legacy `/api/settings` saves in SaaS, explicit non-secret SDK `null` values (for example `llm.base_url: null` from basic-view resets) must survive in `raw_agent_settings`; if they are normalized away, inherited org settings will leak back into personal effective settings on refetch.
-  - Conversation settings now persist `confirmation_mode`, `security_analyzer`, and `max_iterations` as direct `conversation_settings` keys. Do not route them through `agent_settings` or nested `verification.*` keys; the SDK conversation schema exports those same direct keys under the `verification` section.
-
-
-
-
 
 Frontend:
 - Located in the `frontend` directory
@@ -225,7 +209,6 @@ Enterprise uses Alembic for database migrations. When making schema changes:
 1. Create migration files in `enterprise/migrations/versions/`
 2. Test migrations thoroughly
 3. The CI will check for migration conflicts on PRs
-4. Enterprise migrations use sequential integer revisions; if main has added newer migrations since your branch diverged, restore those main migration files and renumber your PR's migration chain above the latest existing revision to avoid duplicate Alembic revision IDs.
 
 **Integration Development:**
 The enterprise codebase includes integrations for:

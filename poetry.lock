@@ -6637,14 +6637,14 @@ subdirectory = "openhands-sdk"
 
 [[package]]
 name = "openhands-tools"
-version = "1.15.0"
+version = "1.16.1"
 description = "OpenHands Tools - Runtime tools for AI agents"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
 files = [
-    {file = "openhands_tools-1.15.0-py3-none-any.whl", hash = "sha256:041f2f5483a0f5caa967067a1964c4ae0716236a360c9acaa51675d85853d453"},
-    {file = "openhands_tools-1.15.0.tar.gz", hash = "sha256:e1cb1962573b3847642960f561414391f3a31e345c5e7094ae674baadf343a50"},
+    {file = "openhands_tools-1.16.1-py3-none-any.whl", hash = "sha256:f7fd1eb205571d02ee480ad71e96cac0c34c57c0938c4074fe135a579a7538d7"},
+    {file = "openhands_tools-1.16.1.tar.gz", hash = "sha256:64488f2d7705ff90f4bfb7dfd1a2f1fbb4f379059d96e0073677c168d97135e7"},
 ]
 
 [package.dependencies]
@@ -15041,4 +15041,4 @@ third-party-runtimes = ["daytona", "e2b-code-interpreter", "modal", "runloop-api
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12,<3.14"
-content-hash = "78140e8d4c9eec17b2e71bc1bf59fb971a6e75809ca15589de75257dffa6f3bf"
+content-hash = "3ecf02eecb12900132b9a8c7c5ec6d53dafba1668c82d25e1dbd25e8d980f72f"

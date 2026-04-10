@@ -16,7 +16,10 @@ from fastapi.routing import Mount
 with warnings.catch_warnings():
     warnings.simplefilter('ignore')
 
-from fastapi import FastAPI, Request
+from fastapi import (
+    FastAPI,
+    Request,
+)
 from fastapi.responses import JSONResponse
 
 import openhands.agenthub  # noqa F401 (we import this to get the agents registered)
