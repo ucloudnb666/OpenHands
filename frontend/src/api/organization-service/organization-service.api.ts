@@ -10,7 +10,10 @@ import { openHands } from "../open-hands-axios";
 
 type OrganizationAgentSettingsResponse = Pick<
   Settings,
-  "agent_settings" | "search_api_key" | "llm_api_key_set"
+  | "agent_settings"
+  | "conversation_settings"
+  | "search_api_key"
+  | "llm_api_key_set"
 >;
 
 export const organizationService = {

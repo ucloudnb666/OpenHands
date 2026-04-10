@@ -171,6 +171,7 @@ class TestLiveStatusAppConversationService:
             llm_api_key='test_api_key',
             sandbox_grouping_strategy=SandboxGroupingStrategy.ADD_TO_ANY,
             confirmation_mode=False,
+            security_analyzer='llm',
             search_api_key=None,
             condenser_max_size=None,
             mcp_config=None,

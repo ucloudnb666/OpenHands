@@ -4,14 +4,18 @@ import { useIsOnIntermediatePage } from "#/hooks/use-is-on-intermediate-page";
 import { SettingsSchema } from "#/types/settings";
 import { useIsAuthed } from "./use-is-authed";
 
-export const useAgentSettingsSchema = (
+const useSettingsSchema = (
+  type: "agent" | "conversation",
   fallbackSchema?: SettingsSchema | null,
 ) => {
   const isOnIntermediatePage = useIsOnIntermediatePage();
   const { data: userIsAuthenticated } = useIsAuthed();
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["settings-schema"],
-    queryFn: SettingsService.getSettingsSchema,
+    queryKey: ["settings-schema", type],
+    queryFn:
+      type === "conversation"
+        ? SettingsService.getConversationSettingsSchema
+        : SettingsService.getSettingsSchema,
     retry: false,
     refetchOnWindowFocus: false,
     staleTime: 1000 * 60 * 5,
@@ -36,3 +40,11 @@ export const useAgentSettingsSchema = (
     isFetching,
   };
 };
+
+export const useAgentSettingsSchema = (
+  fallbackSchema?: SettingsSchema | null,
+) => useSettingsSchema("agent", fallbackSchema);
+
+export const useConversationSettingsSchema = (
+  fallbackSchema?: SettingsSchema | null,
+) => useSettingsSchema("conversation", fallbackSchema);

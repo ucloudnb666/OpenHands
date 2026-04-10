@@ -3642,7 +3642,7 @@ wheels = [
 [[package]]
 name = "openhands-agent-server"
 version = "1.16.1"
-source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-agent-server&rev=openhands%2Fissue-2788-agent-settings-migrations#5ee469c68decf0c2527c4d562b480c1d89d3ac48" }
+source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-agent-server&rev=openhands%2Fissue-2788-agent-settings-migrations#0ccc38134289273b50d45e24afb3694e7b5fec9c" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "alembic" },
@@ -3904,7 +3904,7 @@ test = [
 [[package]]
 name = "openhands-sdk"
 version = "1.16.1"
-source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-sdk&rev=openhands%2Fissue-2788-agent-settings-migrations#5ee469c68decf0c2527c4d562b480c1d89d3ac48" }
+source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-sdk&rev=openhands%2Fissue-2788-agent-settings-migrations#0ccc38134289273b50d45e24afb3694e7b5fec9c" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "deprecation" },

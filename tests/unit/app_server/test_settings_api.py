@@ -87,7 +87,7 @@ def test_client():
         yield client
 
 
-def test_get_agent_settings_schema_includes_verification_section(test_client):
+def test_get_agent_settings_schema_includes_critic_verification_fields(test_client):
     response = test_client.get('/api/settings/schema')
 
     assert response.status_code == 200
@@ -96,9 +96,25 @@ def test_get_agent_settings_schema_includes_verification_section(test_client):
     assert 'verification' in section_keys
     section = next(s for s in schema['sections'] if s['key'] == 'verification')
     field_keys = [f['key'] for f in section['fields']]
+    assert 'verification.critic_enabled' in field_keys
+    assert 'verification.confirmation_mode' not in field_keys
+    assert 'verification.security_analyzer' not in field_keys
+
+
+def test_get_conversation_settings_schema_endpoint(test_client):
+    response = test_client.get('/api/settings/conversation-schema')
+
+    assert response.status_code == 200
+    schema = response.json()
+    assert schema['model_name'] == 'ConversationSettings'
+    section_keys = [s['key'] for s in schema['sections']]
+    assert section_keys == ['general', 'verification']
+    verification_section = next(
+        s for s in schema['sections'] if s['key'] == 'verification'
+    )
+    field_keys = [f['key'] for f in verification_section['fields']]
     assert 'verification.confirmation_mode' in field_keys
     assert 'verification.security_analyzer' in field_keys
-    assert 'verification.critic_enabled' in field_keys
 
 
 @pytest.mark.asyncio
@@ -168,6 +184,29 @@ async def test_settings_api_endpoints(test_client):
                         'value_type': 'integer',
                         'prominence': 'minor',
                     },
+                ],
+            },
+        ],
+    }
+
+    conversation_settings_schema = {
+        'model_name': 'ConversationSettings',
+        'sections': [
+            {
+                'key': 'general',
+                'label': 'General',
+                'fields': [
+                    {
+                        'key': 'max_iterations',
+                        'value_type': 'integer',
+                        'prominence': 'major',
+                    },
+                ],
+            },
+            {
+                'key': 'verification',
+                'label': 'Verification',
+                'fields': [
                     {
                         'key': 'verification.confirmation_mode',
                         'value_type': 'boolean',
@@ -201,13 +240,17 @@ async def test_settings_api_endpoints(test_client):
         'verification.enable_iterative_refinement': True,
         'verification.critic_threshold': 0.7,
         'verification.max_refinement_iterations': 4,
-        'verification.confirmation_mode': True,
-        'verification.security_analyzer': 'llm',
     }
 
-    with patch(
-        'openhands.server.routes.settings._get_agent_settings_schema',
-        return_value=agent_settings_schema,
+    with (
+        patch(
+            'openhands.server.routes.settings._get_agent_settings_schema',
+            return_value=agent_settings_schema,
+        ),
+        patch(
+            'openhands.server.routes.settings._get_conversation_settings_schema',
+            return_value=conversation_settings_schema,
+        ),
     ):
         # Make the POST request to store settings
         response = test_client.post('/api/settings', json=settings_data)
@@ -229,8 +272,14 @@ async def test_settings_api_endpoints(test_client):
         assert vals['verification.enable_iterative_refinement'] is True
         assert vals['verification.critic_threshold'] == 0.7
         assert vals['verification.max_refinement_iterations'] == 4
-        assert vals['verification.confirmation_mode'] is True
-        assert vals['verification.security_analyzer'] == 'llm'
+        assert response_data['confirmation_mode'] is True
+        assert response_data['security_analyzer'] == 'default'
+        assert response_data['conversation_settings'] == {
+            'schema_version': 1,
+            'max_iterations': 100,
+            'verification.confirmation_mode': True,
+            'verification.security_analyzer': 'default',
+        }
         assert vals['llm.api_key'] == '<hidden>'
 
         # Test updating with partial settings

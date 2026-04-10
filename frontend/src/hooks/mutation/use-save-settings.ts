@@ -14,10 +14,13 @@ const LEGACY_FLAT_TO_SDK: Record<string, string> = {
   llm_api_key: "llm.api_key",
   llm_base_url: "llm.base_url",
   mcp_config: "mcp_config",
-  confirmation_mode: "verification.confirmation_mode",
-  security_analyzer: "verification.security_analyzer",
   enable_default_condenser: "condenser.enabled",
   condenser_max_size: "condenser.max_size",
+};
+
+const LEGACY_FLAT_TO_CONVERSATION: Record<string, string> = {
+  confirmation_mode: "verification.confirmation_mode",
+  security_analyzer: "verification.security_analyzer",
   max_iterations: "max_iterations",
 };
 
@@ -28,6 +31,7 @@ const saveSettingsMutationFn = async (
   const settingsToSave: SettingsUpdate = { ...settings };
   delete settingsToSave.agent_settings_schema;
   delete settingsToSave.agent_settings;
+  delete settingsToSave.conversation_settings_schema;
 
   for (const [legacyKey, sdkKey] of Object.entries(LEGACY_FLAT_TO_SDK)) {
     const hasLegacyValue = legacyKey in settingsToSave;
@@ -37,6 +41,29 @@ const saveSettingsMutationFn = async (
       settingsToSave[sdkKey] = settingsToSave[legacyKey];
       delete settingsToSave[legacyKey];
     }
+  }
+
+  const conversationSettings = {
+    ...((settingsToSave.conversation_settings as Record<string, unknown>) ??
+      {}),
+  };
+
+  for (const [legacyKey, conversationKey] of Object.entries(
+    LEGACY_FLAT_TO_CONVERSATION,
+  )) {
+    const hasLegacyValue = legacyKey in settingsToSave;
+    const hasConversationValue = conversationKey in conversationSettings;
+
+    if (hasLegacyValue && !hasConversationValue) {
+      conversationSettings[conversationKey] = settingsToSave[legacyKey];
+      delete settingsToSave[legacyKey];
+    }
+  }
+
+  if (Object.keys(conversationSettings).length > 0) {
+    settingsToSave.conversation_settings = conversationSettings;
+  } else {
+    delete settingsToSave.conversation_settings;
   }
 
   if (typeof settingsToSave["llm.api_key"] === "string") {
