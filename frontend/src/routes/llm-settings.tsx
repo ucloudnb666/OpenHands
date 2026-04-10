@@ -62,6 +62,14 @@ const getSchemaFieldDefaultValue = (
     .flatMap((section) => section.fields)
     .find((field) => field.key === fieldKey)?.default ?? null;
 
+const getSchemaFieldChoices = (
+  schema: SettingsSchema | null | undefined,
+  fieldKey: string,
+) =>
+  schema?.sections
+    .flatMap((section) => section.fields)
+    .find((field) => field.key === fieldKey)?.choices ?? [];
+
 const KNOWN_PROVIDER_DEFAULT_BASE_URLS: Partial<Record<string, Set<string>>> = {
   openai: new Set(["https://api.openai.com", "https://api.openai.com/v1"]),
   openhands: new Set([
@@ -158,7 +166,6 @@ export function LlmSettingsScreen({
     String(DEFAULT_SETTINGS.agent_settings?.["llm.model"] ?? "");
 
   const isSaasMode = config?.app_mode === "saas";
-  const isV1Enabled = settings?.v1_enabled === true;
   const hasAgentField = hasSchemaField(schema, "agent");
 
   React.useEffect(() => {
@@ -387,17 +394,17 @@ export function LlmSettingsScreen({
                     href="https://tavily.com/"
                   />
 
-                  {hasAgentField && !isV1Enabled ? (
+                  {hasAgentField ? (
                     <SettingsDropdownInput
                       testId="agent-input"
                       name="agent-input"
                       label={t(I18nKey.SETTINGS$AGENT)}
-                      items={
-                        resources?.agents.map((agent) => ({
-                          key: agent,
-                          label: agent,
-                        })) || []
-                      }
+                      items={getSchemaFieldChoices(schema, "agent").map(
+                        (choice) => ({
+                          key: String(choice.value),
+                          label: choice.label,
+                        }),
+                      )}
                       selectedKey={agentValue}
                       isClearable={false}
                       onSelectionChange={(key) => {
@@ -420,12 +427,11 @@ export function LlmSettingsScreen({
       hasAgentField,
       infoMessageKey,
       isSaasMode,
-      isV1Enabled,
       modelsAndProviders,
       verifiedModels,
       verifiedProviders,
       defaultModel,
-      resources?.agents,
+      schema,
       searchApiKey,
       selectedProvider,
       settings?.llm_api_key_set,
