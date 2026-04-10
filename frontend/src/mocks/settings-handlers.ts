@@ -124,6 +124,68 @@ const MOCK_AGENT_SETTINGS_SCHEMA: NonNullable<
   ],
 };
 
+const MOCK_CONVERSATION_SETTINGS_SCHEMA: NonNullable<
+  Settings["conversation_settings_schema"]
+> = {
+  model_name: "ConversationSettings",
+  sections: [
+    {
+      key: "general",
+      label: "General",
+      fields: [
+        {
+          key: "max_iterations",
+          label: "Max iterations",
+          section: "general",
+          section_label: "General",
+          value_type: "integer",
+          default: 500,
+          choices: [],
+          depends_on: [],
+          prominence: "major",
+          secret: false,
+          required: true,
+        },
+      ],
+    },
+    {
+      key: "verification",
+      label: "Verification",
+      fields: [
+        {
+          key: "verification.confirmation_mode",
+          label: "Confirmation mode",
+          section: "verification",
+          section_label: "Verification",
+          value_type: "boolean",
+          default: false,
+          choices: [],
+          depends_on: [],
+          prominence: "major",
+          secret: false,
+          required: true,
+        },
+        {
+          key: "verification.security_analyzer",
+          label: "Security analyzer",
+          section: "verification",
+          section_label: "Verification",
+          value_type: "string",
+          default: "llm",
+          choices: [
+            { label: "llm", value: "llm" },
+            { label: "none", value: "none" },
+          ],
+          depends_on: ["verification.confirmation_mode"],
+          prominence: "major",
+          secret: false,
+          required: false,
+        },
+      ],
+    },
+  ],
+};
+
 export const MOCK_DEFAULT_USER_SETTINGS: Settings = {
   ...DEFAULT_SETTINGS,
   provider_tokens_set: {},
@@ -134,6 +196,10 @@ export const MOCK_DEFAULT_USER_SETTINGS: Settings = {
     "critic.enabled": false,
     "llm.api_key": null,
     "llm.model": DEFAULT_MODEL,
+  },
+  conversation_settings_schema: MOCK_CONVERSATION_SETTINGS_SCHEMA,
+  conversation_settings: {
+    ...(DEFAULT_SETTINGS.conversation_settings ?? {}),
   },
 };
 
@@ -220,6 +286,11 @@ export const SETTINGS_HANDLERS = [
     return HttpResponse.json(config);
   }),
 
+  http.get("/api/settings/conversation-schema", async () => {
+    await delay();
+    return HttpResponse.json(MOCK_CONVERSATION_SETTINGS_SCHEMA);
+  }),
+
   http.get("/api/settings", async () => {
     await delay();
     const { settings } = MOCK_USER_PREFERENCES;
@@ -247,8 +318,16 @@ export const SETTINGS_HANDLERS = [
           section.fields.map((field) => field.key),
         ) ?? [],
       );
+      const conversationFieldKeys = new Set(
+        current.conversation_settings_schema?.sections.flatMap((section) =>
+          section.fields.map((field) => field.key),
+        ) ?? [],
+      );
       const agentSettings = {
         ...(current.agent_settings ?? {}),
+      } as Record<string, SettingsValue>;
+      const conversationSettings = {
+        ...(current.conversation_settings ?? {}),
       } as Record<string, SettingsValue>;
 
       const nextSettings: Settings = {
@@ -268,9 +347,42 @@ export const SETTINGS_HANDLERS = [
               ? (value as SettingsValue)
               : null;
         }
+        if (conversationFieldKeys.has(key)) {
+          conversationSettings[key] =
+            value === null ||
+            typeof value === "boolean" ||
+            typeof value === "number" ||
+            typeof value === "string" ||
+            Array.isArray(value) ||
+            (typeof value === "object" && value !== null)
+              ? (value as SettingsValue)
+              : null;
+        }
+      }
+
+      const nestedConversationSettings = body.conversation_settings;
+      if (
+        nestedConversationSettings &&
+        typeof nestedConversationSettings === "object" &&
+        !Array.isArray(nestedConversationSettings)
+      ) {
+        for (const [key, value] of Object.entries(nestedConversationSettings)) {
+          if (conversationFieldKeys.has(key)) {
+            conversationSettings[key] =
+              value === null ||
+              typeof value === "boolean" ||
+              typeof value === "number" ||
+              typeof value === "string" ||
+              Array.isArray(value) ||
+              (typeof value === "object" && value !== null)
+                ? (value as SettingsValue)
+                : null;
+          }
+        }
       }
 
       nextSettings.agent_settings = agentSettings;
+      nextSettings.conversation_settings = conversationSettings;
       MOCK_USER_PREFERENCES.settings = nextSettings;
 
       return HttpResponse.json(null, { status: 200 });

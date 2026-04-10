@@ -107,7 +107,7 @@ async def start_conversation(
         session_init_args = settings.model_dump()
         agent_settings = settings.agent_settings
         model_name = agent_settings.llm.model
-        llm_api_key = agent_settings.llm.api_key
+        llm_api_key = settings.llm_api_key
         is_bedrock_model = model_name.startswith('bedrock/')
         is_lemonade_model = model_name.startswith('lemonade/')
 

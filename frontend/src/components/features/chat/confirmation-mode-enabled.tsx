@@ -3,15 +3,12 @@ import { Tooltip } from "@heroui/react";
 import { I18nKey } from "#/i18n/declaration";
 import LockIcon from "#/icons/lock.svg?react";
 import { useSettings } from "#/hooks/query/use-settings";
-import { getAgentSettingValue } from "#/utils/sdk-settings-schema";
 
 function ConfirmationModeEnabled() {
   const { t } = useTranslation();
 
   const { data: settings } = useSettings();
-  const confirmationModeEnabled =
-    settings &&
-    getAgentSettingValue(settings, "verification.confirmation_mode") === true;
+  const confirmationModeEnabled = settings?.confirmation_mode === true;
 
   if (!confirmationModeEnabled) {
     return null;

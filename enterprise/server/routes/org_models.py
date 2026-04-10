@@ -16,6 +16,28 @@ from storage.org import Org
 from storage.org_member import OrgMember
 from storage.role import Role
 
+from openhands.sdk.settings import ConversationSettings
+
+
+_CONVERSATION_SETTINGS_KEYS = {
+    'max_iterations',
+    'verification.confirmation_mode',
+    'verification.security_analyzer',
+}
+
+
+def get_org_conversation_settings(org: Org) -> dict[str, Any]:
+    agent_settings = get_org_agent_settings(org)
+    conversation_settings = {
+        key: value
+        for key, value in agent_settings.items()
+        if key in _CONVERSATION_SETTINGS_KEYS
+    }
+    conversation_settings['schema_version'] = (
+        ConversationSettings.CURRENT_PERSISTED_VERSION
+    )
+    return conversation_settings
+
 
 class OrgCreationError(Exception):
     """Base exception for organization creation errors."""
@@ -228,6 +250,7 @@ class OrgLLMSettingsResponse(BaseModel):
     """Response model for organization default LLM settings."""
 
     agent_settings: dict[str, Any] = Field(default_factory=dict)
+    conversation_settings: dict[str, Any] = Field(default_factory=dict)
     llm_api_key_set: bool = False
     search_api_key: str | None = None  # Masked in response
 
@@ -248,6 +271,7 @@ class OrgLLMSettingsResponse(BaseModel):
         """Create response from Org entity."""
         return cls(
             agent_settings=get_org_agent_settings(org),
+            conversation_settings=get_org_conversation_settings(org),
             llm_api_key_set=org.llm_api_key is not None,
             search_api_key=cls._mask_key(org.search_api_key),
         )
@@ -270,6 +294,7 @@ class OrgLLMSettingsUpdate(BaseModel):
     """Request model for updating organization LLM settings."""
 
     agent_settings: dict[str, Any] | None = None
+    conversation_settings: dict[str, Any] | None = None
     search_api_key: str | None = None
     llm_api_key: str | None = None
 

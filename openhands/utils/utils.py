@@ -16,7 +16,7 @@ def setup_llm_config(config: OpenHandsConfig, settings: Settings) -> OpenHandsCo
     agent_settings = settings.agent_settings
     llm_config = config.get_llm_config()
     llm_config.model = agent_settings.llm.model
-    llm_config.api_key = agent_settings.llm.api_key
+    llm_config.api_key = settings.llm_api_key
     env_base_url = os.environ.get('LLM_BASE_URL')
     settings_base_url = agent_settings.llm.base_url
 

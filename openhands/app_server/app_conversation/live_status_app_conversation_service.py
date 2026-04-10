@@ -7,7 +7,7 @@ import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, AsyncGenerator, Sequence, cast
+from typing import Any, AsyncGenerator, Mapping, Sequence, cast
 from uuid import UUID, uuid4
 
 import httpx
@@ -91,7 +91,7 @@ from openhands.sdk import Agent, AgentContext, LocalWorkspace
 from openhands.sdk.hooks import HookConfig
 from openhands.sdk.llm import LLM
 from openhands.sdk.plugin import PluginSource
-from openhands.sdk.secret import LookupSecret, SecretValue, StaticSecret
+from openhands.sdk.secret import LookupSecret, SecretSource, SecretValue, StaticSecret
 from openhands.sdk.settings import AgentSettings
 from openhands.sdk.utils.paging import page_iterator
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
@@ -383,12 +383,11 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
             # Set security analyzer from settings
             user = await self.user_context.get_user_info()
-            verification_settings = user.agent_settings.verification
             await self._set_security_analyzer_from_settings(
                 agent_server_url,
                 sandbox.session_api_key,
                 info.id,
-                verification_settings.security_analyzer,
+                user.security_analyzer,
                 self.httpx_client,
             )
 
@@ -482,8 +481,11 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
             data = response.json()
             conversation_info = _conversation_info_type_adapter.validate_python(data)
-            conversation_info = [c for c in conversation_info if c]
-            return conversation_info
+            return [
+                conversation
+                for conversation in conversation_info
+                if conversation is not None
+            ]
         except httpx.HTTPStatusError:
             # The runtime API stops idle sandboxes all the time and they return a 404 or a 503.
             # This is normal and should not be considered an error.
@@ -835,7 +837,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         return f'{working_dir}/{config_dir}/PLAN.md'
 
-    async def _setup_secrets_for_git_providers(self, user: UserInfo) -> dict:
+    async def _setup_secrets_for_git_providers(
+        self, user: UserInfo
+    ) -> dict[str, SecretSource]:
         """Set up secrets for all git provider authentication.
 
         Args:
@@ -1200,7 +1204,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         agent_type: AgentType,
         system_message_suffix: str | None,
         mcp_config: dict,
-        secrets: dict[str, SecretValue] | None = None,
+        secrets: Mapping[str, SecretValue] | None = None,
         git_provider: ProviderType | None = None,
         working_dir: str | None = None,
         agent_settings: AgentSettings | None = None,
@@ -1444,7 +1448,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         user: UserInfo,
         workspace: LocalWorkspace,
         initial_message: SendMessageRequest | None,
-        secrets: dict[str, SecretValue],
+        secrets: dict[str, SecretSource],
         sandbox: SandboxInfo,
         remote_workspace: AsyncRemoteWorkspace | None,
         selected_repository: str | None,
@@ -1527,16 +1531,14 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 for p in plugins
             ]
 
-        verification_settings = user.agent_settings.verification
-
         # Create and return the final request
         return StartConversationRequest(
             conversation_id=conversation_id,
             agent=agent,
             workspace=workspace,
             confirmation_policy=self._select_confirmation_policy(
-                verification_settings.confirmation_mode,
-                verification_settings.security_analyzer,
+                bool(user.confirmation_mode),
+                user.security_analyzer,
             ),
             initial_message=final_initial_message,
             secrets=secrets,

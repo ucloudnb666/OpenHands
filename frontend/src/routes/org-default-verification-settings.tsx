@@ -1,15 +1,14 @@
-import { SdkSectionPage } from "#/components/features/settings/sdk-settings/sdk-section-page";
 import { OrgDefaultsBanner } from "#/components/features/settings/org-defaults-banner";
 import { createPermissionGuard } from "#/utils/org/permission-guard";
+import { VerificationSettingsScreen } from "./verification-settings";
 
 const renderOrgDefaultsBanner = () => <OrgDefaultsBanner />;
 
 function OrgDefaultVerificationSettingsScreen() {
   return (
-    <SdkSectionPage
+    <VerificationSettingsScreen
       scope="org"
-      sectionKeys={["verification"]}
-      header={renderOrgDefaultsBanner}
+      renderTopContent={renderOrgDefaultsBanner}
       testId="org-default-verification-settings-screen"
     />
   );

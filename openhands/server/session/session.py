@@ -143,9 +143,8 @@ class WebSession:
         )
         agent_settings = settings.agent_settings
         agent_cls = agent_settings.agent or self.config.default_agent
-        verification_settings = agent_settings.verification
-        self.config.security.confirmation_mode = verification_settings.confirmation_mode
-        self.config.security.security_analyzer = verification_settings.security_analyzer
+        self.config.security.confirmation_mode = bool(settings.confirmation_mode)
+        self.config.security.security_analyzer = settings.security_analyzer
         self.config.sandbox.base_container_image = (
             settings.sandbox_base_container_image
             or self.config.sandbox.base_container_image
@@ -164,9 +163,7 @@ class WebSession:
         git_user_email = getattr(settings, 'git_user_email', None)
         if git_user_email is not None:
             self.config.git_user_email = git_user_email
-        max_iterations = (
-            settings.get_agent_setting('max_iterations') or self.config.max_iterations
-        )
+        max_iterations = settings.max_iterations or self.config.max_iterations
 
         # Prioritize settings over config for max_budget_per_task
         max_budget_per_task = (

@@ -23,6 +23,13 @@ class SettingsService {
     return data;
   }
 
+  static async getConversationSettingsSchema(): Promise<SettingsSchema> {
+    const { data } = await openHands.get<SettingsSchema>(
+      "/api/settings/conversation-schema",
+    );
+    return data;
+  }
+
   /**
    * Save the settings to the server. Only valid settings are saved.
    * @param settings - the settings to save

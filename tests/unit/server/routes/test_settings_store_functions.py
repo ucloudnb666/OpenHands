@@ -39,6 +39,17 @@ _TEST_SDK_SCHEMA = {
                 {'key': 'condenser.max_size', 'secret': False},
             ],
         },
+    ]
+}
+
+_TEST_CONVERSATION_SCHEMA = {
+    'sections': [
+        {
+            'key': 'general',
+            'fields': [
+                {'key': 'max_iterations', 'secret': False},
+            ],
+        },
         {
             'key': 'verification',
             'fields': [
@@ -73,6 +84,17 @@ def _secret_value(settings: Settings, key: str) -> str | None:
 
 
 # Mock functions to simulate the actual functions in settings.py
+
+
+def _persisted_value(settings: Settings, key: str) -> Any:
+    current: Any = settings.normalized_agent_settings()
+    for part in key.split('.'):
+        if not isinstance(current, dict):
+            raise KeyError(key)
+        current = current[part]
+    return current
+
+
 async def get_settings_store(request):
     """Mock function to get settings store."""
     return MagicMock()
@@ -182,11 +204,13 @@ def test_apply_payload_sdk_keys_stored_and_readable():
         'llm.base_url': 'https://api.example.com',
     }
 
-    result = _apply_settings_payload(payload, None, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
-    assert result.raw_agent_settings['llm.model'] == 'gpt-4'
-    assert result.raw_agent_settings['llm.api_key'] == 'test-api-key'
-    assert result.raw_agent_settings['llm.base_url'] == 'https://api.example.com'
+    assert _persisted_value(result, 'llm.model') == 'gpt-4'
+    assert _persisted_value(result, 'llm.api_key') == 'test-api-key'
+    assert _persisted_value(result, 'llm.base_url') == 'https://api.example.com'
     # Properties read from agent_settings
     assert _agent_value(result, 'llm.model') == 'gpt-4'
     assert _secret_value(result, 'llm.api_key') == 'test-api-key'
@@ -209,7 +233,9 @@ def test_apply_payload_updates_existing():
         'llm.base_url': 'https://new.example.com',
     }
 
-    result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
     assert _agent_value(result, 'llm.model') == 'gpt-4'
     assert _secret_value(result, 'llm.api_key') == 'new-api-key'
@@ -227,7 +253,9 @@ def test_apply_payload_preserves_secrets_when_not_provided():
 
     payload = {'llm.model': 'gpt-4'}
 
-    result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
     assert _agent_value(result, 'llm.model') == 'gpt-4'
     assert _secret_value(result, 'llm.api_key') == 'existing-api-key'
@@ -259,6 +287,7 @@ def test_apply_payload_mcp_update_preserves_existing_llm_settings():
         },
         existing_settings,
         _TEST_SDK_SCHEMA,
+        _TEST_CONVERSATION_SCHEMA,
     )
 
     assert _agent_value(result, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
@@ -271,12 +300,16 @@ def test_apply_payload_clears_secrets_when_explicitly_null_or_empty():
     existing = _make_settings(**{'llm.api_key': 'existing-api-key'})
 
     payload = {'llm.api_key': None}
-    result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
-    assert 'llm.api_key' not in result.raw_agent_settings
+    result = _apply_settings_payload(
+        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
+    assert result.agent_settings_values()['llm.api_key'] is None
 
     payload = {'llm.api_key': ''}
-    result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
-    assert 'llm.api_key' not in result.raw_agent_settings
+    result = _apply_settings_payload(
+        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
+    assert result.agent_settings_values()['llm.api_key'] is None
 
 
 def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
@@ -288,10 +321,12 @@ def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
         }
     )
 
-    result = _apply_settings_payload({'llm.base_url': None}, existing, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        {'llm.base_url': None}, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
-    assert 'llm.base_url' in result.raw_agent_settings
-    assert result.raw_agent_settings['llm.base_url'] is None
+    assert _agent_value(result, 'llm.base_url') is None
+    assert _persisted_value(result, 'llm.base_url') is None
 
 
 def test_apply_payload_mcp_preserves_llm_settings():
@@ -316,7 +351,9 @@ def test_apply_payload_mcp_preserves_llm_settings():
         },
     }
 
-    result = _apply_settings_payload(payload, existing, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
     assert _agent_value(result, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
     assert _secret_value(result, 'llm.api_key') == 'existing-api-key'
@@ -330,24 +367,28 @@ def test_apply_payload_non_sdk_flat_keys_applied():
         'git_user_name': 'test-user',
     }
 
-    result = _apply_settings_payload(payload, None, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
     assert result.language == 'ja'
     assert result.git_user_name == 'test-user'
 
 
-def test_apply_payload_verification_stored_and_readable():
-    """Verification SDK keys are stored and readable via properties."""
+def test_apply_payload_conversation_settings_stored_top_level():
+    """Conversation security settings should be applied as top-level Settings fields."""
     payload = {
-        'verification.confirmation_mode': True,
-        'verification.security_analyzer': 'llm',
+        'confirmation_mode': True,
+        'security_analyzer': 'llm',
     }
 
-    result = _apply_settings_payload(payload, None, _TEST_SDK_SCHEMA)
+    result = _apply_settings_payload(
+        payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+    )
 
-    assert _agent_value(result, 'verification.confirmation_mode') is True
-    assert _agent_value(result, 'verification.security_analyzer') == 'llm'
-    assert result.raw_agent_settings['verification.confirmation_mode'] is True
+    assert result.confirmation_mode is True
+    assert result.security_analyzer == 'llm'
+    assert 'verification.confirmation_mode' not in result.agent_settings_values()
 
 
 def test_legacy_flat_fields_migrate_to_agent_vals():
@@ -362,11 +403,11 @@ def test_legacy_flat_fields_migrate_to_agent_vals():
         }
     )
 
-    assert s.raw_agent_settings['llm.model'] == 'gpt-4'
-    assert s.raw_agent_settings['llm.api_key'] == 'my-key'
-    assert s.raw_agent_settings['llm.base_url'] == 'https://example.com'
-    assert s.raw_agent_settings['agent'] == 'CodeActAgent'
-    assert s.raw_agent_settings['verification.confirmation_mode'] is True
+    assert _persisted_value(s, 'llm.model') == 'gpt-4'
+    assert _persisted_value(s, 'llm.api_key') == 'my-key'
+    assert _persisted_value(s, 'llm.base_url') == 'https://example.com'
+    assert _persisted_value(s, 'agent') == 'CodeActAgent'
+    assert s.confirmation_mode is True
     assert _agent_value(s, 'llm.model') == 'gpt-4'
     assert _agent_value(s, 'agent') == 'CodeActAgent'
 
@@ -378,10 +419,10 @@ def test_agent_settings_normalized_with_schema_version_and_extras():
         agent_settings={'max_iterations': 64, 'custom.extra': 'keep-me'},
     )
 
-    assert s.raw_agent_settings['schema_version'] == 1
-    assert s.raw_agent_settings['llm.model'] == 'anthropic/claude-sonnet-4-5-20250929'
-    assert s.raw_agent_settings['verification.confirmation_mode'] is True
-    assert s.raw_agent_settings['max_iterations'] == 64
+    assert s.raw_agent_settings['schema_version'] == 2
+    assert _persisted_value(s, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
+    assert s.confirmation_mode is True
+    assert s.max_iterations == 64
     assert s.raw_agent_settings['custom.extra'] == 'keep-me'
 
 
@@ -394,27 +435,28 @@ def test_agent_settings_persistence_strips_secret_values():
 
     persisted = s.normalized_agent_settings(strip_secret_values=True)
 
-    assert persisted['schema_version'] == 1
-    assert persisted['llm.model'] == 'anthropic/claude-sonnet-4-5-20250929'
-    assert persisted['max_iterations'] == 64
-    assert 'llm.api_key' not in persisted
+    assert persisted['schema_version'] == 2
+    assert persisted['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert 'max_iterations' not in persisted
+    assert 'api_key' not in persisted['llm']
+    assert s.max_iterations == 64
 
 
 def test_openhands_model_settings_remain_user_facing():
     s = Settings(llm_model='openhands/claude-opus-4-5-20251101')
 
-    assert s.raw_agent_settings['llm.model'] == 'openhands/claude-opus-4-5-20251101'
-    assert s.normalized_agent_settings(strip_secret_values=True)['llm.model'] == (
-        'openhands/claude-opus-4-5-20251101'
+    assert _persisted_value(s, 'llm.model') == 'litellm_proxy/claude-opus-4-5-20251101'
+    assert (
+        s.agent_settings_values()['llm.model'] == 'openhands/claude-opus-4-5-20251101'
     )
 
 
 def test_litellm_proxy_model_settings_migrate_back_to_openhands_prefix():
     s = Settings(agent_settings={'llm.model': 'litellm_proxy/claude-opus-4-5-20251101'})
 
-    assert s.raw_agent_settings['llm.model'] == 'openhands/claude-opus-4-5-20251101'
-    assert s.normalized_agent_settings(strip_secret_values=True)['llm.model'] == (
-        'openhands/claude-opus-4-5-20251101'
+    assert _persisted_value(s, 'llm.model') == 'litellm_proxy/claude-opus-4-5-20251101'
+    assert (
+        s.agent_settings_values()['llm.model'] == 'openhands/claude-opus-4-5-20251101'
     )
 
 

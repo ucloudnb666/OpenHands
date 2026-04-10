@@ -1,11 +1,199 @@
-import { SdkSectionPage } from "#/components/features/settings/sdk-settings/sdk-section-page";
+import React from "react";
+import { useTranslation } from "react-i18next";
+import { SettingsDropdownInput } from "#/components/features/settings/settings-dropdown-input";
+import { SettingsSwitch } from "#/components/features/settings/settings-switch";
+import {
+  SdkSectionHeaderProps,
+  SdkSectionPage,
+} from "#/components/features/settings/sdk-settings/sdk-section-page";
+import { OrgWideSettingsBadge } from "#/components/features/settings/org-wide-settings-badge";
+import { useSettings } from "#/hooks/query/use-settings";
+import { I18nKey } from "#/i18n/declaration";
+import { DEFAULT_SETTINGS } from "#/services/settings";
+import { SettingsScope } from "#/types/settings";
 import { createPermissionGuard } from "#/utils/org/permission-guard";
+import { SettingsView } from "#/utils/sdk-settings-schema";
 
-function VerificationSettingsScreen() {
+const VERIFICATION_SCHEMA_EXCLUDE_KEYS = new Set([
+  "verification.confirmation_mode",
+  "verification.security_analyzer",
+]);
+
+function VerificationSettingsHeader({
+  scope,
+  confirmationMode,
+  securityAnalyzer,
+  isConversationSettingsDisabled,
+  view,
+  onConfirmationModeChange,
+  onSecurityAnalyzerChange,
+  renderTopContent,
+}: {
+  scope: SettingsScope;
+  confirmationMode: boolean;
+  securityAnalyzer: string | null;
+  isConversationSettingsDisabled: boolean;
+  view: SettingsView;
+  onConfirmationModeChange: (value: boolean) => void;
+  onSecurityAnalyzerChange: (value: string | null) => void;
+  renderTopContent?: () => React.ReactNode;
+}) {
+  const { t } = useTranslation();
+
+  const securityAnalyzerItems = React.useMemo(
+    () => [
+      {
+        key: "llm",
+        label: t(I18nKey.SETTINGS$SECURITY_ANALYZER_LLM_DEFAULT),
+      },
+      {
+        key: "none",
+        label: t(I18nKey.SETTINGS$SECURITY_ANALYZER_NONE),
+      },
+    ],
+    [t],
+  );
+
+  const showConversationSettings = view !== "basic";
+  const showSecurityAnalyzer = showConversationSettings && confirmationMode;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {renderTopContent?.()}
+      {scope === "org" ? <OrgWideSettingsBadge /> : null}
+
+      {showConversationSettings ? (
+        <div className="flex flex-col gap-6">
+          <SettingsSwitch
+            testId="confirmation-mode-toggle"
+            isToggled={confirmationMode}
+            onToggle={onConfirmationModeChange}
+            isDisabled={isConversationSettingsDisabled}
+          >
+            {t(I18nKey.SETTINGS_FORM$ENABLE_CONFIRMATION_MODE_LABEL)}
+          </SettingsSwitch>
+
+          {showSecurityAnalyzer ? (
+            <SettingsDropdownInput
+              testId="security-analyzer-input"
+              name="security_analyzer"
+              label={t(I18nKey.SETTINGS_FORM$SECURITY_ANALYZER_LABEL)}
+              items={securityAnalyzerItems}
+              selectedKey={securityAnalyzer ?? undefined}
+              placeholder={t(I18nKey.SETTINGS$SECURITY_ANALYZER_PLACEHOLDER)}
+              isDisabled={isConversationSettingsDisabled}
+              onSelectionChange={(key) =>
+                onSecurityAnalyzerChange(key ? String(key) : null)
+              }
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function VerificationSettingsScreen({
+  scope = "personal",
+  renderTopContent,
+  testId = "verification-settings-screen",
+}: {
+  scope?: SettingsScope;
+  renderTopContent?: () => React.ReactNode;
+  testId?: string;
+}) {
+  const { data: settings } = useSettings(scope);
+  const [confirmationMode, setConfirmationMode] = React.useState(
+    DEFAULT_SETTINGS.confirmation_mode,
+  );
+  const [securityAnalyzer, setSecurityAnalyzer] = React.useState<string | null>(
+    DEFAULT_SETTINGS.security_analyzer,
+  );
+  const [confirmationModeDirty, setConfirmationModeDirty] =
+    React.useState(false);
+  const [securityAnalyzerDirty, setSecurityAnalyzerDirty] =
+    React.useState(false);
+
+  React.useEffect(() => {
+    setConfirmationMode(
+      settings?.confirmation_mode ?? DEFAULT_SETTINGS.confirmation_mode,
+    );
+    setSecurityAnalyzer(
+      settings?.security_analyzer ?? DEFAULT_SETTINGS.security_analyzer,
+    );
+    setConfirmationModeDirty(false);
+    setSecurityAnalyzerDirty(false);
+  }, [settings?.confirmation_mode, settings?.security_analyzer]);
+
+  const buildHeader = React.useCallback(
+    ({ isDisabled, view }: SdkSectionHeaderProps) => (
+      <VerificationSettingsHeader
+        scope={scope}
+        confirmationMode={confirmationMode}
+        securityAnalyzer={securityAnalyzer}
+        isConversationSettingsDisabled={isDisabled}
+        view={view}
+        onConfirmationModeChange={(value) => {
+          setConfirmationMode(value);
+          setConfirmationModeDirty(true);
+        }}
+        onSecurityAnalyzerChange={(value) => {
+          setSecurityAnalyzer(value);
+          setSecurityAnalyzerDirty(true);
+        }}
+        renderTopContent={renderTopContent}
+      />
+    ),
+    [confirmationMode, renderTopContent, scope, securityAnalyzer],
+  );
+
+  const buildPayload = React.useCallback(
+    (basePayload: Record<string, unknown>, context: { view: SettingsView }) => {
+      const payload = { ...basePayload };
+
+      if (context.view === "basic") {
+        payload["verification.confirmation_mode"] =
+          DEFAULT_SETTINGS.confirmation_mode;
+        payload["verification.security_analyzer"] =
+          DEFAULT_SETTINGS.security_analyzer;
+        return { conversation_settings: payload };
+      }
+
+      if (confirmationModeDirty) {
+        payload["verification.confirmation_mode"] = confirmationMode;
+      }
+      if (
+        securityAnalyzerDirty ||
+        (confirmationMode && settings?.security_analyzer !== securityAnalyzer)
+      ) {
+        payload["verification.security_analyzer"] = securityAnalyzer;
+      }
+
+      return { conversation_settings: payload };
+    },
+    [
+      confirmationMode,
+      confirmationModeDirty,
+      securityAnalyzer,
+      securityAnalyzerDirty,
+      settings?.security_analyzer,
+    ],
+  );
+
   return (
     <SdkSectionPage
+      scope={scope}
+      settingsSource="conversation"
       sectionKeys={["verification"]}
-      testId="verification-settings-screen"
+      excludeKeys={VERIFICATION_SCHEMA_EXCLUDE_KEYS}
+      header={buildHeader}
+      extraDirty={confirmationModeDirty || securityAnalyzerDirty}
+      buildPayload={buildPayload}
+      onSaveSuccess={() => {
+        setConfirmationModeDirty(false);
+        setSecurityAnalyzerDirty(false);
+      }}
+      testId={testId}
     />
   );
 }

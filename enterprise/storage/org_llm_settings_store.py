@@ -67,10 +67,14 @@ class OrgLLMSettingsStore:
             return None
 
         update_data.apply_to_org(org)
-        if update_data.agent_settings is not None:
+        combined_agent_settings = merge_agent_settings(
+            update_data.agent_settings,
+            update_data.conversation_settings,
+        )
+        if combined_agent_settings:
             org.agent_settings = merge_agent_settings(
                 get_org_agent_settings(org),
-                update_data.agent_settings,
+                combined_agent_settings,
             )
 
         # flush instead of commit - DbSessionInjector auto-commits at request end
