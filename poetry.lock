@@ -6585,6 +6585,7 @@ optional = false
 python-versions = ">=3.12"
 groups = ["main"]
 files = [
+    {file = "openhands_agent_server-1.16.1-py3-none-any.whl", hash = "sha256:015983b300510c9c329c8eace49fbd4117d31d0895a125e419c31a9964be4155"},
     {file = "openhands_agent_server-1.16.1.tar.gz", hash = "sha256:489151d35250a424dede8646396bef7b7095adb25e5c973ca8bc6dcbd19cdf07"},
 ]
 
@@ -6638,6 +6639,7 @@ optional = false
 python-versions = ">=3.12"
 groups = ["main"]
 files = [
+    {file = "openhands_tools-1.16.1-py3-none-any.whl", hash = "sha256:f7fd1eb205571d02ee480ad71e96cac0c34c57c0938c4074fe135a579a7538d7"},
     {file = "openhands_tools-1.16.1.tar.gz", hash = "sha256:64488f2d7705ff90f4bfb7dfd1a2f1fbb4f379059d96e0073677c168d97135e7"},
 ]
 
@@ -15028,4 +15030,4 @@ third-party-runtimes = ["daytona", "e2b-code-interpreter", "modal", "runloop-api
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12,<3.14"
-content-hash = "b8005df13756cf7dd4609b146f76b086d08eb929b3f2f86f7e95717ecdf2ca83"
+content-hash = "888ee60c315d8a16bdc7d823157a7e730b2fa33920e528abe33d5323b362603b"
