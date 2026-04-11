@@ -13,7 +13,7 @@ from conftest import (
 
 import openhands
 from openhands.core.config import MCPConfig
-from openhands.core.config.mcp_config import MCPSSEServerConfig, MCPStdioServerConfig
+from openhands.core.config.mcp_config import MCPRemoteServerConfig, MCPStdioServerConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import CmdRunAction, MCPAction
 from openhands.events.observation import CmdOutputObservation, MCPObservation
@@ -203,8 +203,11 @@ async def test_filesystem_mcp_via_sse(
     sse_url = sse_server_info['url']
     runtime = None
     try:
-        mcp_sse_server_config = MCPSSEServerConfig(url=sse_url)
-        override_mcp_config = MCPConfig(sse_servers=[mcp_sse_server_config])
+        override_mcp_config = MCPConfig(
+            mcpServers={
+                'fs': MCPRemoteServerConfig(url=sse_url, transport='sse')
+            }
+        )
         runtime, config = _load_runtime(
             temp_dir,
             runtime_cls,
@@ -235,15 +238,13 @@ async def test_both_stdio_and_sse_mcp(
     sse_url = sse_server_info['url']
     runtime = None
     try:
-        mcp_sse_server_config = MCPSSEServerConfig(url=sse_url)
-
-        # Also add stdio server
-        mcp_stdio_server_config = MCPStdioServerConfig(
-            name='fetch', command='uvx', args=['mcp-server-fetch']
-        )
-
         override_mcp_config = MCPConfig(
-            sse_servers=[mcp_sse_server_config], stdio_servers=[mcp_stdio_server_config]
+            mcpServers={
+                'fs': MCPRemoteServerConfig(url=sse_url, transport='sse'),
+                'fetch': MCPStdioServerConfig(
+                    command='uvx', args=['mcp-server-fetch']
+                ),
+            }
         )
         runtime, config = _load_runtime(
             temp_dir,

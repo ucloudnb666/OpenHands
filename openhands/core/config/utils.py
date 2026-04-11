@@ -111,7 +111,7 @@ def load_from_env(
                         if get_origin(field_type) is list:
                             inner_type = get_args(field_type)[
                                 0
-                            ]  # e.g., MCPSHTTPServerConfig
+                            ]
                             if isinstance(inner_type, type) and issubclass(
                                 inner_type, BaseModel
                             ):

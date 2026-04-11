@@ -530,9 +530,9 @@ async def test_store_saves_mcp_config_to_current_member_only(
 
     store = SaasSettingsStore(admin_user_id, mock_config)
     user_mcp_config = {
-        'sse_servers': [{'url': 'https://user1-mcp-server.com', 'api_key': None}],
-        'stdio_servers': [],
-        'shttp_servers': [],
+        'mcpServers': {
+            'user1': {'url': 'https://user1-mcp-server.com', 'transport': 'sse'}
+        },
     }
     new_settings = DataSettings(
         llm_model='test-model',
@@ -657,14 +657,14 @@ async def test_store_does_not_overwrite_other_members_mcp_config(
     member_store = SaasSettingsStore(member1_user_id, mock_config)
 
     admin_mcp_config = {
-        'sse_servers': [{'url': 'https://admin-private-server.com', 'api_key': None}],
-        'stdio_servers': [],
-        'shttp_servers': [],
+        'mcpServers': {
+            'admin': {'url': 'https://admin-private-server.com', 'transport': 'sse'}
+        },
     }
     member_mcp_config = {
-        'sse_servers': [{'url': 'https://member-private-server.com', 'api_key': None}],
-        'stdio_servers': [],
-        'shttp_servers': [],
+        'mcpServers': {
+            'member': {'url': 'https://member-private-server.com', 'transport': 'sse'}
+        },
     }
 
     with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
@@ -703,14 +703,14 @@ async def test_load_returns_current_member_specific_mcp_config(
     member1_user_id = str(fixture['member1_user_id'])
 
     admin_mcp_config = {
-        'sse_servers': [{'url': 'https://admin-private-server.com', 'api_key': None}],
-        'stdio_servers': [],
-        'shttp_servers': [],
+        'mcpServers': {
+            'admin': {'url': 'https://admin-private-server.com', 'transport': 'sse'}
+        },
     }
     member_mcp_config = {
-        'sse_servers': [{'url': 'https://member-private-server.com', 'api_key': None}],
-        'stdio_servers': [],
-        'shttp_servers': [],
+        'mcpServers': {
+            'member': {'url': 'https://member-private-server.com', 'transport': 'sse'}
+        },
     }
 
     admin_store = SaasSettingsStore(admin_user_id, mock_config)
@@ -745,13 +745,13 @@ async def test_load_returns_current_member_specific_mcp_config(
     assert admin_loaded_settings is not None
     assert admin_loaded_settings.mcp_config is not None
     assert (
-        admin_loaded_settings.mcp_config.sse_servers[0].url
+        admin_loaded_settings.mcp_config.mcpServers['admin'].url
         == 'https://admin-private-server.com'
     )
 
     assert member_loaded_settings is not None
     assert member_loaded_settings.mcp_config is not None
     assert (
-        member_loaded_settings.mcp_config.sse_servers[0].url
+        member_loaded_settings.mcp_config.mcpServers['member'].url
         == 'https://member-private-server.com'
     )

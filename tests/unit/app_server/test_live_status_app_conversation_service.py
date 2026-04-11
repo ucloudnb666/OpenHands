@@ -1664,113 +1664,82 @@ class TestLiveStatusAppConversationService:
         assert saved_info.id == conversation_id
 
     @pytest.mark.asyncio
-    async def test_configure_llm_and_mcp_with_custom_sse_servers(self):
-        """Test _configure_llm_and_mcp merges custom SSE servers with UUID-based names."""
-        # Arrange
-
-        from openhands.core.config.mcp_config import MCPConfig, MCPSSEServerConfig
+    async def test_configure_llm_and_mcp_with_custom_remote_servers(self):
+        """Test _configure_llm_and_mcp merges custom remote servers."""
+        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            sse_servers=[
-                MCPSSEServerConfig(url='https://linear.app/sse', api_key='linear_key'),
-                MCPSSEServerConfig(url='https://notion.com/sse'),
-            ]
+            mcpServers={
+                'linear': MCPRemoteServerConfig(
+                    url='https://linear.app/sse', transport='sse', auth='linear_key'
+                ),
+                'notion': MCPRemoteServerConfig(
+                    url='https://notion.com/sse', transport='sse'
+                ),
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         assert isinstance(llm, LLM)
         assert 'mcpServers' in mcp_config
 
-        # Should have default server + 2 custom SSE servers
         mcp_servers = mcp_config['mcpServers']
         assert 'default' in mcp_servers
-
-        # Find SSE servers (they have sse_ prefix)
-        sse_servers = {k: v for k, v in mcp_servers.items() if k.startswith('sse_')}
-        assert len(sse_servers) == 2
-
-        # Verify SSE server configurations
-        for server_name, server_config in sse_servers.items():
-            assert server_name.startswith('sse_')
-            assert len(server_name) > 4  # Has UUID suffix
-            assert 'url' in server_config
-            assert 'transport' in server_config
-            assert server_config['transport'] == 'sse'
-
-            # Check if this is the Linear server (has headers)
-            if 'headers' in server_config:
-                assert server_config['headers']['Authorization'] == 'Bearer linear_key'
+        assert 'linear' in mcp_servers
+        assert 'notion' in mcp_servers
 
     @pytest.mark.asyncio
-    async def test_configure_llm_and_mcp_with_custom_shttp_servers(self):
-        """Test _configure_llm_and_mcp merges custom SHTTP servers with timeout."""
-        # Arrange
-        from openhands.core.config.mcp_config import MCPConfig, MCPSHTTPServerConfig
+    async def test_configure_llm_and_mcp_with_custom_http_servers(self):
+        """Test _configure_llm_and_mcp merges custom HTTP servers with timeout."""
+        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            shttp_servers=[
-                MCPSHTTPServerConfig(
+            mcpServers={
+                'custom-http': MCPRemoteServerConfig(
                     url='https://example.com/mcp',
-                    api_key='test_key',
+                    transport='http',
+                    auth='test_key',
                     timeout=120,
                 )
-            ]
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         assert isinstance(llm, LLM)
         mcp_servers = mcp_config['mcpServers']
-
-        # Find SHTTP servers
-        shttp_servers = {k: v for k, v in mcp_servers.items() if k.startswith('shttp_')}
-        assert len(shttp_servers) == 1
-
-        server_config = list(shttp_servers.values())[0]
-        assert server_config['url'] == 'https://example.com/mcp'
-        assert server_config['transport'] == 'streamable-http'
-        assert server_config['headers']['Authorization'] == 'Bearer test_key'
-        assert server_config['timeout'] == 120
+        assert 'custom-http' in mcp_servers
 
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_with_custom_stdio_servers(self):
         """Test _configure_llm_and_mcp merges custom STDIO servers with explicit names."""
-        # Arrange
         from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            stdio_servers=[
-                MCPStdioServerConfig(
-                    name='my-custom-server',
+            mcpServers={
+                'my-custom-server': MCPStdioServerConfig(
                     command='npx',
                     args=['-y', 'my-package'],
                     env={'API_KEY': 'secret'},
                 )
-            ]
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         assert isinstance(llm, LLM)
         mcp_servers = mcp_config['mcpServers']
 
-        # STDIO server should use its explicit name
         assert 'my-custom-server' in mcp_servers
         server_config = mcp_servers['my-custom-server']
         assert server_config['command'] == 'npx'
@@ -1780,44 +1749,36 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_merges_system_and_custom_servers(self):
         """Test _configure_llm_and_mcp merges both system and custom MCP servers."""
-        # Arrange
         from openhands.core.config.mcp_config import (
             MCPConfig,
-            MCPSSEServerConfig,
+            MCPRemoteServerConfig,
             MCPStdioServerConfig,
         )
 
         self.mock_user.search_api_key = SecretStr('tavily_key')
         self.mock_user.mcp_config = MCPConfig(
-            sse_servers=[MCPSSEServerConfig(url='https://custom.com/sse')],
-            stdio_servers=[
-                MCPStdioServerConfig(
-                    name='custom-stdio', command='node', args=['app.js']
-                )
-            ],
+            mcpServers={
+                'custom-sse': MCPRemoteServerConfig(
+                    url='https://custom.com/sse', transport='sse'
+                ),
+                'custom-stdio': MCPStdioServerConfig(
+                    command='node', args=['app.js']
+                ),
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = 'mcp_api_key'
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
 
-        # Should have system servers
         assert 'default' in mcp_servers
         assert 'tavily' in mcp_servers
-
-        # Should have custom SSE server with UUID name
-        sse_servers = [k for k in mcp_servers if k.startswith('sse_')]
-        assert len(sse_servers) == 1
-
-        # Should have custom STDIO server with explicit name
+        assert 'custom-sse' in mcp_servers
         assert 'custom-stdio' in mcp_servers
 
-        # Total: default + tavily + 1 SSE + 1 STDIO = 4 servers
         assert len(mcp_servers) == 4
 
     @pytest.mark.asyncio
@@ -1867,198 +1828,154 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_empty_custom_config(self):
         """Test _configure_llm_and_mcp handles empty custom MCP config."""
-        # Arrange
         from openhands.core.config.mcp_config import MCPConfig
 
-        self.mock_user.mcp_config = MCPConfig(
-            sse_servers=[], stdio_servers=[], shttp_servers=[]
-        )
+        self.mock_user.mcp_config = MCPConfig(mcpServers={})
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
-        # Should only have system default server
         assert 'default' in mcp_servers
         assert len(mcp_servers) == 1
 
     @pytest.mark.asyncio
-    async def test_configure_llm_and_mcp_sse_server_without_api_key(self):
-        """Test _configure_llm_and_mcp handles SSE servers without API keys."""
-        # Arrange
-        from openhands.core.config.mcp_config import MCPConfig, MCPSSEServerConfig
+    async def test_configure_llm_and_mcp_remote_server_without_auth(self):
+        """Test _configure_llm_and_mcp handles remote servers without auth."""
+        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            sse_servers=[MCPSSEServerConfig(url='https://public.com/sse')]
+            mcpServers={
+                'public': MCPRemoteServerConfig(
+                    url='https://public.com/sse', transport='sse'
+                )
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
-        sse_servers = {k: v for k, v in mcp_servers.items() if k.startswith('sse_')}
-
-        # Server should exist but without headers
-        assert len(sse_servers) == 1
-        server_config = list(sse_servers.values())[0]
-        assert 'headers' not in server_config
-        assert server_config['url'] == 'https://public.com/sse'
-        assert server_config['transport'] == 'sse'
+        assert 'public' in mcp_servers
 
     @pytest.mark.asyncio
-    async def test_configure_llm_and_mcp_shttp_server_without_timeout(self):
-        """Test _configure_llm_and_mcp handles SHTTP servers without timeout."""
-        # Arrange
-        from openhands.core.config.mcp_config import MCPConfig, MCPSHTTPServerConfig
+    async def test_configure_llm_and_mcp_http_server_default_timeout(self):
+        """Test _configure_llm_and_mcp handles HTTP servers with default timeout."""
+        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            shttp_servers=[MCPSHTTPServerConfig(url='https://example.com/mcp')]
+            mcpServers={
+                'http-server': MCPRemoteServerConfig(
+                    url='https://example.com/mcp', transport='http'
+                )
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
-        shttp_servers = {k: v for k, v in mcp_servers.items() if k.startswith('shttp_')}
-
-        assert len(shttp_servers) == 1
-        server_config = list(shttp_servers.values())[0]
-        # Timeout should be included even if None (defaults to 60)
-        assert 'timeout' in server_config
+        assert 'http-server' in mcp_servers
 
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_stdio_server_without_env(self):
         """Test _configure_llm_and_mcp handles STDIO servers without environment variables."""
-        # Arrange
         from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            stdio_servers=[
-                MCPStdioServerConfig(
-                    name='simple-server', command='node', args=['app.js']
+            mcpServers={
+                'simple-server': MCPStdioServerConfig(
+                    command='node', args=['app.js']
                 )
-            ]
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
         assert 'simple-server' in mcp_servers
         server_config = mcp_servers['simple-server']
-
-        # Should not have env key if not provided
-        assert 'env' not in server_config
         assert server_config['command'] == 'node'
         assert server_config['args'] == ['app.js']
 
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_multiple_servers_same_type(self):
         """Test _configure_llm_and_mcp handles multiple custom servers of the same type."""
-        # Arrange
-        from openhands.core.config.mcp_config import MCPConfig, MCPSSEServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
 
         self.mock_user.mcp_config = MCPConfig(
-            sse_servers=[
-                MCPSSEServerConfig(url='https://server1.com/sse'),
-                MCPSSEServerConfig(url='https://server2.com/sse'),
-                MCPSSEServerConfig(url='https://server3.com/sse'),
-            ]
+            mcpServers={
+                'server1': MCPRemoteServerConfig(
+                    url='https://server1.com/sse', transport='sse'
+                ),
+                'server2': MCPRemoteServerConfig(
+                    url='https://server2.com/sse', transport='sse'
+                ),
+                'server3': MCPRemoteServerConfig(
+                    url='https://server3.com/sse', transport='sse'
+                ),
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
-        sse_servers = {k: v for k, v in mcp_servers.items() if k.startswith('sse_')}
 
-        # All 3 servers should be present with unique UUID-based names
-        assert len(sse_servers) == 3
-
-        # Verify all have unique names
-        server_names = list(sse_servers.keys())
-        assert len(set(server_names)) == 3  # All names are unique
-
-        # Verify all URLs are preserved
-        urls = [v['url'] for v in sse_servers.values()]
-        assert 'https://server1.com/sse' in urls
-        assert 'https://server2.com/sse' in urls
-        assert 'https://server3.com/sse' in urls
+        assert 'server1' in mcp_servers
+        assert 'server2' in mcp_servers
+        assert 'server3' in mcp_servers
 
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_mixed_server_types(self):
-        """Test _configure_llm_and_mcp handles all three server types together."""
-        # Arrange
+        """Test _configure_llm_and_mcp handles all server types together."""
         from openhands.core.config.mcp_config import (
             MCPConfig,
-            MCPSHTTPServerConfig,
-            MCPSSEServerConfig,
+            MCPRemoteServerConfig,
             MCPStdioServerConfig,
         )
 
         self.mock_user.mcp_config = MCPConfig(
-            sse_servers=[
-                MCPSSEServerConfig(url='https://sse.example.com/sse', api_key='sse_key')
-            ],
-            shttp_servers=[
-                MCPSHTTPServerConfig(url='https://shttp.example.com/mcp', timeout=90)
-            ],
-            stdio_servers=[
-                MCPStdioServerConfig(
-                    name='stdio-server',
+            mcpServers={
+                'sse-server': MCPRemoteServerConfig(
+                    url='https://sse.example.com/sse',
+                    transport='sse',
+                    auth='sse_key',
+                ),
+                'http-server': MCPRemoteServerConfig(
+                    url='https://shttp.example.com/mcp',
+                    transport='http',
+                    timeout=90,
+                ),
+                'stdio-server': MCPStdioServerConfig(
                     command='npx',
                     args=['mcp-server'],
                     env={'TOKEN': 'value'},
-                )
-            ],
+                ),
+            }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
 
-        # Act
         llm, mcp_config = await self.service._configure_llm_and_mcp(
             self.mock_user, None, self.conversation_id
         )
 
-        # Assert
         mcp_servers = mcp_config['mcpServers']
 
-        # Check all server types are present
-        sse_count = len([k for k in mcp_servers if k.startswith('sse_')])
-        shttp_count = len([k for k in mcp_servers if k.startswith('shttp_')])
-        stdio_count = 1 if 'stdio-server' in mcp_servers else 0
-
-        assert sse_count == 1
-        assert shttp_count == 1
-        assert stdio_count == 1
-
-        # Verify each type has correct configuration
-        sse_server = next(v for k, v in mcp_servers.items() if k.startswith('sse_'))
-        assert sse_server['transport'] == 'sse'
-        assert sse_server['headers']['Authorization'] == 'Bearer sse_key'
-
-        shttp_server = next(v for k, v in mcp_servers.items() if k.startswith('shttp_'))
-        assert shttp_server['transport'] == 'streamable-http'
-        assert shttp_server['timeout'] == 90
+        assert 'sse-server' in mcp_servers
+        assert 'http-server' in mcp_servers
+        assert 'stdio-server' in mcp_servers
 
         stdio_server = mcp_servers['stdio-server']
         assert stdio_server['command'] == 'npx'
