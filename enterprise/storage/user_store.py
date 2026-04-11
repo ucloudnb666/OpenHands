@@ -1026,12 +1026,20 @@ class UserStore:
             True if user has custom settings, False if using old defaults
         """
         persisted_agent_settings = user_settings.agent_settings or {}
-        user_model = persisted_agent_settings.get("llm.model") or getattr(
-            user_settings, "llm_model", None
-        )
-        user_base_url = persisted_agent_settings.get("llm.base_url") or getattr(
-            user_settings, "llm_base_url", None
-        )
+        llm_settings = persisted_agent_settings.get("llm", {})
+        if isinstance(llm_settings, dict):
+            user_model = llm_settings.get("model")
+            user_base_url = llm_settings.get("base_url")
+        else:
+            user_model = None
+            user_base_url = None
+        # Fall back to legacy flat-key format or top-level attributes
+        user_model = user_model or persisted_agent_settings.get(
+            "llm.model"
+        ) or getattr(user_settings, "llm_model", None)
+        user_base_url = user_base_url or persisted_agent_settings.get(
+            "llm.base_url"
+        ) or getattr(user_settings, "llm_base_url", None)
 
         user_model = user_model.strip() or None if user_model else None
         user_base_url = user_base_url.strip() or None if user_base_url else None

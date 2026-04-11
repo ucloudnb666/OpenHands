@@ -107,8 +107,7 @@ async def test_create_org_success(mock_app):
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
+            'llm': {'model': 'claude-opus-4-5-20251101'},
         },
         enable_proactive_conversation_starters=True,
     )
@@ -143,7 +142,8 @@ async def test_create_org_success(mock_app):
         assert response_data['credits'] == 100.0
         assert response_data['org_version'] == 5
         assert (
-            response_data['agent_settings']['llm.model'] == 'claude-opus-4-5-20251101'
+            response_data['agent_settings']['llm']['model']
+            == 'claude-opus-4-5-20251101'
         )
 
 
@@ -432,9 +432,8 @@ async def test_create_org_sensitive_fields_not_exposed(mock_app):
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
-            'condenser.enabled': True,
+            'llm': {'model': 'claude-opus-4-5-20251101'},
+            'condenser': {'enabled': True},
         },
         enable_proactive_conversation_starters=True,
     )
@@ -515,8 +514,7 @@ async def test_list_user_orgs_success(mock_app_list):
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
+            'llm': {'model': 'claude-opus-4-5-20251101'},
         },
     )
     mock_user = MagicMock()
@@ -929,15 +927,14 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         contact_email='john@example.com',
         conversation_expiration=3600,
         agent_settings={
-            'schema_version': 1,
             'agent': 'CodeActAgent',
+            'llm': {'model': 'claude-opus-4-5-20251101', 'base_url': 'https://api.example.com'},
+            'condenser': {'enabled': True},
+        },
+        conversation_settings={
             'max_iterations': 50,
-            'security_analyzer': 'enabled',
+            'security_analyzer': 'llm',
             'confirmation_mode': True,
-            'llm.model': 'claude-opus-4-5-20251101',
-            'llm.base_url': 'https://api.example.com',
-            'condenser.enabled': True,
-            'mcp_config': {'key': 'value'},
         },
         remote_runtime_resource_factor=2,
         billing_margin=0.15,
@@ -979,8 +976,8 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         assert org_data['agent_settings']['max_iterations'] == 50
         assert org_data['agent_settings']['security_analyzer'] == 'enabled'
         assert org_data['agent_settings']['confirmation_mode'] is True
-        assert org_data['agent_settings']['llm.model'] == 'claude-opus-4-5-20251101'
-        assert org_data['agent_settings']['llm.base_url'] == 'https://api.example.com'
+        assert org_data['agent_settings']['llm']['model'] == 'claude-opus-4-5-20251101'
+        assert org_data['agent_settings']['llm']['base_url'] == 'https://api.example.com'
         assert org_data['remote_runtime_resource_factor'] == 2
         assert org_data['billing_margin'] == 0.15
         assert org_data['enable_proactive_conversation_starters'] is True
@@ -1032,9 +1029,8 @@ async def test_get_org_success(mock_app_with_get_user_id, mock_owner_role):
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
-            'condenser.enabled': True,
+            'llm': {'model': 'claude-opus-4-5-20251101'},
+            'condenser': {'enabled': True},
         },
         enable_proactive_conversation_starters=True,
     )
@@ -1313,9 +1309,8 @@ async def test_get_org_with_credits_none(mock_app_with_get_user_id, mock_owner_r
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
-            'condenser.enabled': True,
+            'llm': {'model': 'claude-opus-4-5-20251101'},
+            'condenser': {'enabled': True},
         },
         enable_proactive_conversation_starters=True,
     )
@@ -1363,9 +1358,8 @@ async def test_get_org_sensitive_fields_not_exposed(
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
-            'condenser.enabled': True,
+            'llm': {'model': 'claude-opus-4-5-20251101'},
+            'condenser': {'enabled': True},
         },
         search_api_key='secret-search-key-123',  # Should not be exposed
         sandbox_api_key='secret-sandbox-key-123',  # Should not be exposed
@@ -1892,7 +1886,7 @@ async def test_update_org_permission_denied_llm_settings(
     """
     # Arrange
     org_id = uuid.uuid4()
-    update_data = {'agent_settings_diff': {'llm.model': 'claude-opus-4-5-20251101'}}
+    update_data = {'agent_settings_diff': {'llm': {'model': 'claude-opus-4-5-20251101'}}}
 
     with (
         patch(
@@ -3020,9 +3014,9 @@ class TestGetMeEndpoint:
         """Create a MeResponse for testing."""
         agent_settings = {'schema_version': 1}
         if llm_model is not None:
-            agent_settings['llm.model'] = llm_model
+            agent_settings.setdefault('llm', {})['model'] = llm_model
         if llm_base_url is not None:
-            agent_settings['llm.base_url'] = llm_base_url
+            agent_settings.setdefault('llm', {})['base_url'] = llm_base_url
         if max_iterations is not None:
             agent_settings['max_iterations'] = max_iterations
 
@@ -3067,8 +3061,8 @@ class TestGetMeEndpoint:
         assert data['user_id'] == test_user_id
         assert data['email'] == 'owner@example.com'
         assert data['role'] == 'owner'
-        assert data['agent_settings']['llm.model'] == 'gpt-4'
-        assert data['agent_settings']['llm.base_url'] == 'https://api.example.com'
+        assert data['agent_settings']['llm']['model'] == 'gpt-4'
+        assert data['agent_settings']['llm']['base_url'] == 'https://api.example.com'
         assert data['agent_settings']['max_iterations'] == 50
         assert data['status'] == 'active'
 
@@ -3309,8 +3303,7 @@ async def test_switch_org_success(mock_app_with_get_user_id):
         contact_email='john@example.com',
         org_version=5,
         agent_settings={
-            'schema_version': 1,
-            'llm.model': 'claude-opus-4-5-20251101',
+            'llm': {'model': 'claude-opus-4-5-20251101'},
         },
     )
 

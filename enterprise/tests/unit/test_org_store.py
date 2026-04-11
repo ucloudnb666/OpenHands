@@ -510,9 +510,10 @@ async def test_persist_org_with_owner_with_multiple_fields(
         status='active',
         llm_api_key='test-key',
         agent_settings={
-            'schema_version': 1,
+            'llm': {'model': 'gpt-4'},
+        },
+        conversation_settings={
             'max_iterations': 100,
-            'llm.model': 'gpt-4',
         },
     )
 
@@ -539,8 +540,8 @@ async def test_persist_org_with_owner_with_multiple_fields(
             select(OrgMember).filter_by(org_id=org_id, user_id=user_id)
         )
         persisted_member = result_query.scalars().first()
-        assert persisted_member.agent_settings['max_iterations'] == 100
-        assert persisted_member.agent_settings['llm.model'] == 'gpt-4'
+        assert persisted_member.conversation_settings['max_iterations'] == 100
+        assert persisted_member.agent_settings['llm']['model'] == 'gpt-4'
 
 
 @pytest.mark.asyncio

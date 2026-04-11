@@ -19,14 +19,19 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
     user_settings = UserSettings(
         llm_api_key='legacy-secret',
         agent_settings={
-            'schema_version': 1,
             'agent': 'CodeActAgent',
+            'llm': {
+                'model': 'anthropic/claude-sonnet-4-5-20250929',
+                'base_url': 'https://api.example.com',
+            },
+            'condenser': {
+                'enabled': False,
+                'max_size': 128,
+            },
+        },
+        conversation_settings={
             'confirmation_mode': True,
             'security_analyzer': 'llm',
-            'condenser.enabled': False,
-            'condenser.max_size': 128,
-            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
-            'llm.base_url': 'https://api.example.com',
             'max_iterations': 42,
         },
     )
@@ -34,21 +39,14 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
     kwargs = OrgMemberStore.get_kwargs_from_user_settings(user_settings)
 
     assert kwargs['llm_api_key'] == 'legacy-secret'
-    assert (
-        kwargs['agent_settings']
-        | {
-            'schema_version': 1,
-            'agent': 'CodeActAgent',
-            'confirmation_mode': True,
-            'security_analyzer': 'llm',
-            'condenser.enabled': False,
-            'condenser.max_size': 128,
-            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
-            'llm.base_url': 'https://api.example.com',
-            'max_iterations': 42,
-        }
-        == kwargs['agent_settings']
-    )
+    assert kwargs['agent_settings']['agent'] == 'CodeActAgent'
+    assert kwargs['agent_settings']['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert kwargs['agent_settings']['llm']['base_url'] == 'https://api.example.com'
+    assert kwargs['agent_settings']['condenser']['enabled'] is False
+    assert kwargs['agent_settings']['condenser']['max_size'] == 128
+    assert kwargs['conversation_settings']['confirmation_mode'] is True
+    assert kwargs['conversation_settings']['security_analyzer'] == 'llm'
+    assert kwargs['conversation_settings']['max_iterations'] == 42
 
 
 def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides():
@@ -74,20 +72,28 @@ def test_get_agent_settings_diff_from_org_member_uses_canonical_snapshot_json():
         role_id=1,
         llm_api_key='legacy-secret',
         agent_settings={
-            'schema_version': 1,
             'agent': 'CodeActAgent',
-            'llm.model': 'member-model',
-            'llm.base_url': 'https://member.example.com',
+            'llm': {
+                'model': 'member-model',
+                'base_url': 'https://member.example.com',
+            },
+        },
+        conversation_settings={
             'max_iterations': 42,
             'confirmation_mode': True,
         },
     )
 
     assert OrgMemberStore.get_agent_settings_diff_from_org_member(org_member) == {
-        'schema_version': 1,
         'agent': 'CodeActAgent',
-        'llm.model': 'member-model',
-        'llm.base_url': 'https://member.example.com',
+        'llm': {
+            'model': 'member-model',
+            'base_url': 'https://member.example.com',
+        },
+    }
+    assert OrgMemberStore.get_conversation_settings_diff_from_org_member(
+        org_member
+    ) == {
         'max_iterations': 42,
         'confirmation_mode': True,
     }

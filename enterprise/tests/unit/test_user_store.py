@@ -694,8 +694,10 @@ def test_has_custom_settings_custom_base_url():
     user_settings = UserSettings(
         keycloak_user_id='test',
         agent_settings={
-            'llm.base_url': 'https://custom.api.example.com',
-            'llm.model': 'some-model',
+            'llm': {
+                'base_url': 'https://custom.api.example.com',
+                'model': 'some-model',
+            },
         },
     )
 
@@ -721,7 +723,7 @@ def test_has_custom_settings_empty_model():
 
     user_settings = UserSettings(
         keycloak_user_id='test',
-        agent_settings={'llm.model': '   '},
+        agent_settings={'llm': {'model': '   '}},
     )
 
     result = UserStore._has_custom_settings(user_settings, old_user_version=1)

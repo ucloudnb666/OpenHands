@@ -2225,9 +2225,12 @@ class TestOrgMemberServiceGetMe:
         member.role_id = 1
         member.llm_api_key = SecretStr('sk-test-key-12345')
         member.agent_settings = {
-            'schema_version': 1,
-            'llm.model': 'gpt-4',
-            'llm.base_url': 'https://api.example.com',
+            'llm': {
+                'model': 'gpt-4',
+                'base_url': 'https://api.example.com',
+            },
+        }
+        member.conversation_settings = {
             'max_iterations': 50,
         }
         member.status = 'active'
@@ -2277,8 +2280,8 @@ class TestOrgMemberServiceGetMe:
             assert result.user_id == str(current_user_id)
             assert result.email == 'test@example.com'
             assert result.role == 'owner'
-            assert result.agent_settings_diff['llm.model'] == 'gpt-4'
-            assert result.agent_settings_diff['max_iterations'] == 50
+            assert result.agent_settings_diff['llm']['model'] == 'gpt-4'
+            assert result.conversation_settings_diff['max_iterations'] == 50
             assert result.status == 'active'
 
     @pytest.mark.asyncio

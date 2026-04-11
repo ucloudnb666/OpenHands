@@ -143,8 +143,10 @@ class TestLiteLlmManager:
         user_settings = UserSettings()
         user_settings.agent_settings = {
             'agent': 'TestAgent',
-            'llm.model': 'test-model',
-            'llm.base_url': 'http://test.com',
+            'llm': {
+                'model': 'test-model',
+                'base_url': 'http://test.com',
+            },
         }
         user_settings.llm_api_key = SecretStr('test-key')
         user_settings.user_version = 4  # Set version to avoid None comparison

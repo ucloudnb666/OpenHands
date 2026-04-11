@@ -352,11 +352,9 @@ def org_with_multiple_members_fixture(session_maker):
             role_id=10,
             llm_api_key='admin-initial-key',
             agent_settings={
-                'schema_version': 1,
-                'llm.model': 'old-model-v1',
-                'llm.base_url': 'http://old-url-1.com',
-                'max_iterations': 10,
+                'llm': {'model': 'old-model-v1', 'base_url': 'http://old-url-1.com'},
             },
+            conversation_settings={'max_iterations': 10},
             status='active',
         )
         session.add(admin_member)
@@ -367,11 +365,9 @@ def org_with_multiple_members_fixture(session_maker):
             role_id=10,
             llm_api_key='member1-initial-key',
             agent_settings={
-                'schema_version': 1,
-                'llm.model': 'old-model-v2',
-                'llm.base_url': 'http://old-url-2.com',
-                'max_iterations': 20,
+                'llm': {'model': 'old-model-v2', 'base_url': 'http://old-url-2.com'},
             },
+            conversation_settings={'max_iterations': 20},
             status='active',
         )
         session.add(member1)
@@ -382,11 +378,9 @@ def org_with_multiple_members_fixture(session_maker):
             role_id=10,
             llm_api_key='member2-initial-key',
             agent_settings={
-                'schema_version': 1,
-                'llm.model': 'old-model-v3',
-                'llm.base_url': 'http://old-url-3.com',
-                'max_iterations': 30,
+                'llm': {'model': 'old-model-v3', 'base_url': 'http://old-url-3.com'},
             },
+            conversation_settings={'max_iterations': 30},
             status='active',
         )
         session.add(member2)
