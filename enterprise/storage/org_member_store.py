@@ -197,7 +197,7 @@ class OrgMemberStore:
 
             if email_filter:
                 query = query.join(User, User.id == OrgMember.user_id).filter(
-                    User.email.ilike(f"%{email_filter}%")
+                    User.email.ilike(f'%{email_filter}%')
                 )
 
             result = await session.execute(query)
@@ -233,7 +233,7 @@ class OrgMemberStore:
 
             # Apply email filter if provided
             if email_filter:
-                query = query.filter(User.email.ilike(f"%{email_filter}%"))
+                query = query.filter(User.email.ilike(f'%{email_filter}%'))
 
             query = query.order_by(OrgMember.user_id).offset(offset).limit(limit + 1)
 

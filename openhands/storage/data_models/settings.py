@@ -478,7 +478,7 @@ class Settings(BaseModel):
 
         return data
 
-    @field_serializer("secrets_store")
+    @field_serializer('secrets_store')
     def secrets_store_serializer(self, secrets: Secrets, info: SerializationInfo):
         return {'provider_tokens': {}}
 

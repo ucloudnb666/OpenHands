@@ -129,7 +129,7 @@ class OpenHandsMCPConfig:
         """Return a tavily stdio server entry if a Tavily API key is configured."""
         if (
             app_config.search_api_key
-            and app_config.search_api_key.get_secret_value().startswith("tvly-")
+            and app_config.search_api_key.get_secret_value().startswith('tvly-')
         ):
             logger.info("Adding search engine to MCP config")
             return {

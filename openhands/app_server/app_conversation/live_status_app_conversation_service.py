@@ -466,7 +466,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         try:
             # Build the URL with query parameters
             agent_server_url = self._get_agent_server_url(sandbox)
-            url = f"{agent_server_url.rstrip('/')}/api/conversations"
+            url = f'{agent_server_url.rstrip("/")}/api/conversations'
             params = {'ids': conversation_ids}
 
             # Set up headers
@@ -1572,7 +1572,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         agent_server_url = self._get_agent_server_url(sandbox)
 
         # Prepare the request
-        url = f"{agent_server_url.rstrip('/')}/api/conversations/{conversation_id}"
+        url = f'{agent_server_url.rstrip("/")}/api/conversations/{conversation_id}'
         headers = {}
         if sandbox.session_api_key:
             headers['X-Session-API-Key'] = sandbox.session_api_key

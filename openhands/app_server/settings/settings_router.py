@@ -97,7 +97,7 @@ def convert_to_settings(settings_with_token_data: Settings) -> Settings:
         if key in Settings.model_fields
     }
 
-    filtered_settings_data["search_api_key"] = settings_with_token_data.search_api_key
+    filtered_settings_data['search_api_key'] = settings_with_token_data.search_api_key
 
     # Create a new Settings instance
     settings = Settings(**filtered_settings_data)
