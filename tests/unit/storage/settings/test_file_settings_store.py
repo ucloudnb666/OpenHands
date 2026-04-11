@@ -67,9 +67,7 @@ async def test_store_and_load_data(file_settings_store):
     loaded_data = await file_settings_store.load()
     assert loaded_data is not None
     assert loaded_data.language == init_data.language
-    assert loaded_data.get_agent_setting('agent') == init_data.get_agent_setting(
-        'agent'
-    )
+    assert loaded_data.agent == init_data.agent
     assert (
         loaded_data.conversation_settings.max_iterations
         == init_data.conversation_settings.max_iterations
@@ -82,18 +80,14 @@ async def test_store_and_load_data(file_settings_store):
         loaded_data.conversation_settings.confirmation_mode
         == init_data.conversation_settings.confirmation_mode
     )
-    assert loaded_data.get_agent_setting('llm.model') == init_data.get_agent_setting(
-        'llm.model'
-    )
-    assert loaded_data.get_secret_agent_setting('llm.api_key')
-    assert init_data.get_secret_agent_setting('llm.api_key')
+    assert loaded_data.llm_model == init_data.llm_model
+    assert loaded_data.llm_api_key is not None
+    assert init_data.llm_api_key is not None
     assert (
-        loaded_data.get_secret_agent_setting('llm.api_key').get_secret_value()
-        == init_data.get_secret_agent_setting('llm.api_key').get_secret_value()
+        loaded_data.llm_api_key.get_secret_value()
+        == init_data.llm_api_key.get_secret_value()
     )
-    assert loaded_data.get_agent_setting('llm.base_url') == init_data.get_agent_setting(
-        'llm.base_url'
-    )
+    assert loaded_data.llm_base_url == init_data.llm_base_url
 
 
 @pytest.mark.asyncio

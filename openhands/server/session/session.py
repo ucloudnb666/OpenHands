@@ -188,7 +188,14 @@ class WebSession:
         )
 
         # Check if settings has custom mcp_config
-        custom_mcp_config = settings.to_legacy_mcp_config()
+        from openhands.storage.data_models.settings import sdk_mcp_config_to_legacy
+
+        sdk_mcp = settings.agent_settings.mcp_config
+        custom_mcp_config = (
+            sdk_mcp_config_to_legacy(sdk_mcp)
+            if sdk_mcp and sdk_mcp.mcpServers
+            else None
+        )
         if custom_mcp_config:
             # Use the provided MCP SHTTP servers instead of default setup
             self.config.mcp = self.config.mcp.merge(custom_mcp_config)

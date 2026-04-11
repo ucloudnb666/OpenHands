@@ -228,9 +228,7 @@ class OrgStore:
                 kwargs.pop('id')
 
             agent_settings_diff = kwargs.pop("agent_settings_diff", None)
-            conversation_settings_diff = kwargs.pop(
-                "conversation_settings_diff", None
-            )
+            conversation_settings_diff = kwargs.pop("conversation_settings_diff", None)
             for key, value in kwargs.items():
                 if hasattr(org, key):
                     setattr(org, key, value)
@@ -258,9 +256,7 @@ class OrgStore:
             for field in _ORG_SETTINGS_FIELDS
             if hasattr(settings, field)
         }
-        kwargs["agent_settings"] = settings.normalized_agent_settings(
-            strip_secret_values=True
-        )
+        kwargs["agent_settings"] = settings.agent_settings.model_dump(mode="json")
         kwargs["conversation_settings"] = settings.conversation_settings.model_dump(
             mode="json"
         )
@@ -275,9 +271,7 @@ class OrgStore:
         }
         kwargs["org_version"] = user_settings.user_version
         full_settings = user_settings.to_settings()
-        kwargs["agent_settings"] = full_settings.normalized_agent_settings(
-            strip_secret_values=True
-        )
+        kwargs["agent_settings"] = full_settings.agent_settings.model_dump(mode="json")
         kwargs["conversation_settings"] = (
             full_settings.conversation_settings.model_dump(mode="json")
         )

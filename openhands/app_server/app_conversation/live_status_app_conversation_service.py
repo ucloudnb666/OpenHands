@@ -466,7 +466,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         try:
             # Build the URL with query parameters
             agent_server_url = self._get_agent_server_url(sandbox)
-            url = f'{agent_server_url.rstrip("/")}/api/conversations'
+            url = f"{agent_server_url.rstrip('/')}/api/conversations"
             params = {'ids': conversation_ids}
 
             # Set up headers
@@ -1054,13 +1054,17 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             mcp_servers: Dictionary to add servers to
             user: User information containing custom MCP config
         """
-        if not user.mcp_config:
+        from openhands.storage.data_models.settings import sdk_mcp_config_to_legacy
+
+        sdk_mcp = user.agent_settings.mcp_config
+        if not sdk_mcp or not sdk_mcp.mcpServers:
             return
 
         try:
-            sse_count = len(user.mcp_config.sse_servers)
-            shttp_count = len(user.mcp_config.shttp_servers)
-            stdio_count = len(user.mcp_config.stdio_servers)
+            legacy_mcp = sdk_mcp_config_to_legacy(sdk_mcp)
+            sse_count = len(legacy_mcp.sse_servers)
+            shttp_count = len(legacy_mcp.shttp_servers)
+            stdio_count = len(legacy_mcp.stdio_servers)
 
             _logger.info(
                 f'Loading custom MCP config from user settings: '
@@ -1068,9 +1072,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
 
             # Add each type of custom server
-            self._add_custom_sse_servers(mcp_servers, user.mcp_config.sse_servers)
-            self._add_custom_shttp_servers(mcp_servers, user.mcp_config.shttp_servers)
-            self._add_custom_stdio_servers(mcp_servers, user.mcp_config.stdio_servers)
+            self._add_custom_sse_servers(mcp_servers, legacy_mcp.sse_servers)
+            self._add_custom_shttp_servers(mcp_servers, legacy_mcp.shttp_servers)
+            self._add_custom_stdio_servers(mcp_servers, legacy_mcp.stdio_servers)
 
             _logger.info(
                 f'Successfully merged custom MCP config: added {sse_count} SSE, '
@@ -1655,7 +1659,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         agent_server_url = self._get_agent_server_url(sandbox)
 
         # Prepare the request
-        url = f'{agent_server_url.rstrip("/")}/api/conversations/{conversation_id}'
+        url = f"{agent_server_url.rstrip('/')}/api/conversations/{conversation_id}"
         headers = {}
         if sandbox.session_api_key:
             headers['X-Session-API-Key'] = sandbox.session_api_key

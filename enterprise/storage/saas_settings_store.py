@@ -105,7 +105,7 @@ class SaasSettingsStore(SettingsStore):
 
     @staticmethod
     def _get_persisted_agent_settings(item: Settings) -> dict[str, Any]:
-        settings = item.normalized_agent_settings(strip_secret_values=True)
+        settings = item.agent_settings.model_dump(mode="json")
         settings.pop("mcp_config", None)
         return settings
 
@@ -264,12 +264,17 @@ class SaasSettingsStore(SettingsStore):
             kwargs = item.model_dump(context={"expose_secrets": True})
             kwargs.pop("agent_settings", None)
             kwargs.pop("conversation_settings", None)
-            legacy_mcp_config = item.to_legacy_mcp_config()
-            kwargs["mcp_config"] = (
-                legacy_mcp_config.model_dump(mode="python")
-                if legacy_mcp_config is not None
-                else None
+            from openhands.storage.data_models.settings import (
+                sdk_mcp_config_to_legacy,
             )
+
+            sdk_mcp = item.agent_settings.mcp_config
+            if sdk_mcp and sdk_mcp.mcpServers:
+                kwargs["mcp_config"] = sdk_mcp_config_to_legacy(sdk_mcp).model_dump(
+                    mode="python"
+                )
+            else:
+                kwargs["mcp_config"] = None
             for key, value in kwargs.items():
                 if hasattr(user, key):
                     setattr(user, key, value)
@@ -287,7 +292,7 @@ class SaasSettingsStore(SettingsStore):
                 ):
                     setattr(org, key, value)
 
-            current_member_llm_api_key = item.get_secret_agent_setting("llm.api_key")
+            current_member_llm_api_key = item.llm_api_key
             org_default_llm_api_key = org.llm_api_key
             org_default_llm_api_key_raw = (
                 org_default_llm_api_key.get_secret_value()
@@ -342,7 +347,7 @@ class SaasSettingsStore(SettingsStore):
         is valid in LiteLLM. If valid, reuses it. Otherwise, generates a new key.
         """
 
-        llm_api_key = item.get_secret_agent_setting("llm.api_key")
+        llm_api_key = item.llm_api_key
 
         # First, check if our current key is valid
         if llm_api_key and not await LiteLlmManager.verify_existing_key(
@@ -369,7 +374,7 @@ class SaasSettingsStore(SettingsStore):
                     None,
                 )
 
-            item.set_agent_setting("llm.api_key", SecretStr(generated_key))
+            item.llm_api_key = SecretStr(generated_key)
             logger.info(
                 'saas_settings_store:store:generated_openhands_key',
                 extra={'user_id': self.user_id},

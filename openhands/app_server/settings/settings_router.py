@@ -86,24 +86,18 @@ async def store_llm_settings(
 
 def convert_to_settings(settings_with_token_data: Settings) -> Settings:
     """Convert settings with token data to Settings model."""
-    settings_data = settings_with_token_data.model_dump()
+    settings_data = settings_with_token_data.model_dump(
+        mode="json", context={"expose_secrets": True}
+    )
 
     # Filter out additional fields from `SettingsWithTokenData`
     filtered_settings_data = {
         key: value
         for key, value in settings_data.items()
-        if key in Settings.model_fields  # Ensures only `Settings` fields are included
+        if key in Settings.model_fields
     }
 
-    # `model_dump()` exposes transport fields under their aliases, so preserve the
-    # underlying raw payloads explicitly when round-tripping into `Settings`.
-    filtered_settings_data['raw_agent_settings'] = dict(
-        settings_with_token_data.raw_agent_settings
-    )
-    filtered_settings_data['conversation_settings'] = (
-        settings_with_token_data.conversation_settings
-    )
-    filtered_settings_data['search_api_key'] = settings_with_token_data.search_api_key
+    filtered_settings_data["search_api_key"] = settings_with_token_data.search_api_key
 
     # Create a new Settings instance
     settings = Settings(**filtered_settings_data)

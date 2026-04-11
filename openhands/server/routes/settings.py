@@ -28,7 +28,12 @@ from openhands.server.user_auth import (
     get_user_settings,
     get_user_settings_store,
 )
-from openhands.storage.data_models.settings import Settings
+from openhands.storage.data_models.settings import (
+    Settings,
+    _lookup_dotted,
+    _sdk_schema_field_metadata,
+    _set_nested,
+)
 from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.settings_store import SettingsStore
 
@@ -43,89 +48,70 @@ def _get_conversation_settings_schema() -> dict[str, Any]:
     return ConversationSettings.export_schema().model_dump(mode='json')
 
 
-def _get_schema_field_keys(schema: dict[str, Any] | None) -> set[str]:
-    if not schema:
-        return set()
-    return {
-        field['key']
-        for section in schema.get('sections', [])
-        for field in section.get('fields', [])
-    }
+_SECRET_REDACTED = "<hidden>"
 
 
-def _get_schema_secret_field_keys(schema: dict[str, Any] | None) -> set[str]:
-    if not schema:
-        return set()
-    return {
-        field['key']
-        for section in schema.get('sections', [])
-        for field in section.get('fields', [])
-        if field.get('secret')
-    }
-
-
-_SECRET_REDACTED = '<hidden>'
-
-
-def _extract_agent_settings(
-    settings: Settings, schema: dict[str, Any] | None
-) -> dict[str, Any]:
+def _extract_agent_settings(settings: Settings) -> dict[str, Any]:
     """Build the agent_settings dict for the GET response.
 
     Secret fields with a value are redacted to ``"<hidden>"``;
     unset secrets become ``None``.
     """
+    _, secret_keys = _sdk_schema_field_metadata()
     values = settings.agent_settings_values()
-    for field_key in _get_schema_secret_field_keys(schema):
-        secret_value = settings.get_secret_agent_setting(field_key)
+    for field_key in secret_keys:
         raw = values.get(field_key)
-        values[field_key] = _SECRET_REDACTED if secret_value or raw else None
+        values[field_key] = _SECRET_REDACTED if raw else None
     return values
-
-
-_SETTINGS_FROZEN_FIELDS = frozenset(
-    name for name, field_info in Settings.model_fields.items() if field_info.frozen
-)
 
 
 def _apply_settings_payload(
     payload: dict[str, Any],
     existing_settings: Settings | None,
-    agent_schema: dict[str, Any] | None,
-    conversation_schema: dict[str, Any] | None,
 ) -> Settings:
-    """Apply an incoming settings payload.
+    """Apply an incoming settings payload using Settings.update().
 
-    SDK dotted keys (e.g. ``llm.model``) go into ``agent_settings``.
-    Other keys (e.g. ``language``, ``git_user_name``) are set directly
-    on the ``Settings`` model.
+    SDK dotted keys (e.g. ``llm.model``) are converted to nested dicts
+    and routed to ``agent_settings``. Conversation keys go to
+    ``conversation_settings``. Everything else is a top-level field.
     """
     settings = existing_settings.model_copy() if existing_settings else Settings()
 
-    schema_field_keys = _get_schema_field_keys(agent_schema)
-    secret_field_keys = _get_schema_secret_field_keys(agent_schema)
-    conversation_field_keys = _get_schema_field_keys(conversation_schema)
+    field_keys, secret_keys = _sdk_schema_field_metadata()
+    conv_keys = frozenset(
+        f.key for s in ConversationSettings.export_schema().sections for f in s.fields
+    )
+
+    agent_update: dict[str, Any] = {}
+    conv_update: dict[str, Any] = {}
+    top_level: dict[str, Any] = {}
 
     for key, value in payload.items():
-        if key in schema_field_keys:
-            if key in secret_field_keys and value == _SECRET_REDACTED:
+        if key in field_keys:
+            if key in secret_keys and value == _SECRET_REDACTED:
                 continue
-            if key in secret_field_keys and (value is None or value == ''):
-                settings.set_agent_setting(key, None)
-                continue
-            settings.set_agent_setting(key, value)
+            if key in secret_keys and (value is None or value == ""):
+                value = None
+            # Convert dotted key to nested dict
+            _set_nested(agent_update, key.split("."), value)
             continue
-        if key in conversation_field_keys:
-            setattr(settings.conversation_settings, key, value)
+        if key in conv_keys:
+            conv_update[key] = value
             continue
         if key == 'conversation_settings' and isinstance(value, dict):
             for conv_key, conv_value in value.items():
-                if conv_key in conversation_field_keys:
-                    setattr(settings.conversation_settings, conv_key, conv_value)
+                if conv_key in conv_keys:
+                    conv_update[conv_key] = conv_value
             continue
-        if key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
-            setattr(settings, key, value)
+        top_level[key] = value
 
+    update_payload: dict[str, Any] = {}
+    if agent_update:
+        update_payload["agent_settings"] = agent_update
+    if conv_update:
+        update_payload["conversation_settings"] = conv_update
+    update_payload.update(top_level)
+    settings.update(update_payload)
     return settings
 
 
@@ -164,12 +150,10 @@ async def load_settings(
                 content={'error': 'Settings not found'},
             )
 
-        # On initial load, user secrets may not be populated with values migrated from settings store
         user_secrets = await invalidate_legacy_secrets_store(
             settings, settings_store, secrets_store
         )
 
-        # If invalidation is successful, then the returned user secrets holds the most recent values
         git_providers = (
             user_secrets.provider_tokens if user_secrets else provider_tokens
         )
@@ -180,9 +164,9 @@ async def load_settings(
                 if provider_token.token or provider_token.user_id:
                     provider_tokens_set[provider_type.value] = provider_token.host
 
-        agent_vals = _extract_agent_settings(settings, _get_agent_settings_schema())
+        agent_vals = _extract_agent_settings(settings)
         settings_payload = settings.model_dump(
-            mode='json', exclude={'raw_agent_settings', 'conversation_settings'}
+            mode="json", exclude={"agent_settings", "conversation_settings"}
         )
         settings_payload.update(
             {
@@ -212,10 +196,6 @@ async def load_settings(
         )
 
 
-# NOTE: We use response_model=None for endpoints that return JSONResponse directly.
-# This is because FastAPI's response_model expects a Pydantic model, but we're returning
-# a response object directly. We document the possible responses using the 'responses'
-# parameter and maintain proper type annotations for mypy.
 @app.post(
     '/settings',
     response_model=None,
@@ -231,14 +211,7 @@ async def store_settings(
 ) -> JSONResponse:
     try:
         existing_settings = await settings_store.load()
-        agent_settings_schema = _get_agent_settings_schema()
-        conversation_settings_schema = _get_conversation_settings_schema()
-        settings = _apply_settings_payload(
-            payload,
-            existing_settings,
-            agent_settings_schema,
-            conversation_settings_schema,
-        )
+        settings = _apply_settings_payload(payload, existing_settings)
 
         if existing_settings:
             if 'search_api_key' not in payload and settings.search_api_key is None:
@@ -247,18 +220,14 @@ async def store_settings(
                 settings.user_consents_to_analytics = (
                     existing_settings.user_consents_to_analytics
                 )
-
-            # Keep existing disabled_skills if not provided
             if settings.disabled_skills is None:
                 settings.disabled_skills = existing_settings.disabled_skills
 
-        # Update sandbox config with new settings
         if settings.remote_runtime_resource_factor is not None:
             config.sandbox.remote_runtime_resource_factor = (
                 settings.remote_runtime_resource_factor
             )
 
-        # Update git configuration with new settings
         git_config_updated = False
         if settings.git_user_name is not None:
             config.git_user_name = settings.git_user_name

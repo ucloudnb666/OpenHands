@@ -49,7 +49,7 @@ from openhands.storage.data_models.settings import SandboxGroupingStrategy, Sett
 
 
 def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
-    agent_vals = dict(getattr(user, 'raw_agent_settings', {}))
+    agent_vals: dict = {}
     model = getattr(user, 'llm_model', '') or ''
     agent_vals.setdefault('llm.model', model)
 
@@ -57,7 +57,7 @@ def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
     if llm_api_key:
         agent_vals.setdefault('llm.api_key', llm_api_key)
 
-    mcp_config = getattr(user, 'mcp_config', None)
+    mcp_config = getattr(user, "_mcp_config", None)
     if mcp_config and 'mcp_config' not in agent_vals:
         agent_vals['mcp_config'] = mcp_config.model_dump(mode='python')
 
@@ -82,7 +82,7 @@ class _TestUserInfo(SimpleNamespace):
 
     @agent_settings.setter
     def agent_settings(self, value):
-        self.raw_agent_settings = value
+        object.__setattr__(self, "_agent_settings_override", value)
 
     @property
     def conversation_settings(self) -> ConversationSettings:
@@ -94,21 +94,6 @@ class _TestUserInfo(SimpleNamespace):
         if max_iter is not None:
             kwargs['max_iterations'] = max_iter
         return ConversationSettings(**kwargs)
-
-    @property
-    def raw_agent_settings(self) -> dict:
-        return getattr(self, '_raw_agent_settings', {})
-
-    @raw_agent_settings.setter
-    def raw_agent_settings(self, value):
-        object.__setattr__(self, '_raw_agent_settings', value or {})
-
-    def to_legacy_mcp_config(self):
-        agent_vals = dict(self.raw_agent_settings)
-        mcp_config = getattr(self, 'mcp_config', None)
-        if mcp_config and 'mcp_config' not in agent_vals:
-            agent_vals['mcp_config'] = mcp_config.model_dump(mode='python')
-        return Settings(agent_settings=agent_vals).to_legacy_mcp_config()
 
     def to_agent_settings(self) -> AgentSettings:
         return self.agent_settings

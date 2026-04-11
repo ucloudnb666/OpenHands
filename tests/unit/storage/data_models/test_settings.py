@@ -9,11 +9,10 @@ from openhands.core.config.mcp_config import MCPConfig as LegacyMCPConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
 from openhands.core.config.security_config import SecurityConfig
-from openhands.storage.data_models.settings import Settings
+from openhands.storage.data_models.settings import Settings, sdk_mcp_config_to_legacy
 
 
 def test_settings_from_config():
-    # Mock configuration
     mock_app_config = OpenHandsConfig(
         default_agent='test-agent',
         max_iterations=100,
@@ -39,22 +38,18 @@ def test_settings_from_config():
 
         assert settings is not None
         assert settings.language == 'en'
-        assert settings.get_agent_setting('agent') == 'test-agent'
+        assert settings.agent == "test-agent"
         assert settings.conversation_settings.max_iterations == 100
         assert settings.conversation_settings.security_analyzer == 'llm'
         assert settings.conversation_settings.confirmation_mode is True
-        assert settings.get_agent_setting('llm.model') == 'test-model'
-        assert (
-            settings.get_secret_agent_setting('llm.api_key').get_secret_value()
-            == 'test-key'
-        )
-        assert settings.get_agent_setting('llm.base_url') == 'https://test.example.com'
+        assert settings.llm_model == "test-model"
+        assert settings.llm_api_key.get_secret_value() == "test-key"
+        assert settings.llm_base_url == "https://test.example.com"
         assert settings.remote_runtime_resource_factor == 2
         assert not settings.secrets_store.provider_tokens
 
 
 def test_settings_from_config_no_api_key():
-    # Mock configuration without API key
     mock_app_config = OpenHandsConfig(
         default_agent='test-agent',
         max_iterations=100,
@@ -91,7 +86,7 @@ def test_settings_handles_sensitive_data():
         remote_runtime_resource_factor=2,
     )
 
-    llm_api_key = settings.get_secret_agent_setting('llm.api_key')
+    llm_api_key = settings.llm_api_key
     assert str(llm_api_key) == '**********'
     assert llm_api_key.get_secret_value() == 'test-key'
 
@@ -119,18 +114,17 @@ def test_settings_preserve_agent_settings():
         },
     )
 
-    assert (
-        settings.get_secret_agent_setting('llm.api_key').get_secret_value()
-        == 'test-key'
+    assert settings.llm_api_key.get_secret_value() == "test-key"
+    dump = settings.agent_settings.model_dump(
+        mode="json", context={"expose_secrets": True}
     )
-    persisted = settings.normalized_agent_settings()
 
-    assert persisted['schema_version'] == 1
-    assert persisted['llm']['model'] == 'test-model'
-    assert persisted['llm']['api_key'] == 'test-key'
-    assert persisted['verification']['critic_enabled'] is True
-    assert persisted['verification']['critic_mode'] == 'all_actions'
-    assert persisted['llm']['litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
+    assert dump["schema_version"] == 1
+    assert dump["llm"]["model"] == "test-model"
+    assert dump["llm"]["api_key"] == "test-key"
+    assert dump["verification"]["critic_enabled"] is True
+    assert dump["verification"]["critic_mode"] == "all_actions"
+    assert dump["llm"]["litellm_extra_body"] == {"metadata": {"tier": "pro"}}
 
 
 def test_settings_to_agent_settings_uses_agent_vals():
@@ -167,69 +161,84 @@ def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
         },
     )
 
-    assert settings.raw_agent_settings['mcp_config'] == {
-        'mcpServers': {'sse_0': {'transport': 'sse', 'url': 'https://example.com/sse'}}
-    }
-    assert settings.agent_settings_values()['mcp_config'] == {
-        'mcpServers': {'sse_0': {'transport': 'sse', 'url': 'https://example.com/sse'}}
-    }
-    assert settings.to_legacy_mcp_config() == LegacyMCPConfig.model_validate(
-        {'sse_servers': [{'url': 'https://example.com/sse'}]}
+    mcp_config = settings.agent_settings.mcp_config
+    assert mcp_config is not None
+    servers = mcp_config.mcpServers
+    assert "sse_0" in servers
+    assert servers["sse_0"].transport == "sse"
+    assert servers["sse_0"].url == "https://example.com/sse"
+
+    api_values = settings.agent_settings_values()
+    assert "sse_0" in api_values["mcp_config"]["mcpServers"]
+
+    legacy = sdk_mcp_config_to_legacy(mcp_config)
+    assert legacy == LegacyMCPConfig.model_validate(
+        {"sse_servers": [{"url": "https://example.com/sse"}]}
     )
 
 
-def test_settings_set_agent_setting_keeps_sdk_mcp_shape_for_persistence():
+def test_settings_update_mcp_config():
     settings = Settings(agent_settings={'llm.model': 'sdk-model'})
 
-    settings.set_agent_setting(
-        'mcp_config',
+    settings.update(
         {
-            'mcpServers': {
-                'custom': {'transport': 'http', 'url': 'https://example.com/mcp'}
+            "agent_settings": {
+                "mcp_config": {
+                    "mcpServers": {
+                        "custom": {
+                            "transport": "http",
+                            "url": "https://example.com/mcp",
+                        }
+                    }
+                }
             }
-        },
+        }
     )
 
-    assert settings.raw_agent_settings['mcp_config'] == {
-        'mcpServers': {
-            'custom': {
-                'transport': 'http',
-                'url': 'https://example.com/mcp',
-            }
-        }
-    }
-    assert settings.agent_settings_values()['mcp_config'] == {
-        'mcpServers': {
-            'custom': {
-                'transport': 'http',
-                'url': 'https://example.com/mcp',
-            }
-        }
-    }
-    assert settings.to_legacy_mcp_config() == LegacyMCPConfig.model_validate(
-        {'shttp_servers': [{'url': 'https://example.com/mcp', 'timeout': 60}]}
+    mcp = settings.agent_settings.mcp_config
+    assert mcp is not None
+    assert "custom" in mcp.mcpServers
+    assert mcp.mcpServers["custom"].transport == "http"
+    assert mcp.mcpServers["custom"].url == "https://example.com/mcp"
+
+    legacy = sdk_mcp_config_to_legacy(mcp)
+    assert legacy == LegacyMCPConfig.model_validate(
+        {"shttp_servers": [{"url": "https://example.com/mcp", "timeout": 60}]}
     )
+
+
+def test_settings_update_batch():
+    settings = Settings()
+    settings.update(
+        {
+            "language": "fr",
+            "agent_settings": {
+                "agent": "TestAgent",
+                "llm": {"model": "new-model", "api_key": "new-key"},
+            },
+            "conversation_settings": {
+                "max_iterations": 200,
+            },
+        }
+    )
+    assert settings.language == "fr"
+    assert settings.agent == "TestAgent"
+    assert settings.llm_model == "new-model"
+    assert settings.llm_api_key.get_secret_value() == "new-key"
+    assert settings.conversation_settings.max_iterations == 200
 
 
 def test_settings_no_pydantic_frozen_field_warning():
-    """Test that Settings model does not trigger Pydantic UnsupportedFieldAttributeWarning.
-
-    This test ensures that the 'frozen' parameter is not incorrectly used in Field()
-    definitions, which would cause warnings in Pydantic v2 for union types.
-    See: https://github.com/All-Hands-AI/infra/issues/860
-    """
+    """Test that Settings model does not trigger Pydantic UnsupportedFieldAttributeWarning."""
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
 
-        # Re-import to trigger any warnings during model definition
         import importlib
 
         import openhands.storage.data_models.settings
 
         importlib.reload(openhands.storage.data_models.settings)
 
-        # Check for warnings containing 'frozen' which would indicate
-        # incorrect usage of frozen=True in Field()
         frozen_warnings = [
             warning for warning in w if 'frozen' in str(warning.message).lower()
         ]

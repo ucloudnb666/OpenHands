@@ -523,8 +523,13 @@ class SaasNestedConversationManager(ConversationManager):
         mcp_config = await self._get_mcp_config(user_id)
         if mcp_config:
             # Merge with any MCP config from settings
-            settings_mcp_config = settings.to_legacy_mcp_config()
-            if settings_mcp_config:
+            from openhands.storage.data_models.settings import (
+                sdk_mcp_config_to_legacy,
+            )
+
+            sdk_mcp = settings.agent_settings.mcp_config
+            if sdk_mcp and sdk_mcp.mcpServers:
+                settings_mcp_config = sdk_mcp_config_to_legacy(sdk_mcp)
                 mcp_config = mcp_config.merge(settings_mcp_config)
             # Check again since theoretically merge could return None.
             if mcp_config:
@@ -795,7 +800,7 @@ class SaasNestedConversationManager(ConversationManager):
         response_ids = await self.get_running_agent_loops(user_id)
         if len(response_ids) >= self.config.max_concurrent_conversations:
             logger.info(
-                f'too_many_sessions_for:{user_id or ""}',
+                f"too_many_sessions_for:{user_id or ''}",
                 extra={'session_id': sid, 'user_id': user_id},
             )
             # Get the conversations sorted (oldest first)
@@ -806,7 +811,7 @@ class SaasNestedConversationManager(ConversationManager):
             while len(conversations) >= self.config.max_concurrent_conversations:
                 oldest_conversation_id = conversations.pop().conversation_id
                 logger.debug(
-                    f'closing_from_too_many_sessions:{user_id or ""}:{oldest_conversation_id}',
+                    f"closing_from_too_many_sessions:{user_id or ''}:{oldest_conversation_id}",
                     extra={'session_id': oldest_conversation_id, 'user_id': user_id},
                 )
                 # Send status message to client and close session.
