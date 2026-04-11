@@ -549,7 +549,12 @@ class OrgService:
             )
             return existing_org
 
-        restricted_fields = {'agent_settings_diff', 'search_api_key', 'sandbox_api_key'}
+        restricted_fields = {
+            'agent_settings_diff',
+            'conversation_settings_diff',
+            'search_api_key',
+            'sandbox_api_key',
+        }
         if restricted_fields.intersection(
             update_dict
         ) and not await OrgService.has_admin_or_owner_role(user_id, org_id):

@@ -481,6 +481,11 @@ class OrgStore:
                     org.agent_settings,
                     llm_settings.agent_settings_diff,
                 )
+            if llm_settings.conversation_settings_diff is not None:
+                org.conversation_settings = deep_merge(
+                    org.conversation_settings,
+                    llm_settings.conversation_settings_diff,
+                )
 
             # Propagate relevant settings to all org members
             member_updates = llm_settings.get_member_updates()
