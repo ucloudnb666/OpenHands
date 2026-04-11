@@ -44,7 +44,7 @@ from openhands.app_server.status.system_stats import (
     get_system_stats,
     update_last_execution_time,
 )
-from openhands.core.config.mcp_config import MCPStdioServerConfig
+from openhands.core.config.mcp_config import MCPStdioServerConfig  # noqa: F401
 from openhands.core.exceptions import BrowserUnavailableException
 from openhands.core.logger import get_uvicorn_log_config
 from openhands.core.logger import openhands_logger as logger

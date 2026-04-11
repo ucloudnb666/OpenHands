@@ -16,7 +16,6 @@ from pydantic import (
 )
 
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig as LegacyMCPConfig
 from openhands.core.config.utils import load_openhands_config
 from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.storage.data_models.secrets import Secrets
@@ -53,12 +52,11 @@ def _sdk_schema_field_metadata() -> tuple[set[str], set[str]]:
 
 
 def _coerce_value(value: Any) -> Any:
-    """Unwrap SecretStr and legacy config objects to plain values."""
+    """Unwrap SecretStr to plain values."""
     if isinstance(value, SecretStr):
         return value.get_secret_value()
-    if isinstance(value, LegacyMCPConfig):
-        sdk = _legacy_mcp_config_to_sdk(value)
-        return sdk.model_dump(exclude_none=True, exclude_defaults=True) if sdk else None
+    if isinstance(value, SDKMCPConfig):
+        return value.model_dump(exclude_none=True, exclude_defaults=True) or None
     return value
 
 
@@ -96,100 +94,28 @@ def _normalize_model_name(key: str, value: Any) -> Any:
     return value
 
 
-def _legacy_mcp_config_to_sdk(value: LegacyMCPConfig) -> SDKMCPConfig | None:
-    mcp_servers: dict[str, Any] = {}
-
-    for index, sse_server in enumerate(value.sse_servers):
-        sse_server_config: dict[str, Any] = {
-            'transport': 'sse',
-            'url': sse_server.url,
-        }
-        if sse_server.api_key:
-            sse_server_config['auth'] = sse_server.api_key
-        mcp_servers[f'sse_{index}'] = sse_server_config
-
-    for index, shttp_server in enumerate(value.shttp_servers):
-        shttp_server_config: dict[str, Any] = {
-            'transport': 'http',
-            'url': shttp_server.url,
-        }
-        if shttp_server.api_key:
-            shttp_server_config['auth'] = shttp_server.api_key
-        if shttp_server.timeout is not None:
-            shttp_server_config['timeout'] = shttp_server.timeout
-        mcp_servers[f'shttp_{index}'] = shttp_server_config
-
-    for stdio_server in value.stdio_servers:
-        stdio_server_config: dict[str, Any] = {'command': stdio_server.command}
-        if stdio_server.args:
-            stdio_server_config['args'] = list(stdio_server.args)
-        if stdio_server.env:
-            stdio_server_config['env'] = dict(stdio_server.env)
-        mcp_servers[stdio_server.name] = stdio_server_config
-
-    if not mcp_servers:
-        return None
-    return SDKMCPConfig.model_validate({'mcpServers': mcp_servers})
-
-
-def sdk_mcp_config_to_legacy(value: SDKMCPConfig) -> LegacyMCPConfig:
-    raw_config = value.model_dump(exclude_none=True)
-    sse_servers: list[dict[str, Any]] = []
-    shttp_servers: list[dict[str, Any]] = []
-    stdio_servers: list[dict[str, Any]] = []
-
-    for server_name, server_config in raw_config.get('mcpServers', {}).items():
-        url = server_config.get('url')
-        if url:
-            transport = server_config.get('transport')
-            if transport is None:
-                transport = 'sse' if '/sse' in str(url).lower() else 'http'
-
-            legacy_server: dict[str, Any] = {'url': url}
-            auth = server_config.get('auth')
-            if isinstance(auth, str) and auth != 'oauth':
-                legacy_server['api_key'] = auth
-
-            if transport == 'sse':
-                sse_servers.append(legacy_server)
-                continue
-
-            if server_config.get('timeout') is not None:
-                legacy_server['timeout'] = server_config['timeout']
-            shttp_servers.append(legacy_server)
-            continue
-
-        stdio_server: dict[str, Any] = {
-            'name': server_name,
-            'command': server_config['command'],
-        }
-        if server_config.get('args'):
-            stdio_server['args'] = server_config['args']
-        if server_config.get('env'):
-            stdio_server['env'] = server_config['env']
-        stdio_servers.append(stdio_server)
-
-    return LegacyMCPConfig.model_validate(
-        {
-            'sse_servers': sse_servers,
-            'shttp_servers': shttp_servers,
-            'stdio_servers': stdio_servers,
-        }
-    )
-
-
 def _sdk_mcp_config_from_value(value: Any) -> SDKMCPConfig | None:
+    """Convert various MCP config representations to SDKMCPConfig.
+
+    Handles: SDKMCPConfig instances, dicts with 'mcpServers', and legacy
+    dicts with 'sse_servers'/'shttp_servers'/'stdio_servers'.
+    """
     if value in (None, {}):
         return None
     if isinstance(value, SDKMCPConfig):
         return value if value.mcpServers else None
-    if isinstance(value, LegacyMCPConfig):
-        return _legacy_mcp_config_to_sdk(value)
-    if isinstance(value, dict) and 'mcpServers' in value:
-        if not value.get('mcpServers'):
-            return None
-        return SDKMCPConfig.model_validate(value)
-    return _legacy_mcp_config_to_sdk(LegacyMCPConfig.model_validate(value))
+    if isinstance(value, dict):
+        if 'mcpServers' in value:
+            if not value.get('mcpServers'):
+                return None
+            return SDKMCPConfig.model_validate(value)
+        # Legacy dict format with sse_servers/shttp_servers/stdio_servers
+        from openhands.core.config.mcp_config import mcp_config_from_toml
+
+        result = mcp_config_from_toml(value)
+        cfg = result.get('mcp')
+        return cfg if cfg and cfg.mcpServers else None
+    return None
 
 
 def _merge_sdk_mcp_configs(

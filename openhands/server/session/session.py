@@ -20,7 +20,11 @@ from openhands.core.config.condenser_config import (
     ConversationWindowCondenserConfig,
     LLMSummarizingCondenserConfig,
 )
-from openhands.core.config.mcp_config import OpenHandsMCPConfigImpl
+from openhands.core.config.mcp_config import (
+    MCPConfig,
+    OpenHandsMCPConfigImpl,
+    merge_mcp_configs,
+)
 from openhands.core.exceptions import MicroagentValidationError
 from openhands.core.logger import OpenHandsLoggerAdapter
 from openhands.core.schema import AgentState
@@ -187,35 +191,23 @@ class WebSession:
             f'MCP configuration before setup - self.config.mcp_config: {sanitize_dict(self.config.mcp.model_dump())}'
         )
 
-        # Check if settings has custom mcp_config
-        from openhands.storage.data_models.settings import sdk_mcp_config_to_legacy
-
+        # Merge user's custom MCP servers from settings
         sdk_mcp = settings.agent_settings.mcp_config
-        custom_mcp_config = (
-            sdk_mcp_config_to_legacy(sdk_mcp)
-            if sdk_mcp and sdk_mcp.mcpServers
-            else None
-        )
-        if custom_mcp_config:
-            # Use the provided MCP SHTTP servers instead of default setup
-            self.config.mcp = self.config.mcp.merge(custom_mcp_config)
+        if sdk_mcp and sdk_mcp.mcpServers:
+            self.config.mcp = merge_mcp_configs(self.config.mcp, sdk_mcp)
             self.logger.debug(
-                f'Merged custom MCP Config: {sanitize_dict(custom_mcp_config.model_dump())}'
+                f'Merged custom MCP Config: {sanitize_dict(sdk_mcp.model_dump())}'
             )
 
-        # Add OpenHands' MCP server by default
-        (
-            openhands_mcp_server,
-            openhands_mcp_stdio_servers,
-        ) = await OpenHandsMCPConfigImpl.create_default_mcp_server_config(
+        # Add OpenHands' default MCP servers
+        default_servers = await OpenHandsMCPConfigImpl.create_default_mcp_server_config(
             self.config.mcp_host, self.config, self.user_id
         )
-
-        if openhands_mcp_server:
-            self.config.mcp.shttp_servers.append(openhands_mcp_server)
-            self.logger.debug('Added default MCP HTTP server to config')
-
-            self.config.mcp.stdio_servers.extend(openhands_mcp_stdio_servers)
+        if default_servers:
+            self.config.mcp = MCPConfig(
+                mcpServers={**self.config.mcp.mcpServers, **default_servers}
+            )
+            self.logger.debug('Added default MCP servers to config')
 
         self.logger.debug(
             f'MCP configuration after setup - self.config.mcp: {sanitize_dict(self.config.mcp.model_dump())}'

@@ -264,15 +264,10 @@ class SaasSettingsStore(SettingsStore):
             kwargs = item.model_dump(context={"expose_secrets": True})
             kwargs.pop("agent_settings", None)
             kwargs.pop("conversation_settings", None)
-            from openhands.storage.data_models.settings import (
-                sdk_mcp_config_to_legacy,
-            )
 
             sdk_mcp = item.agent_settings.mcp_config
             if sdk_mcp and sdk_mcp.mcpServers:
-                kwargs["mcp_config"] = sdk_mcp_config_to_legacy(sdk_mcp).model_dump(
-                    mode="python"
-                )
+                kwargs["mcp_config"] = sdk_mcp.model_dump(mode="python")
             else:
                 kwargs["mcp_config"] = None
             for key, value in kwargs.items():

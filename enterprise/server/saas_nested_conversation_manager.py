@@ -27,7 +27,7 @@ from storage.stored_conversation_metadata_saas import StoredConversationMetadata
 
 from openhands.controller.agent import Agent
 from openhands.core.config import LLMConfig, OpenHandsConfig
-from openhands.core.config.mcp_config import MCPConfig, MCPSHTTPServerConfig
+from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import MessageAction
 from openhands.events.event_store import EventStore
@@ -497,10 +497,16 @@ class SaasNestedConversationManager(ConversationManager):
         if not mcp_api_key:
             return None
         web_host = os.environ.get('WEB_HOST', 'app.all-hands.dev')
-        shttp_servers = [
-            MCPSHTTPServerConfig(url=f'https://{web_host}/mcp/mcp', api_key=mcp_api_key)
-        ]
-        return MCPConfig(shttp_servers=shttp_servers)
+        return MCPConfig(
+            mcpServers={
+                'openhands': MCPRemoteServerConfig(
+                    url=f'https://{web_host}/mcp/mcp',
+                    transport='http',
+                    auth=mcp_api_key,
+                    timeout=60,
+                )
+            }
+        )
 
     async def _create_nested_conversation(
         self,
@@ -523,15 +529,11 @@ class SaasNestedConversationManager(ConversationManager):
         mcp_config = await self._get_mcp_config(user_id)
         if mcp_config:
             # Merge with any MCP config from settings
-            from openhands.storage.data_models.settings import (
-                sdk_mcp_config_to_legacy,
-            )
-
             sdk_mcp = settings.agent_settings.mcp_config
             if sdk_mcp and sdk_mcp.mcpServers:
-                settings_mcp_config = sdk_mcp_config_to_legacy(sdk_mcp)
-                mcp_config = mcp_config.merge(settings_mcp_config)
-            # Check again since theoretically merge could return None.
+                from openhands.core.config.mcp_config import merge_mcp_configs
+
+                mcp_config = merge_mcp_configs(mcp_config, sdk_mcp)
             if mcp_config:
                 init_conversation['mcp_config'] = mcp_config.model_dump()
 

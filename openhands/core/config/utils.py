@@ -30,7 +30,7 @@ from openhands.core.config.condenser_config import (
 from openhands.core.config.extended_config import ExtendedConfig
 from openhands.core.config.kubernetes_config import KubernetesConfig
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig
+from openhands.core.config.mcp_config import mcp_config_from_toml
 from openhands.core.config.model_routing_config import ModelRoutingConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
@@ -282,8 +282,7 @@ def load_from_toml(cfg: OpenHandsConfig, toml_file: str = 'config.toml') -> None
     # Process MCP sections if present
     if 'mcp' in toml_config:
         try:
-            mcp_mapping = MCPConfig.from_toml_section(toml_config['mcp'])
-            # We only use the base mcp config for now
+            mcp_mapping = mcp_config_from_toml(toml_config['mcp'])
             if 'mcp' in mcp_mapping:
                 cfg.mcp = mcp_mapping['mcp']
         except (TypeError, KeyError, ValidationError) as e:
@@ -291,7 +290,6 @@ def load_from_toml(cfg: OpenHandsConfig, toml_file: str = 'config.toml') -> None
                 f'Cannot parse MCP config from toml, values have not been applied.\nError: {e}'
             )
         except ValueError:
-            # Re-raise ValueError from MCPConfig.from_toml_section
             raise ValueError('Error in MCP sections in config.toml')
 
     # Process kubernetes section if present

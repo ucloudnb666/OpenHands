@@ -1054,31 +1054,21 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             mcp_servers: Dictionary to add servers to
             user: User information containing custom MCP config
         """
-        from openhands.storage.data_models.settings import sdk_mcp_config_to_legacy
-
         sdk_mcp = user.agent_settings.mcp_config
         if not sdk_mcp or not sdk_mcp.mcpServers:
             return
 
         try:
-            legacy_mcp = sdk_mcp_config_to_legacy(sdk_mcp)
-            sse_count = len(legacy_mcp.sse_servers)
-            shttp_count = len(legacy_mcp.shttp_servers)
-            stdio_count = len(legacy_mcp.stdio_servers)
-
+            count = len(sdk_mcp.mcpServers)
             _logger.info(
-                f'Loading custom MCP config from user settings: '
-                f'{sse_count} SSE, {shttp_count} SHTTP, {stdio_count} STDIO servers'
+                f'Loading custom MCP config from user settings: {count} servers'
             )
 
-            # Add each type of custom server
-            self._add_custom_sse_servers(mcp_servers, legacy_mcp.sse_servers)
-            self._add_custom_shttp_servers(mcp_servers, legacy_mcp.shttp_servers)
-            self._add_custom_stdio_servers(mcp_servers, legacy_mcp.stdio_servers)
+            for name, server in sdk_mcp.mcpServers.items():
+                mcp_servers[name] = server.model_dump(exclude_none=True)
 
             _logger.info(
-                f'Successfully merged custom MCP config: added {sse_count} SSE, '
-                f'{shttp_count} SHTTP, and {stdio_count} STDIO servers'
+                f'Successfully merged custom MCP config: added {count} servers'
             )
 
         except Exception as e:
