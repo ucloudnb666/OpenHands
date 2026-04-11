@@ -21,46 +21,6 @@ from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.data_models.settings import Settings
 from openhands.storage.secrets.file_secrets_store import FileSecretsStore
 
-# Minimal SDK schema fixture for tests.
-_TEST_SDK_SCHEMA = {
-    'sections': [
-        {
-            'key': 'llm',
-            'fields': [
-                {'key': 'llm.model', 'secret': False},
-                {'key': 'llm.api_key', 'secret': True},
-                {'key': 'llm.base_url', 'secret': False},
-            ],
-        },
-        {
-            'key': 'condenser',
-            'fields': [
-                {'key': 'condenser.enabled', 'secret': False},
-                {'key': 'condenser.max_size', 'secret': False},
-            ],
-        },
-    ]
-}
-
-_TEST_CONVERSATION_SCHEMA = {
-    'sections': [
-        {
-            'key': 'general',
-            'fields': [
-                {'key': 'max_iterations', 'secret': False},
-            ],
-        },
-        {
-            'key': 'verification',
-            'fields': [
-                {'key': 'confirmation_mode', 'secret': False},
-                {'key': 'security_analyzer', 'secret': False},
-            ],
-        },
-    ]
-}
-
-
 def _make_settings(**sdk_vals: Any) -> Settings:
     """Helper to create Settings with agent_settings."""
     if 'llm.api_key' in sdk_vals and 'llm.model' not in sdk_vals:
@@ -74,20 +34,33 @@ def allow_short_context_windows():
         yield
 
 
+def _resolve_dotted(obj: Any, key: str) -> Any:
+    """Resolve a dotted key against an object (e.g. 'llm.model' → obj.llm.model)."""
+    current = obj
+    for part in key.split('.'):
+        if isinstance(current, dict):
+            current = current[part]
+        else:
+            current = getattr(current, part)
+    return current
+
+
 def _agent_value(settings: Settings, key: str) -> Any:
-    return settings.get_agent_setting(key)
+    return _resolve_dotted(settings.agent_settings, key)
 
 
 def _secret_value(settings: Settings, key: str) -> str | None:
-    secret = settings.get_secret_agent_setting(key)
-    return secret.get_secret_value() if secret else None
-
-
-# Mock functions to simulate the actual functions in settings.py
+    val = _resolve_dotted(settings.agent_settings, key)
+    if val is None:
+        return None
+    return val.get_secret_value() if hasattr(val, 'get_secret_value') else str(val)
 
 
 def _persisted_value(settings: Settings, key: str) -> Any:
-    current: Any = settings.normalized_agent_settings()
+    dump = settings.agent_settings.model_dump(
+        mode="json", context={"expose_secrets": True}
+    )
+    current: Any = dump
     for part in key.split('.'):
         if not isinstance(current, dict):
             raise KeyError(key)
@@ -205,7 +178,7 @@ def test_apply_payload_sdk_keys_stored_and_readable():
     }
 
     result = _apply_settings_payload(
-        payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, None
     )
 
     assert _persisted_value(result, 'llm.model') == 'gpt-4'
@@ -234,7 +207,7 @@ def test_apply_payload_updates_existing():
     }
 
     result = _apply_settings_payload(
-        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, existing
     )
 
     assert _agent_value(result, 'llm.model') == 'gpt-4'
@@ -254,7 +227,7 @@ def test_apply_payload_preserves_secrets_when_not_provided():
     payload = {'llm.model': 'gpt-4'}
 
     result = _apply_settings_payload(
-        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, existing
     )
 
     assert _agent_value(result, 'llm.model') == 'gpt-4'
@@ -264,9 +237,11 @@ def test_apply_payload_preserves_secrets_when_not_provided():
 
 def test_apply_payload_mcp_update_preserves_existing_llm_settings():
     existing_settings = Settings(
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key=SecretStr('existing-api-key'),
-        llm_base_url='https://my-custom-proxy.example.com',
+        agent_settings={
+            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
+            'llm.api_key': 'existing-api-key',
+            'llm.base_url': 'https://my-custom-proxy.example.com',
+        },
     )
 
     result = _apply_settings_payload(
@@ -286,8 +261,6 @@ def test_apply_payload_mcp_update_preserves_existing_llm_settings():
             }
         },
         existing_settings,
-        _TEST_SDK_SCHEMA,
-        _TEST_CONVERSATION_SCHEMA,
     )
 
     assert _agent_value(result, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
@@ -301,15 +274,15 @@ def test_apply_payload_clears_secrets_when_explicitly_null_or_empty():
 
     payload = {'llm.api_key': None}
     result = _apply_settings_payload(
-        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, existing
     )
-    assert result.agent_settings_values()['llm.api_key'] is None
+    assert result.agent_settings.llm.api_key is None
 
     payload = {'llm.api_key': ''}
     result = _apply_settings_payload(
-        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, existing
     )
-    assert result.agent_settings_values()['llm.api_key'] is None
+    assert result.agent_settings.llm.api_key is None
 
 
 def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
@@ -322,7 +295,7 @@ def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
     )
 
     result = _apply_settings_payload(
-        {'llm.base_url': None}, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        {'llm.base_url': None}, existing
     )
 
     assert _agent_value(result, 'llm.base_url') is None
@@ -352,7 +325,7 @@ def test_apply_payload_mcp_preserves_llm_settings():
     }
 
     result = _apply_settings_payload(
-        payload, existing, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, existing
     )
 
     assert _agent_value(result, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
@@ -368,7 +341,7 @@ def test_apply_payload_non_sdk_flat_keys_applied():
     }
 
     result = _apply_settings_payload(
-        payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, None
     )
 
     assert result.language == 'ja'
@@ -383,7 +356,7 @@ def test_apply_payload_conversation_settings_stored_top_level():
     }
 
     result = _apply_settings_payload(
-        payload, None, _TEST_SDK_SCHEMA, _TEST_CONVERSATION_SCHEMA
+        payload, None
     )
 
     assert result.conversation_settings.confirmation_mode is True
@@ -391,16 +364,20 @@ def test_apply_payload_conversation_settings_stored_top_level():
     assert 'confirmation_mode' not in result.agent_settings_values()
 
 
-def test_legacy_flat_fields_migrate_to_agent_vals():
-    """Loading a Settings with legacy flat fields should migrate to agent_settings."""
+def test_agent_settings_nested_dict_construction():
+    """Settings constructed with nested agent_settings dict should be accessible."""
     s = Settings(
-        **{
-            'llm_model': 'gpt-4',
-            'llm_api_key': 'my-key',
-            'llm_base_url': 'https://example.com',
+        agent_settings={
+            'llm': {
+                'model': 'gpt-4',
+                'api_key': 'my-key',
+                'base_url': 'https://example.com',
+            },
             'agent': 'CodeActAgent',
+        },
+        conversation_settings={
             'confirmation_mode': True,
-        }
+        },
     )
 
     assert _persisted_value(s, 'llm.model') == 'gpt-4'
@@ -414,37 +391,42 @@ def test_legacy_flat_fields_migrate_to_agent_vals():
 
 def test_agent_settings_normalized_with_schema_version_and_extras():
     s = Settings(
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        confirmation_mode=True,
-        agent_settings={'custom.extra': 'keep-me'},
-        conversation_settings={'max_iterations': 64},
+        agent_settings={
+            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
+        },
+        conversation_settings={
+            'max_iterations': 64,
+            'confirmation_mode': True,
+        },
     )
 
-    assert s.raw_agent_settings['schema_version'] == 1
+    dump = s.agent_settings.model_dump(mode="json", context={"expose_secrets": True})
+    assert dump['schema_version'] == 1
     assert _persisted_value(s, 'llm.model') == 'anthropic/claude-sonnet-4-5-20250929'
     assert s.conversation_settings.confirmation_mode is True
     assert s.conversation_settings.max_iterations == 64
-    assert s.raw_agent_settings['custom.extra'] == 'keep-me'
 
 
 def test_agent_settings_persistence_strips_secret_values():
     s = Settings(
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key='super-secret',
+        agent_settings={
+            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
+            'llm.api_key': 'super-secret',
+        },
         conversation_settings={'max_iterations': 64},
     )
 
-    persisted = s.normalized_agent_settings(strip_secret_values=True)
-
+    persisted = s.agent_settings.model_dump(mode="json")
+    # Secrets are redacted by default (not exposed)
     assert persisted['schema_version'] == 1
     assert persisted['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
     assert 'max_iterations' not in persisted
-    assert 'api_key' not in persisted['llm']
+    assert persisted['llm']['api_key'] == '**********'
     assert s.conversation_settings.max_iterations == 64
 
 
 def test_openhands_model_settings_remain_user_facing():
-    s = Settings(llm_model='openhands/claude-opus-4-5-20251101')
+    s = Settings(agent_settings={'llm.model': 'openhands/claude-opus-4-5-20251101'})
 
     assert _persisted_value(s, 'llm.model') == 'litellm_proxy/claude-opus-4-5-20251101'
     assert (

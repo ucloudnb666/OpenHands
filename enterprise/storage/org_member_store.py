@@ -162,7 +162,7 @@ class OrgMemberStore:
     def get_kwargs_from_settings(settings: Settings) -> dict[str, Any]:
         """Return kwargs for OrgMember construction (keys match column names)."""
         return {
-            "llm_api_key": settings.llm_api_key,
+            "llm_api_key": settings.agent_settings.llm.api_key,
             "agent_settings": {},
             "conversation_settings": {},
         }

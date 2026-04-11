@@ -40,13 +40,19 @@ async def test_store_and_load_data(file_settings_store):
     # Test data
     init_data = Settings(
         language='python',
-        agent='test-agent',
-        max_iterations=100,
-        security_analyzer='llm',
-        confirmation_mode=True,
-        llm_model='test-model',
-        llm_api_key='test-key',
-        llm_base_url='https://test.com',
+        agent_settings={
+            'agent': 'test-agent',
+            'llm': {
+                'model': 'test-model',
+                'api_key': 'test-key',
+                'base_url': 'https://test.com',
+            },
+        },
+        conversation_settings={
+            'max_iterations': 100,
+            'security_analyzer': 'llm',
+            'confirmation_mode': True,
+        },
     )
 
     # Store data
@@ -67,7 +73,7 @@ async def test_store_and_load_data(file_settings_store):
     loaded_data = await file_settings_store.load()
     assert loaded_data is not None
     assert loaded_data.language == init_data.language
-    assert loaded_data.agent == init_data.agent
+    assert loaded_data.agent_settings.agent == init_data.agent_settings.agent
     assert (
         loaded_data.conversation_settings.max_iterations
         == init_data.conversation_settings.max_iterations
@@ -80,14 +86,14 @@ async def test_store_and_load_data(file_settings_store):
         loaded_data.conversation_settings.confirmation_mode
         == init_data.conversation_settings.confirmation_mode
     )
-    assert loaded_data.llm_model == init_data.llm_model
-    assert loaded_data.llm_api_key is not None
-    assert init_data.llm_api_key is not None
+    assert loaded_data.agent_settings.llm.model == init_data.agent_settings.llm.model
+    assert loaded_data.agent_settings.llm.api_key is not None
+    assert init_data.agent_settings.llm.api_key is not None
     assert (
-        loaded_data.llm_api_key.get_secret_value()
-        == init_data.llm_api_key.get_secret_value()
+        loaded_data.agent_settings.llm.api_key.get_secret_value()
+        == init_data.agent_settings.llm.api_key.get_secret_value()
     )
-    assert loaded_data.llm_base_url == init_data.llm_base_url
+    assert loaded_data.agent_settings.llm.base_url == init_data.agent_settings.llm.base_url
 
 
 @pytest.mark.asyncio

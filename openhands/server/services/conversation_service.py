@@ -109,7 +109,7 @@ async def start_conversation(
         # We could use litellm.check_valid_key for a more accurate check,
         # but that would run a tiny inference.
         model_name = agent_settings.llm.model
-        llm_api_key = settings.llm_api_key
+        llm_api_key = settings.agent_settings.llm.api_key
         is_bedrock_model = model_name.startswith('bedrock/')
         is_lemonade_model = model_name.startswith('lemonade/')
 

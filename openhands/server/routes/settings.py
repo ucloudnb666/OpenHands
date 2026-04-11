@@ -38,16 +38,6 @@ from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.settings_store import SettingsStore
 
 
-def _get_agent_settings_schema() -> dict[str, Any]:
-    """Return the SDK agent settings schema for the legacy V0 settings API."""
-    return AgentSettings.export_schema().model_dump(mode='json')
-
-
-def _get_conversation_settings_schema() -> dict[str, Any]:
-    """Return the SDK conversation settings schema for the legacy V0 settings API."""
-    return ConversationSettings.export_schema().model_dump(mode='json')
-
-
 _SECRET_REDACTED = "<hidden>"
 
 
@@ -113,6 +103,16 @@ def _apply_settings_payload(
     update_payload.update(top_level)
     settings.update(update_payload)
     return settings
+
+
+def _get_agent_settings_schema() -> dict[str, Any]:
+    """Return the SDK agent settings schema for the legacy V0 settings API."""
+    return AgentSettings.export_schema().model_dump(mode='json')
+
+
+def _get_conversation_settings_schema() -> dict[str, Any]:
+    """Return the SDK conversation settings schema for the legacy V0 settings API."""
+    return ConversationSettings.export_schema().model_dump(mode='json')
 
 
 app = APIRouter(prefix='/api', dependencies=get_dependencies())

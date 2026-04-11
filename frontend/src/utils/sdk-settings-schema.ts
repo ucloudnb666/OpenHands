@@ -219,11 +219,6 @@ export function inferInitialView(
   return "basic";
 }
 
-/** @deprecated Use {@link inferInitialView} instead. */
-export function hasAdvancedSettingsOverrides(settings: Settings): boolean {
-  return inferInitialView(settings) !== "basic";
-}
-
 export function isSettingsFieldVisible(
   field: SettingsFieldSchema,
   values: SettingsFormValues,

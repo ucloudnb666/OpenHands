@@ -373,7 +373,7 @@ class OrgInvitationService:
         # Step 5: Add user to organization. New members start with no
         # personal agent-setting overrides so future org default changes
         # continue to flow through automatically.
-        llm_api_key_secret = settings.llm_api_key
+        llm_api_key_secret = settings.agent_settings.llm.api_key
         llm_api_key = (
             llm_api_key_secret.get_secret_value() if llm_api_key_secret else ''
         )

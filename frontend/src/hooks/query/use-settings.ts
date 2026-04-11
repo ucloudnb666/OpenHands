@@ -10,42 +10,21 @@ import { useConfig } from "./use-config";
 import {
   pickFirstBoolean,
   pickFirstNumber,
-  pickFirstString,
   pickNullableString,
 } from "#/utils/settings-value-pickers";
 import { parseMcpConfig } from "#/utils/mcp-config";
 
-const hasAgentSettingKey = (
+const resolveSdkString = (
   agentSettings: Record<string, SettingsValue>,
   key: string,
-) => Object.prototype.hasOwnProperty.call(agentSettings, key);
-
-const resolveSdkStringSetting = ({
-  agentSettings,
-  key,
-  legacyValue,
-  defaultValue,
+  defaultValue: string,
   allowEmpty = false,
-}: {
-  agentSettings: Record<string, SettingsValue>;
-  key: string;
-  legacyValue: unknown;
-  defaultValue: string;
-  allowEmpty?: boolean;
-}) => {
-  if (hasAgentSettingKey(agentSettings, key)) {
-    const agentValue = agentSettings[key];
-
-    if (typeof agentValue === "string") {
-      if (agentValue.length > 0 || allowEmpty) {
-        return agentValue;
-      }
-    }
-
-    return defaultValue;
+): string => {
+  const value = agentSettings[key];
+  if (typeof value === "string" && (value.length > 0 || allowEmpty)) {
+    return value;
   }
-
-  return pickFirstString(legacyValue) ?? defaultValue;
+  return defaultValue;
 };
 
 const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
@@ -61,76 +40,42 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     >),
   };
 
-  if (!hasAgentSettingKey(conversationSettings, "confirmation_mode")) {
-    const confirmationMode = pickFirstBoolean(settings.confirmation_mode);
-    if (confirmationMode !== undefined) {
-      conversationSettings.confirmation_mode = confirmationMode;
-    }
-  }
-
-  if (!hasAgentSettingKey(conversationSettings, "security_analyzer")) {
-    const securityAnalyzer = pickNullableString(settings.security_analyzer);
-    if (securityAnalyzer !== undefined) {
-      conversationSettings.security_analyzer = securityAnalyzer;
-    }
-  }
-
-  if (!hasAgentSettingKey(conversationSettings, "max_iterations")) {
-    const maxIterations = pickFirstNumber(settings.max_iterations);
-    if (maxIterations !== undefined) {
-      conversationSettings.max_iterations = maxIterations;
-    }
-  }
-
   return {
     ...DEFAULT_SETTINGS,
     ...settings,
-    llm_model: resolveSdkStringSetting({
+    llm_model: resolveSdkString(
       agentSettings,
-      key: "llm.model",
-      legacyValue: settings.llm_model,
-      defaultValue: DEFAULT_SETTINGS.llm_model,
-    }),
-    llm_base_url: resolveSdkStringSetting({
+      "llm.model",
+      DEFAULT_SETTINGS.llm_model,
+    ),
+    llm_base_url: resolveSdkString(
       agentSettings,
-      key: "llm.base_url",
-      legacyValue: settings.llm_base_url,
-      defaultValue: DEFAULT_SETTINGS.llm_base_url,
-      allowEmpty: true,
-    }),
-    agent: resolveSdkStringSetting({
+      "llm.base_url",
+      DEFAULT_SETTINGS.llm_base_url,
+      true,
+    ),
+    agent: resolveSdkString(
       agentSettings,
-      key: "agent",
-      legacyValue: settings.agent,
-      defaultValue: DEFAULT_SETTINGS.agent,
-    }),
+      "agent",
+      DEFAULT_SETTINGS.agent,
+    ),
     llm_api_key: settings.llm_api_key ?? null,
     llm_api_key_set: settings.llm_api_key_set ?? false,
     confirmation_mode:
-      pickFirstBoolean(
-        conversationSettings.confirmation_mode,
-        settings.confirmation_mode,
-      ) ?? DEFAULT_SETTINGS.confirmation_mode,
+      pickFirstBoolean(conversationSettings.confirmation_mode) ??
+      DEFAULT_SETTINGS.confirmation_mode,
     security_analyzer:
-      pickNullableString(
-        conversationSettings.security_analyzer,
-        settings.security_analyzer,
-      ) ?? DEFAULT_SETTINGS.security_analyzer,
+      pickNullableString(conversationSettings.security_analyzer) ??
+      DEFAULT_SETTINGS.security_analyzer,
     max_iterations:
-      pickFirstNumber(
-        conversationSettings.max_iterations,
-        settings.max_iterations,
-      ) ?? DEFAULT_SETTINGS.max_iterations,
+      pickFirstNumber(conversationSettings.max_iterations) ??
+      DEFAULT_SETTINGS.max_iterations,
     enable_default_condenser:
-      pickFirstBoolean(
-        agentSettings["condenser.enabled"],
-        settings.enable_default_condenser,
-      ) ?? DEFAULT_SETTINGS.enable_default_condenser,
+      pickFirstBoolean(agentSettings["condenser.enabled"]) ??
+      DEFAULT_SETTINGS.enable_default_condenser,
     condenser_max_size:
-      pickFirstNumber(
-        agentSettings["condenser.max_size"],
-        settings.condenser_max_size,
-      ) ?? DEFAULT_SETTINGS.condenser_max_size,
+      pickFirstNumber(agentSettings["condenser.max_size"]) ??
+      DEFAULT_SETTINGS.condenser_max_size,
     mcp_config: parseMcpConfig(settings.mcp_config ?? agentSettings.mcp_config),
     search_api_key: settings.search_api_key || "",
     email: settings.email || "",

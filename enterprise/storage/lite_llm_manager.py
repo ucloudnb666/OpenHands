@@ -363,19 +363,13 @@ class LiteLlmManager:
                 db_key = None
                 llm_base_url = None
                 if user_settings and user_settings.agent_settings:
-                    # Handle both nested {'llm': {'base_url': ...}} and
-                    # legacy flat {'llm.base_url': ...} formats
-                    llm_section = user_settings.agent_settings.get('llm')
-                    if isinstance(llm_section, dict):
-                        llm_base_url = llm_section.get('base_url')
-                    else:
-                        llm_base_url = user_settings.agent_settings.get("llm.base_url")
+                    llm_base_url = user_settings.agent_settings.llm.base_url
                 if (
                     user_settings
-                    and user_settings.llm_api_key
+                    and user_settings.agent_settings.llm.api_key
                     and llm_base_url == LITE_LLM_API_URL
                 ):
-                    db_key = user_settings.llm_api_key
+                    db_key = user_settings.agent_settings.llm.api_key
                     if hasattr(db_key, 'get_secret_value'):
                         db_key = db_key.get_secret_value()
 
@@ -408,7 +402,7 @@ class LiteLlmManager:
                             extra={'org_id': org_id, 'user_id': keycloak_user_id},
                         )
                         # Update user_settings with the new key so it gets stored in org_member
-                        user_settings.llm_api_key = SecretStr(new_key)
+                        user_settings.agent_settings.llm.api_key = SecretStr(new_key)
                         user_settings.llm_api_key_for_byor_secret = SecretStr(new_key)
 
         logger.info(

@@ -49,34 +49,33 @@ async def store_llm_settings(
     if not existing_settings:
         return settings
 
-    # Preserve unset LLM settings
-    settings.llm_api_key = settings.llm_api_key or existing_settings.llm_api_key
-    settings.llm_model = settings.llm_model or existing_settings.llm_model
+    llm = settings.agent_settings.llm
+    existing_llm = existing_settings.agent_settings.llm
 
-    if settings.llm_base_url is None:
-        # Not provided at all (e.g. MCP config save) - preserve existing or auto-detect
-        if existing_settings.llm_base_url:
-            settings.llm_base_url = existing_settings.llm_base_url
-        elif is_openhands_model(settings.llm_model):
-            # OpenHands models use the LiteLLM proxy
-            settings.llm_base_url = LITE_LLM_API_URL
-        elif settings.llm_model:
-            # For non-openhands models, try to get URL from litellm
+    # Preserve unset LLM settings
+    llm.api_key = llm.api_key or existing_llm.api_key
+    llm.model = llm.model or existing_llm.model
+
+    if llm.base_url is None:
+        if existing_llm.base_url:
+            llm.base_url = existing_llm.base_url
+        elif is_openhands_model(llm.model):
+            llm.base_url = LITE_LLM_API_URL
+        elif llm.model:
             try:
-                api_base = get_provider_api_base(settings.llm_model)
+                api_base = get_provider_api_base(llm.model)
                 if api_base:
-                    settings.llm_base_url = api_base
+                    llm.base_url = api_base
                 else:
                     logger.debug(
-                        f'No api_base found in litellm for model: {settings.llm_model}'
+                        f'No api_base found in litellm for model: {llm.model}'
                     )
             except Exception as e:
                 logger.error(
-                    f'Failed to get api_base from litellm for model {settings.llm_model}: {e}'
+                    f'Failed to get api_base from litellm for model {llm.model}: {e}'
                 )
-    elif settings.llm_base_url == '':
-        # Explicitly cleared by the user (basic view save or advanced view clear)
-        settings.llm_base_url = None
+    elif llm.base_url == '':
+        llm.base_url = None
 
     settings.search_api_key = (
         settings.search_api_key or existing_settings.search_api_key
@@ -157,10 +156,10 @@ async def load_settings(
                 if provider_token.token or provider_token.user_id:
                     provider_tokens_set[provider_type] = provider_token.host
 
+        llm = settings.agent_settings.llm
         settings_with_token_data = GETSettingsModel(
             **settings.model_dump(exclude={'secrets_store'}),
-            llm_api_key_set=settings.llm_api_key is not None
-            and bool(settings.llm_api_key),
+            llm_api_key_set=settings.llm_api_key_is_set,
             search_api_key_set=settings.search_api_key is not None
             and bool(settings.search_api_key),
             provider_tokens_set=provider_tokens_set,
@@ -168,15 +167,13 @@ async def load_settings(
 
         # If the base url matches the default for the provider, we don't send it
         # So that the frontend can display basic mode
-        if is_openhands_model(settings.llm_model):
-            if settings.llm_base_url == LITE_LLM_API_URL:
-                settings_with_token_data.llm_base_url = None
-        elif settings.llm_model and settings.llm_base_url == get_provider_api_base(
-            settings.llm_model
-        ):
-            settings_with_token_data.llm_base_url = None
+        if is_openhands_model(llm.model):
+            if llm.base_url == LITE_LLM_API_URL:
+                settings_with_token_data.agent_settings.llm.base_url = None
+        elif llm.model and llm.base_url == get_provider_api_base(llm.model):
+            settings_with_token_data.agent_settings.llm.base_url = None
 
-        settings_with_token_data.llm_api_key = None
+        settings_with_token_data.agent_settings.llm.api_key = None
         settings_with_token_data.search_api_key = None
         settings_with_token_data.sandbox_api_key = None
         return settings_with_token_data

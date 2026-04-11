@@ -38,13 +38,13 @@ def test_settings_from_config():
 
         assert settings is not None
         assert settings.language == 'en'
-        assert settings.agent == "test-agent"
+        assert settings.agent_settings.agent == "test-agent"
         assert settings.conversation_settings.max_iterations == 100
         assert settings.conversation_settings.security_analyzer == 'llm'
         assert settings.conversation_settings.confirmation_mode is True
-        assert settings.llm_model == "test-model"
-        assert settings.llm_api_key.get_secret_value() == "test-key"
-        assert settings.llm_base_url == "https://test.example.com"
+        assert settings.agent_settings.llm.model == "test-model"
+        assert settings.agent_settings.llm.api_key.get_secret_value() == "test-key"
+        assert settings.agent_settings.llm.base_url == "https://test.example.com"
         assert settings.remote_runtime_resource_factor == 2
         assert not settings.secrets_store.provider_tokens
 
@@ -76,31 +76,38 @@ def test_settings_from_config_no_api_key():
 def test_settings_handles_sensitive_data():
     settings = Settings(
         language='en',
-        agent='test-agent',
-        max_iterations=100,
-        security_analyzer='llm',
-        confirmation_mode=True,
-        llm_model='test-model',
-        llm_api_key='test-key',
-        llm_base_url='https://test.example.com',
+        agent_settings={
+            'agent': 'test-agent',
+            'llm': {
+                'model': 'test-model',
+                'api_key': 'test-key',
+                'base_url': 'https://test.example.com',
+            },
+        },
+        conversation_settings={
+            'max_iterations': 100,
+            'security_analyzer': 'llm',
+            'confirmation_mode': True,
+        },
         remote_runtime_resource_factor=2,
     )
 
-    llm_api_key = settings.llm_api_key
+    llm_api_key = settings.agent_settings.llm.api_key
     assert str(llm_api_key) == '**********'
     assert llm_api_key.get_secret_value() == 'test-key'
 
 
 def test_convert_to_settings():
     settings_with_token_data = Settings(
-        llm_model='test-model',
-        llm_api_key='test-key',
+        agent_settings={
+            'llm': {'model': 'test-model', 'api_key': 'test-key'},
+        },
     )
 
     settings = convert_to_settings(settings_with_token_data)
 
-    assert settings.llm_api_key is not None
-    assert settings.llm_api_key.get_secret_value() == 'test-key'
+    assert settings.agent_settings.llm.api_key is not None
+    assert settings.agent_settings.llm.api_key.get_secret_value() == 'test-key'
 
 
 def test_settings_preserve_agent_settings():
@@ -114,7 +121,7 @@ def test_settings_preserve_agent_settings():
         },
     )
 
-    assert settings.llm_api_key.get_secret_value() == "test-key"
+    assert settings.agent_settings.llm.api_key.get_secret_value() == "test-key"
     dump = settings.agent_settings.model_dump(
         mode="json", context={"expose_secrets": True}
     )
@@ -217,9 +224,9 @@ def test_settings_update_batch():
         }
     )
     assert settings.language == "fr"
-    assert settings.agent == "TestAgent"
-    assert settings.llm_model == "new-model"
-    assert settings.llm_api_key.get_secret_value() == "new-key"
+    assert settings.agent_settings.agent == "TestAgent"
+    assert settings.agent_settings.llm.model == "new-model"
+    assert settings.agent_settings.llm.api_key.get_secret_value() == "new-key"
     assert settings.conversation_settings.max_iterations == 200
 
 

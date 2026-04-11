@@ -905,7 +905,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         return LLM(
             model=model,
             base_url=base_url,
-            api_key=user.llm_api_key,
+            api_key=user.agent_settings.llm.api_key,
             usage_id='agent',
         )
 

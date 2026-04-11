@@ -22,22 +22,6 @@ from openhands.storage.data_models.secrets import Secrets
 from openhands.utils.jsonpatch_compat import deep_merge
 
 
-# Maps legacy flat field names → nested SDK dict paths for migration.
-_LEGACY_FLAT_TO_SDK: dict[str, list[str]] = {
-    "agent": ["agent"],
-    "llm_model": ["llm", "model"],
-    "llm_api_key": ["llm", "api_key"],
-    "llm_base_url": ["llm", "base_url"],
-    "mcp_config": ["mcp_config"],
-    "enable_default_condenser": ["condenser", "enabled"],
-    "condenser_max_size": ["condenser", "max_size"],
-}
-
-_CONVERSATION_SETTINGS_KEYS = frozenset(
-    f.key for s in ConversationSettings.export_schema().sections for f in s.fields
-)
-
-
 @lru_cache(maxsize=1)
 def _sdk_schema_field_metadata() -> tuple[set[str], set[str]]:
     schema = AgentSettings.export_schema()
@@ -58,14 +42,6 @@ def _coerce_value(value: Any) -> Any:
     if isinstance(value, SDKMCPConfig):
         return value.model_dump(exclude_none=True, exclude_defaults=True) or None
     return value
-
-
-def _normalize_mcp_value(value: Any) -> Any:
-    """Normalize an MCP config value to SDK dict format."""
-    sdk = _sdk_mcp_config_from_value(value)
-    if sdk is None:
-        return None
-    return sdk.model_dump(exclude_none=True, exclude_defaults=True)
 
 
 def _set_nested(target: dict[str, Any], path: list[str], value: Any) -> None:
@@ -92,30 +68,6 @@ def _normalize_model_name(key: str, value: Any) -> Any:
         if value.startswith("litellm_proxy/"):
             return f"openhands/{value.removeprefix('litellm_proxy/')}"
     return value
-
-
-def _sdk_mcp_config_from_value(value: Any) -> SDKMCPConfig | None:
-    """Convert various MCP config representations to SDKMCPConfig.
-
-    Handles: SDKMCPConfig instances, dicts with 'mcpServers', and legacy
-    dicts with 'sse_servers'/'shttp_servers'/'stdio_servers'.
-    """
-    if value in (None, {}):
-        return None
-    if isinstance(value, SDKMCPConfig):
-        return value if value.mcpServers else None
-    if isinstance(value, dict):
-        if 'mcpServers' in value:
-            if not value.get('mcpServers'):
-                return None
-            return SDKMCPConfig.model_validate(value)
-        # Legacy dict format with sse_servers/shttp_servers/stdio_servers
-        from openhands.core.config.mcp_config import mcp_config_from_toml
-
-        result = mcp_config_from_toml(value)
-        cfg = result.get('mcp')
-        return cfg if cfg and cfg.mcpServers else None
-    return None
 
 
 def _merge_sdk_mcp_configs(
@@ -203,44 +155,6 @@ class Settings(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    # ── Convenience properties (backward-compat shims) ──────────────
-
-    @property
-    def llm_model(self) -> str | None:
-        return self.agent_settings.llm.model
-
-    @llm_model.setter
-    def llm_model(self, value: str | None) -> None:
-        if value is not None:
-            self.agent_settings.llm.model = value
-
-    @property
-    def llm_base_url(self) -> str | None:
-        return self.agent_settings.llm.base_url
-
-    @llm_base_url.setter
-    def llm_base_url(self, value: str | None) -> None:
-        self.agent_settings.llm.base_url = value
-
-    @property
-    def llm_api_key(self) -> SecretStr | None:
-        raw = self.agent_settings.llm.api_key
-        if raw is None:
-            return None
-        secret_value = (
-            raw.get_secret_value() if isinstance(raw, SecretStr) else str(raw)
-        )
-        return SecretStr(secret_value) if secret_value else None
-
-    @llm_api_key.setter
-    def llm_api_key(self, value: SecretStr | str | None) -> None:
-        if isinstance(value, SecretStr):
-            self.agent_settings.llm.api_key = value
-        elif value is not None:
-            self.agent_settings.llm.api_key = SecretStr(value)
-        else:
-            self.agent_settings.llm.api_key = None
-
     @property
     def llm_api_key_is_set(self) -> bool:
         raw = self.agent_settings.llm.api_key
@@ -250,33 +164,6 @@ class Settings(BaseModel):
             raw.get_secret_value() if isinstance(raw, SecretStr) else str(raw)
         )
         return bool(secret_value and secret_value.strip())
-
-    @property
-    def agent(self) -> str | None:
-        return self.agent_settings.agent
-
-    @agent.setter
-    def agent(self, value: str | None) -> None:
-        if value is not None:
-            self.agent_settings.agent = value
-
-    @property
-    def enable_default_condenser(self) -> bool | None:
-        return self.agent_settings.condenser.enabled
-
-    @enable_default_condenser.setter
-    def enable_default_condenser(self, value: bool | None) -> None:
-        if value is not None:
-            self.agent_settings.condenser.enabled = value
-
-    @property
-    def condenser_max_size(self) -> int | None:
-        return self.agent_settings.condenser.max_size
-
-    @condenser_max_size.setter
-    def condenser_max_size(self, value: int | None) -> None:
-        if value is not None:
-            self.agent_settings.condenser.max_size = value
 
     # ── Batch update ────────────────────────────────────────────────
 
@@ -324,6 +211,15 @@ class Settings(BaseModel):
             if key in ("agent_settings", "conversation_settings"):
                 continue
             if key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
+                field_info = Settings.model_fields[key]
+                # Coerce plain strings to SecretStr when the field type expects it
+                if value is not None and isinstance(value, str):
+                    annotation = field_info.annotation
+                    if annotation is SecretStr or (
+                        hasattr(annotation, '__args__')
+                        and SecretStr in getattr(annotation, '__args__', ())
+                    ):
+                        value = SecretStr(value) if value else None
                 setattr(self, key, value)
 
     # ── Flattened values for API responses ──────────────────────────
@@ -371,92 +267,38 @@ class Settings(BaseModel):
             )
         return agent_settings.model_dump(mode="json")
 
-    # ── Legacy migration (model_validator) ──────────────────────────
-
     @model_validator(mode="before")
     @classmethod
-    def _migrate_legacy_fields(cls, data: dict | object) -> dict | object:
-        """Migrate legacy flat fields into ``agent_settings`` and ``conversation_settings``."""
+    def _normalize_inputs(cls, data: dict | object) -> dict | object:
+        """Normalize agent_settings dotted keys and secrets_store dicts."""
         if not isinstance(data, dict):
             return data
 
-        # --- Agent settings ---
-        agent_settings = data.pop("agent_settings", None)
-        # Accept raw_agent_settings as an alias for backward compat with persisted data
-        raw_agent_settings = data.pop("raw_agent_settings", None)
-        agent_vals: dict[str, Any] = {}
-        source = raw_agent_settings or agent_settings
-        if isinstance(source, AgentSettings):
-            agent_vals = source.model_dump(
+        # --- Agent settings: expand dotted keys to nested dicts ---
+        agent_settings = data.get("agent_settings")
+        if isinstance(agent_settings, dict):
+            expanded: dict[str, Any] = {}
+            for key, value in agent_settings.items():
+                if "." in key:
+                    _set_nested(expanded, key.split("."), _coerce_value(value))
+                else:
+                    expanded[key] = (
+                        _coerce_value(value)
+                        if not isinstance(value, dict)
+                        else value
+                    )
+            data["agent_settings"] = expanded
+        elif isinstance(agent_settings, AgentSettings):
+            data["agent_settings"] = agent_settings.model_dump(
                 mode="json", context={"expose_secrets": True}
             )
-        elif isinstance(source, dict):
-            agent_vals = dict(source)
 
-        # Normalize MCP config if present (legacy dict → SDK format)
-        mcp_val = agent_vals.get("mcp_config")
-        if mcp_val is not None:
-            agent_vals["mcp_config"] = _normalize_mcp_value(mcp_val)
-
-        # Migrate legacy top-level keys (sdk_settings_values, mcp_config)
-        for legacy_key in ("sdk_settings_values", "mcp_config"):
-            legacy_val = data.pop(legacy_key, None)
-            if legacy_key == "sdk_settings_values" and isinstance(legacy_val, dict):
-                for key, value in legacy_val.items():
-                    agent_vals.setdefault(key, _coerce_value(value))
-            elif legacy_key == "mcp_config" and legacy_val is not None:
-                agent_vals.setdefault("mcp_config", _normalize_mcp_value(legacy_val))
-
-        # Migrate legacy flat fields → nested SDK dict structure
-        for flat_key, path in _LEGACY_FLAT_TO_SDK.items():
-            if flat_key not in data:
-                continue
-            value = data[flat_key]
-            if value is not None:
-                if isinstance(value, str) and value.startswith("**"):
-                    continue
-                coerced = _coerce_value(value)
-                # Only set if the SDK path isn't already populated
-                if _lookup_dotted(agent_vals, ".".join(path)) is None:
-                    _set_nested(agent_vals, path, coerced)
-
-        # Strip conversation settings keys that may have leaked into agent_settings
-        for conv_key in _CONVERSATION_SETTINGS_KEYS:
-            agent_vals.pop(conv_key, None)
-
-        # Remove flat legacy keys from data
-        for flat_key in _LEGACY_FLAT_TO_SDK:
-            data.pop(flat_key, None)
-
-        # Expand any remaining dotted keys to nested dicts
-        expanded: dict[str, Any] = {}
-        for key, value in agent_vals.items():
-            if "." in key:
-                _set_nested(expanded, key.split("."), _coerce_value(value))
-            else:
-                expanded[key] = (
-                    _coerce_value(value) if not isinstance(value, dict) else value
-                )
-        agent_vals = expanded
-
-        data["agent_settings"] = agent_vals
-
-        # --- Conversation settings ---
-        conversation_settings = data.pop('conversation_settings', None)
-        conversation_vals: dict[str, Any] = {}
-        if isinstance(conversation_settings, dict):
-            conversation_vals = conversation_settings
-        elif isinstance(conversation_settings, ConversationSettings):
-            conversation_vals = conversation_settings.model_dump(mode='json')
-
-        for flat_key in _CONVERSATION_SETTINGS_KEYS:
-            if flat_key in data:
-                value = data.pop(flat_key)
-                if value is not None and flat_key not in conversation_vals:
-                    conversation_vals[flat_key] = value
-
-        if conversation_vals:
-            data["conversation_settings"] = conversation_vals
+        # --- Conversation settings: normalize ---
+        conversation_settings = data.get("conversation_settings")
+        if isinstance(conversation_settings, ConversationSettings):
+            data["conversation_settings"] = conversation_settings.model_dump(
+                mode="json"
+            )
 
         # --- Secrets store ---
         secrets_store = data.get('secrets_store')

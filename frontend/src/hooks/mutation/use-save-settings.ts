@@ -13,22 +13,6 @@ import { useSettings } from "../query/use-settings";
 
 type SettingsUpdate = Partial<Settings> & Record<string, unknown>;
 
-const LEGACY_FLAT_TO_SDK: Record<string, string> = {
-  agent: "agent",
-  llm_model: "llm.model",
-  llm_api_key: "llm.api_key",
-  llm_base_url: "llm.base_url",
-  mcp_config: "mcp_config",
-  enable_default_condenser: "condenser.enabled",
-  condenser_max_size: "condenser.max_size",
-};
-
-const ROOT_CONVERSATION_KEYS = [
-  "confirmation_mode",
-  "security_analyzer",
-  "max_iterations",
-] as const;
-
 const saveSettingsMutationFn = async (
   scope: SettingsScope,
   settings: SettingsUpdate,
@@ -38,32 +22,12 @@ const saveSettingsMutationFn = async (
   delete settingsToSave.agent_settings;
   delete settingsToSave.conversation_settings_schema;
 
-  for (const [legacyKey, sdkKey] of Object.entries(LEGACY_FLAT_TO_SDK)) {
-    const hasLegacyValue = legacyKey in settingsToSave;
-    const hasSdkValue = sdkKey in settingsToSave;
-
-    if (hasLegacyValue && !hasSdkValue) {
-      settingsToSave[sdkKey] = settingsToSave[legacyKey];
-      delete settingsToSave[legacyKey];
-    }
-  }
-
   const conversationSettings: Record<string, SettingsValue> = {
     ...((settingsToSave.conversation_settings as Record<
       string,
       SettingsValue
     >) ?? {}),
   };
-
-  for (const key of ROOT_CONVERSATION_KEYS) {
-    const hasRootValue = key in settingsToSave;
-    const hasConversationValue = key in conversationSettings;
-
-    if (hasRootValue && !hasConversationValue) {
-      conversationSettings[key] = settingsToSave[key] as SettingsValue;
-      delete settingsToSave[key];
-    }
-  }
 
   if (Object.keys(conversationSettings).length > 0) {
     settingsToSave.conversation_settings = conversationSettings;

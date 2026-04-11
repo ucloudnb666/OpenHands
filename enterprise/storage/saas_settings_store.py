@@ -231,8 +231,8 @@ class SaasSettingsStore(SettingsStore):
                 )
                 return None
 
-            llm_model = item.llm_model
-            llm_base_url = item.llm_base_url
+            llm_model = item.agent_settings.llm.model
+            llm_base_url = item.agent_settings.llm.base_url
             normalized_llm_base_url = llm_base_url.rstrip("/") if llm_base_url else None
             normalized_managed_base_url = LITE_LLM_API_URL.rstrip("/")
             uses_managed_llm_key = (
@@ -287,7 +287,7 @@ class SaasSettingsStore(SettingsStore):
                 ):
                     setattr(org, key, value)
 
-            current_member_llm_api_key = item.llm_api_key
+            current_member_llm_api_key = item.agent_settings.llm.api_key
             org_default_llm_api_key = org.llm_api_key
             org_default_llm_api_key_raw = (
                 org_default_llm_api_key.get_secret_value()
@@ -342,7 +342,7 @@ class SaasSettingsStore(SettingsStore):
         is valid in LiteLLM. If valid, reuses it. Otherwise, generates a new key.
         """
 
-        llm_api_key = item.llm_api_key
+        llm_api_key = item.agent_settings.llm.api_key
 
         # First, check if our current key is valid
         if llm_api_key and not await LiteLlmManager.verify_existing_key(
@@ -369,7 +369,7 @@ class SaasSettingsStore(SettingsStore):
                     None,
                 )
 
-            item.llm_api_key = SecretStr(generated_key)
+            item.agent_settings.llm.api_key = SecretStr(generated_key)
             logger.info(
                 'saas_settings_store:store:generated_openhands_key',
                 extra={'user_id': self.user_id},
