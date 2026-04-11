@@ -11,6 +11,15 @@ from openhands.core.config.mcp_config import (
 from openhands.core.logger import openhands_logger as logger
 
 
+# We opt for Streamable HTTP over SSE connection to the main app server's MCP
+# Reasoning:
+# 1. Better performance over SSE
+# 2. Allows stateless MCP client connections, essential for distributed server environments
+#
+# The second point is very important - any long lived stateful connections (like SSE) will
+# require bespoke implementation to make sure all subsequent requests hit the same replica. It is
+# also not resistant to replica pod restarts (it will kill the connection and there's no recovering from it)
+# NOTE: these details are specific to the MCP protocol
 class SaaSOpenHandsMCPConfig(OpenHandsMCPConfig):
     @staticmethod
     async def create_default_mcp_server_config(

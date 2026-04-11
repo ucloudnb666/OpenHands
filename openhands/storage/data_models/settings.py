@@ -153,11 +153,11 @@ def _merge_sdk_mcp_configs(
 class SandboxGroupingStrategy(str, Enum):
     """Strategy for grouping conversations within sandboxes."""
 
-    NO_GROUPING = 'NO_GROUPING'
-    GROUP_BY_NEWEST = 'GROUP_BY_NEWEST'
-    LEAST_RECENTLY_USED = 'LEAST_RECENTLY_USED'
-    FEWEST_CONVERSATIONS = 'FEWEST_CONVERSATIONS'
-    ADD_TO_ANY = 'ADD_TO_ANY'
+    NO_GROUPING = 'NO_GROUPING'  # Default - each conversation gets its own sandbox
+    GROUP_BY_NEWEST = 'GROUP_BY_NEWEST'  # Add to the most recently created sandbox
+    LEAST_RECENTLY_USED = 'LEAST_RECENTLY_USED'  # Add to the least recently used sandbox
+    FEWEST_CONVERSATIONS = 'FEWEST_CONVERSATIONS'  # Add to sandbox with fewest conversations
+    ADD_TO_ANY = 'ADD_TO_ANY'  # Add to any available sandbox (first found)
 
 
 _SETTINGS_FROZEN_FIELDS = frozenset(["secrets_store"])
