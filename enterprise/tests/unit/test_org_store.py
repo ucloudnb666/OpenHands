@@ -1050,11 +1050,11 @@ async def test_update_org_llm_settings_async_with_llm_api_key():
     mock_org = Org(
         id=org_id,
         name='Test Organization',
-        agent_settings={'schema_version': 1, 'llm.model': 'old-model'},
+        agent_settings={'schema_version': 1, 'llm': {'model': 'old-model'}},
     )
 
     llm_settings = OrgLLMSettingsUpdate(
-        agent_settings={'llm.model': 'new-model'},
+        agent_settings_diff={'llm': {'model': 'new-model'}},
         llm_api_key='new-member-api-key',
     )
 
@@ -1082,14 +1082,14 @@ async def test_update_org_llm_settings_async_with_llm_api_key():
 
         # Assert - Org is returned
         assert result is not None
-        assert result.agent_settings['llm.model'] == 'new-model'
+        assert result.agent_settings['llm']['model'] == 'new-model'
 
         # Assert - Member update was called with correct settings
         mock_member_update.assert_called_once()
         call_args = mock_member_update.call_args
         member_settings = call_args[0][2]  # Third positional arg is member_settings
         assert member_settings.llm_api_key == 'new-member-api-key'
-        assert member_settings.agent_settings is None
+        assert member_settings.agent_settings_diff is None
 
 
 @pytest.mark.asyncio
@@ -1103,7 +1103,9 @@ async def test_update_org_llm_settings_async_org_not_found():
 
     # Arrange
     non_existent_org_id = uuid.uuid4()
-    llm_settings = OrgLLMSettingsUpdate(agent_settings={'llm.model': 'new-model'})
+    llm_settings = OrgLLMSettingsUpdate(
+        agent_settings_diff={'llm': {'model': 'new-model'}}
+    )
 
     # Mock the async session to return None for org
     mock_session = AsyncMock()

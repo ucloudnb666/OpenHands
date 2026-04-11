@@ -36,12 +36,13 @@ def mock_org(org_id):
     org.id = org_id
     org.agent_settings = {
         'schema_version': 1,
-        'llm.model': 'claude-3',
-        'llm.base_url': 'https://api.anthropic.com',
         'agent': 'CodeActAgent',
-        'confirmation_mode': True,
-        'max_iterations': 50,
+        'llm': {
+            'model': 'claude-3',
+            'base_url': 'https://api.anthropic.com',
+        },
     }
+    org.conversation_settings = {}
     org.llm_api_key = None
     org.search_api_key = None
     return org
@@ -79,8 +80,8 @@ async def test_get_org_llm_settings_success(
 
     # Assert
     assert isinstance(result, OrgLLMSettingsResponse)
-    assert result.agent_settings['llm.model'] == 'claude-3'
-    assert result.agent_settings['agent'] == 'CodeActAgent'
+    assert result.agent_settings.llm.model == 'claude-3'
+    assert result.agent_settings.agent == 'CodeActAgent'
     mock_store.get_current_org_by_user_id.assert_called_once_with(user_id)
 
 
@@ -137,8 +138,10 @@ async def test_update_org_llm_settings_success(
     updated_org.id = mock_org.id
     updated_org.agent_settings = {
         'schema_version': 1,
-        'llm.model': 'new-model',
         'agent': 'CodeActAgent',
+        'llm': {'model': 'new-model'},
+    }
+    updated_org.conversation_settings = {
         'confirmation_mode': False,
         'max_iterations': 100,
     }
@@ -146,11 +149,13 @@ async def test_update_org_llm_settings_success(
     updated_org.search_api_key = None
 
     update_data = OrgLLMSettingsUpdate(
-        agent_settings={
-            'llm.model': 'new-model',
+        agent_settings_diff={
+            'llm': {'model': 'new-model'},
+        },
+        conversation_settings_diff={
             'confirmation_mode': False,
             'max_iterations': 100,
-        }
+        },
     )
 
     mock_store.get_current_org_by_user_id = AsyncMock(return_value=mock_org)
@@ -162,9 +167,9 @@ async def test_update_org_llm_settings_success(
 
     # Assert
     assert isinstance(result, OrgLLMSettingsResponse)
-    assert result.agent_settings['llm.model'] == 'new-model'
-    assert result.agent_settings['confirmation_mode'] is False
-    assert result.agent_settings['max_iterations'] == 100
+    assert result.agent_settings.llm.model == 'new-model'
+    assert result.conversation_settings.confirmation_mode is False
+    assert result.conversation_settings.max_iterations == 100
     mock_store.update_org_llm_settings.assert_called_once_with(
         org_id=mock_org.id,
         update_data=update_data,
@@ -192,7 +197,7 @@ async def test_update_org_llm_settings_no_changes(
 
     # Assert
     assert isinstance(result, OrgLLMSettingsResponse)
-    assert result.agent_settings['llm.model'] == 'claude-3'
+    assert result.agent_settings.llm.model == 'claude-3'
     mock_store.update_org_llm_settings.assert_not_called()
 
 
@@ -206,7 +211,9 @@ async def test_update_org_llm_settings_org_not_found(
     THEN: OrgNotFoundError is raised
     """
     # Arrange
-    update_data = OrgLLMSettingsUpdate(agent_settings={'llm.model': 'new-model'})
+    update_data = OrgLLMSettingsUpdate(
+        agent_settings_diff={'llm': {'model': 'new-model'}}
+    )
 
     mock_store.get_current_org_by_user_id = AsyncMock(return_value=None)
     service = OrgLLMSettingsService(store=mock_store, user_context=mock_user_context)

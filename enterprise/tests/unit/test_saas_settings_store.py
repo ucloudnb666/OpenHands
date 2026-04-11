@@ -49,20 +49,18 @@ def test_member_settings_persist_full_effective_agent_settings(mock_config):
         condenser_max_size=128,
     )
 
-    expected = {
-        'schema_version': 1,
-        'agent': 'CodeActAgent',
-        'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
-        'llm.base_url': 'https://api.example.com',
-        'max_iterations': 42,
-        'confirmation_mode': True,
-        'security_analyzer': 'llm',
-        'condenser.enabled': False,
-        'condenser.max_size': 128,
-    }
-
     actual = settings.normalized_agent_settings(strip_secret_values=True)
-    assert actual | expected == actual
+    # Agent settings are now nested format
+    assert actual['agent'] == 'CodeActAgent'
+    assert actual['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert actual['llm']['base_url'] == 'https://api.example.com'
+    assert actual['condenser']['enabled'] is False
+    assert actual['condenser']['max_size'] == 128
+
+    # Conversation settings live on the Settings object, not in agent_settings
+    assert settings.conversation_settings.max_iterations == 42
+    assert settings.conversation_settings.confirmation_mode is True
+    assert settings.conversation_settings.security_analyzer == 'llm'
 
 
 @pytest.fixture
@@ -431,9 +429,9 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
     with session_maker() as session:
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
-        assert org.agent_settings['llm.model'] == 'anthropic/claude-sonnet-4'
-        assert org.agent_settings['llm.base_url'] == 'https://api.anthropic.com/v1'
-        assert org.agent_settings['max_iterations'] == 100
+        assert org.agent_settings['llm']['model'] == 'anthropic/claude-sonnet-4'
+        assert org.agent_settings['llm']['base_url'] == 'https://api.anthropic.com/v1'
+        assert org.conversation_settings['max_iterations'] == 100
 
         members = {
             str(member.user_id): member
@@ -446,11 +444,12 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
         assert len(members) == 3
 
         for member in members.values():
-            assert member.agent_settings['llm.model'] == 'anthropic/claude-sonnet-4'
+            assert member.agent_settings['llm']['model'] == 'anthropic/claude-sonnet-4'
             assert (
-                member.agent_settings['llm.base_url'] == 'https://api.anthropic.com/v1'
+                member.agent_settings['llm']['base_url']
+                == 'https://api.anthropic.com/v1'
             )
-            assert member.agent_settings['max_iterations'] == 100
+            assert member.conversation_settings['max_iterations'] == 100
             assert decrypt_value(member._llm_api_key) == 'shared-external-api-key'
 
 
@@ -489,9 +488,10 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
     with session_maker() as session:
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
-        assert org.agent_settings['llm.model'] == 'openhands/claude-opus-4-5-20251101'
-        assert org.agent_settings['llm.base_url'] == LITE_LLM_API_URL
-        assert org.agent_settings['max_iterations'] == 75
+        # Settings normalizes openhands/ → litellm_proxy/ during construction
+        assert org.agent_settings['llm']['model'] == 'litellm_proxy/claude-opus-4-5-20251101'
+        assert org.agent_settings['llm']['base_url'] == LITE_LLM_API_URL
+        assert org.conversation_settings['max_iterations'] == 75
 
         members = {
             str(member.user_id): member
@@ -513,11 +513,11 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
 
         for member in members.values():
             assert (
-                member.agent_settings['llm.model']
-                == 'openhands/claude-opus-4-5-20251101'
+                member.agent_settings['llm']['model']
+                == 'litellm_proxy/claude-opus-4-5-20251101'
             )
-            assert member.agent_settings['llm.base_url'] == LITE_LLM_API_URL
-            assert member.agent_settings['max_iterations'] == 75
+            assert member.agent_settings['llm']['base_url'] == LITE_LLM_API_URL
+            assert member.conversation_settings['max_iterations'] == 75
 
 
 @pytest.mark.asyncio

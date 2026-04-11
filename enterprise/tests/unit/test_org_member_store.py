@@ -352,18 +352,20 @@ async def test_add_user_to_org_with_llm_settings(async_session_maker):
             role_id=role_id,
             llm_api_key='test-api-key',
             status='active',
-            agent_settings={
+            agent_settings_diff={
                 'schema_version': 1,
-                'llm.model': 'claude-sonnet-4',
-                'llm.base_url': 'https://api.example.com',
+                'llm': {
+                    'model': 'claude-sonnet-4',
+                    'base_url': 'https://api.example.com',
+                },
                 'max_iterations': 50,
             },
         )
 
     # Assert
     assert org_member is not None
-    assert org_member.agent_settings['llm.model'] == 'claude-sonnet-4'
-    assert org_member.agent_settings['llm.base_url'] == 'https://api.example.com'
+    assert org_member.agent_settings['llm']['model'] == 'claude-sonnet-4'
+    assert org_member.agent_settings['llm']['base_url'] == 'https://api.example.com'
     assert org_member.agent_settings['max_iterations'] == 50
 
 
@@ -1063,7 +1065,7 @@ async def test_update_all_members_llm_settings_async_with_non_encrypted_fields(
             llm_api_key='test-key',
             agent_settings={
                 'schema_version': 1,
-                'llm.model': 'old-model',
+                'llm': {'model': 'old-model'},
                 'max_iterations': 10,
             },
             status='active',
@@ -1074,9 +1076,11 @@ async def test_update_all_members_llm_settings_async_with_non_encrypted_fields(
 
     # Act
     member_settings = OrgMemberLLMSettings(
-        agent_settings={
-            'llm.model': 'new-model',
-            'llm.base_url': 'https://new-url.com',
+        agent_settings_diff={
+            'llm': {
+                'model': 'new-model',
+                'base_url': 'https://new-url.com',
+            },
             'max_iterations': 50,
         }
     )
@@ -1096,8 +1100,8 @@ async def test_update_all_members_llm_settings_async_with_non_encrypted_fields(
         )
         updated_member = result.scalars().first()
 
-        assert updated_member.agent_settings['llm.model'] == 'new-model'
-        assert updated_member.agent_settings['llm.base_url'] == 'https://new-url.com'
+        assert updated_member.agent_settings['llm']['model'] == 'new-model'
+        assert updated_member.agent_settings['llm']['base_url'] == 'https://new-url.com'
         assert updated_member.agent_settings['max_iterations'] == 50
 
 
@@ -1133,7 +1137,7 @@ async def test_update_all_members_llm_settings_async_with_empty_settings(
             llm_api_key='original-key',
             agent_settings={
                 'schema_version': 1,
-                'llm.model': 'original-model',
+                'llm': {'model': 'original-model'},
             },
             status='active',
         )
@@ -1159,7 +1163,7 @@ async def test_update_all_members_llm_settings_async_with_empty_settings(
         )
         member = result.scalars().first()
 
-        assert member.agent_settings['llm.model'] == 'original-model'
+        assert member.agent_settings['llm']['model'] == 'original-model'
         # Original key should still be there (encrypted)
         assert member._llm_api_key is not None
 
@@ -1242,7 +1246,7 @@ def test_org_llm_settings_update_get_member_updates_includes_llm_api_key():
 
     # Arrange
     settings = OrgLLMSettingsUpdate(
-        agent_settings={'llm.model': 'claude-3'},
+        agent_settings_diff={'llm': {'model': 'claude-3'}},
         llm_api_key='new-member-key',
     )
 
@@ -1252,7 +1256,7 @@ def test_org_llm_settings_update_get_member_updates_includes_llm_api_key():
     # Assert
     assert member_updates is not None
     assert member_updates.llm_api_key == 'new-member-key'
-    assert member_updates.agent_settings is None
+    assert member_updates.agent_settings_diff is None
 
 
 def test_org_llm_settings_update_get_member_updates_only_llm_api_key():
@@ -1272,7 +1276,7 @@ def test_org_llm_settings_update_get_member_updates_only_llm_api_key():
     # Assert
     assert member_updates is not None
     assert member_updates.llm_api_key == 'member-key-only'
-    assert member_updates.agent_settings is None
+    assert member_updates.agent_settings_diff is None
 
 
 def test_org_llm_settings_update_has_updates_with_llm_api_key():

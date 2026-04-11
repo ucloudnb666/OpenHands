@@ -157,7 +157,7 @@ class SaasSettingsStore(SettingsStore):
         if org_member.mcp_config is not None:
             kwargs['mcp_config'] = org_member.mcp_config
         kwargs["agent_settings"] = deep_merge(
-            org_agent_settings,
+            org_agent_settings.model_dump(mode='json'),
             member_agent_settings_diff,
         )
         org_conversation = OrgStore.get_conversation_settings_from_org(org)
@@ -165,7 +165,7 @@ class SaasSettingsStore(SettingsStore):
             OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
         )
         kwargs["conversation_settings"] = deep_merge(
-            org_conversation,
+            org_conversation.model_dump(mode='json'),
             member_conversation_diff,
         )
         if org.v1_enabled is None:
@@ -247,7 +247,7 @@ class SaasSettingsStore(SettingsStore):
 
             effective_agent_settings_diff = self._get_persisted_agent_settings(item)
             org.agent_settings = deep_merge(
-                OrgStore.get_agent_settings_from_org(org),
+                OrgStore.get_agent_settings_from_org(org).model_dump(mode='json'),
                 effective_agent_settings_diff,
             )
 
@@ -255,7 +255,9 @@ class SaasSettingsStore(SettingsStore):
                 mode="json"
             )
             org.conversation_settings = deep_merge(
-                OrgStore.get_conversation_settings_from_org(org),
+                OrgStore.get_conversation_settings_from_org(org).model_dump(
+                    mode='json'
+                ),
                 effective_conversation_diff,
             )
 

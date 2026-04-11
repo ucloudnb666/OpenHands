@@ -354,11 +354,17 @@ class LiteLlmManager:
                 # Check if the database key exists in LiteLLM
                 # If not, generate a new key to prevent verification failures later
                 db_key = None
-                llm_base_url = (
-                    user_settings.agent_settings.get('llm.base_url')
-                    if user_settings and user_settings.agent_settings
-                    else None
-                )
+                llm_base_url = None
+                if user_settings and user_settings.agent_settings:
+                    # Handle both nested {'llm': {'base_url': ...}} and
+                    # legacy flat {'llm.base_url': ...} formats
+                    llm_section = user_settings.agent_settings.get('llm')
+                    if isinstance(llm_section, dict):
+                        llm_base_url = llm_section.get('base_url')
+                    else:
+                        llm_base_url = user_settings.agent_settings.get(
+                            'llm.base_url'
+                        )
                 if (
                     user_settings
                     and user_settings.llm_api_key

@@ -769,9 +769,12 @@ def test_create_user_settings_from_entities():
     org_member = MagicMock()
     org_member.llm_api_key = SecretStr('test-api-key')
     org_member.agent_settings = {
-        'schema_version': 1,
-        'llm.model': 'claude-3-5-sonnet',
-        'llm.base_url': 'https://api.example.com',
+        'llm': {
+            'model': 'claude-3-5-sonnet',
+            'base_url': 'https://api.example.com',
+        },
+    }
+    org_member.conversation_settings = {
         'max_iterations': 50,
     }
 
@@ -793,9 +796,10 @@ def test_create_user_settings_from_entities():
     org.sandbox_runtime_container_image = None
     org.org_version = 1
     org.agent_settings = {
-        'schema_version': 1,
         'agent': 'CodeActAgent',
-        'security_analyzer': 'mock-analyzer',
+    }
+    org.conversation_settings = {
+        'security_analyzer': 'llm',
     }
     org.search_api_key = None
     org.sandbox_api_key = None
@@ -809,11 +813,11 @@ def test_create_user_settings_from_entities():
 
     assert result.keycloak_user_id == user_id
     assert result.llm_api_key == 'test-api-key'
-    assert result.agent_settings['llm.model'] == 'claude-3-5-sonnet'
-    assert result.agent_settings['llm.base_url'] == 'https://api.example.com'
-    assert result.agent_settings['max_iterations'] == 50
+    assert result.agent_settings['llm']['model'] == 'claude-3-5-sonnet'
+    assert result.agent_settings['llm']['base_url'] == 'https://api.example.com'
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['security_analyzer'] == 'mock-analyzer'
+    assert result.conversation_settings['security_analyzer'] == 'llm'
+    assert result.conversation_settings['max_iterations'] == 50
     assert result.language == 'en'
     assert result.email == 'test@example.com'
 
@@ -826,6 +830,7 @@ def test_create_user_settings_from_entities_with_org_fallback():
     org_member = MagicMock()
     org_member.llm_api_key = None
     org_member.agent_settings = {}
+    org_member.conversation_settings = {}
 
     user = MagicMock()
     user.accepted_tos = None
@@ -845,15 +850,19 @@ def test_create_user_settings_from_entities_with_org_fallback():
     org.sandbox_runtime_container_image = None
     org.org_version = 2
     org.agent_settings = {
-        'schema_version': 1,
         'agent': 'CodeActAgent',
-        'llm.model': 'default-model',
-        'llm.base_url': 'https://default.api.com',
+        'llm': {
+            'model': 'default-model',
+            'base_url': 'https://default.api.com',
+        },
+        'condenser': {
+            'enabled': False,
+            'max_size': 1000,
+        },
+    }
+    org.conversation_settings = {
         'confirmation_mode': True,
-        'condenser.enabled': False,
-        'condenser.max_size': 1000,
         'max_iterations': 100,
-        'mcp_config': {'key': 'value'},
     }
     org.search_api_key = SecretStr('search-key')
     org.sandbox_api_key = None
@@ -866,12 +875,12 @@ def test_create_user_settings_from_entities_with_org_fallback():
     )
 
     # Should have fallen back to org defaults
-    assert result.agent_settings['llm.model'] == 'default-model'
-    assert result.agent_settings['llm.base_url'] == 'https://default.api.com'
-    assert result.agent_settings['max_iterations'] == 100
+    assert result.agent_settings['llm']['model'] == 'default-model'
+    assert result.agent_settings['llm']['base_url'] == 'https://default.api.com'
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['confirmation_mode'] is True
-    assert result.agent_settings['condenser.max_size'] == 1000
+    assert result.agent_settings['condenser']['max_size'] == 1000
+    assert result.conversation_settings['confirmation_mode'] is True
+    assert result.conversation_settings['max_iterations'] == 100
     assert result.language == 'es'
     assert result.search_api_key == 'search-key'
 

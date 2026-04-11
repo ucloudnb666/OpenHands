@@ -48,7 +48,7 @@ async def test_get_current_org_by_user_id_success(async_session_maker):
     async with async_session_maker() as session:
         org = Org(
             name='test-org',
-            agent_settings={'schema_version': 1, 'llm.model': 'claude-3'},
+            agent_settings={'schema_version': 1, 'llm': {'model': 'claude-3'}},
         )
         session.add(org)
         await session.flush()
@@ -65,7 +65,7 @@ async def test_get_current_org_by_user_id_success(async_session_maker):
     # Assert
     assert result is not None
     assert result.name == 'test-org'
-    assert result.agent_settings['llm.model'] == 'claude-3'
+    assert result.agent_settings['llm']['model'] == 'claude-3'
 
 
 @pytest.mark.asyncio
@@ -98,18 +98,20 @@ async def test_update_org_llm_settings_success(async_session_maker):
     async with async_session_maker() as session:
         org = Org(
             name='test-org',
-            agent_settings={'schema_version': 1, 'llm.model': 'old-model'},
+            agent_settings={'schema_version': 1, 'llm': {'model': 'old-model'}},
         )
         session.add(org)
         await session.commit()
         org_id = org.id
 
         update_data = OrgLLMSettingsUpdate(
-            agent_settings={
-                'llm.model': 'new-model',
+            agent_settings_diff={
+                'llm': {'model': 'new-model'},
                 'agent': 'CodeActAgent',
+            },
+            conversation_settings_diff={
                 'confirmation_mode': True,
-            }
+            },
         )
 
         # Act
@@ -118,9 +120,9 @@ async def test_update_org_llm_settings_success(async_session_maker):
 
     # Assert
     assert result is not None
-    assert result.agent_settings['llm.model'] == 'new-model'
+    assert result.agent_settings['llm']['model'] == 'new-model'
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['confirmation_mode'] is True
+    assert result.conversation_settings['confirmation_mode'] is True
 
 
 @pytest.mark.asyncio
@@ -132,7 +134,9 @@ async def test_update_org_llm_settings_org_not_found(async_session_maker):
     """
     # Arrange
     non_existent_org_id = uuid.uuid4()
-    update_data = OrgLLMSettingsUpdate(agent_settings={'llm.model': 'new-model'})
+    update_data = OrgLLMSettingsUpdate(
+        agent_settings_diff={'llm': {'model': 'new-model'}}
+    )
 
     # Act
     async with async_session_maker() as session:
@@ -153,7 +157,7 @@ async def test_update_org_llm_settings_updates_org_defaults_only(async_session_m
     async with async_session_maker() as session:
         org = Org(
             name='test-org',
-            agent_settings={'schema_version': 1, 'llm.model': 'old-model'},
+            agent_settings={'schema_version': 1, 'llm': {'model': 'old-model'}},
         )
         session.add(org)
         await session.commit()
@@ -162,14 +166,14 @@ async def test_update_org_llm_settings_updates_org_defaults_only(async_session_m
         result = await store.update_org_llm_settings(
             org.id,
             OrgLLMSettingsUpdate(
-                agent_settings={'llm.model': 'new-model'},
+                agent_settings_diff={'llm': {'model': 'new-model'}},
                 llm_api_key='new-api-key',
                 search_api_key='search-key',
             ),
         )
 
     assert result is not None
-    assert result.agent_settings['llm.model'] == 'new-model'
+    assert result.agent_settings['llm']['model'] == 'new-model'
     assert result.llm_api_key is not None
     assert result.llm_api_key.get_secret_value() == 'new-api-key'
     assert result.search_api_key is not None

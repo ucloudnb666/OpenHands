@@ -282,7 +282,7 @@ class UserStore:
             )
             if not custom_settings:
                 org_member_kwargs["agent_settings"] = (
-                    OrgStore.get_agent_settings_from_org(org)
+                    OrgStore.get_agent_settings_from_org(org).model_dump(mode='json')
                 )
 
             org_member = OrgMember(
@@ -960,14 +960,17 @@ class UserStore:
             OrgMemberStore.get_agent_settings_diff_from_org_member(org_member)
         )
         org_agent_settings = OrgStore.get_agent_settings_from_org(org)
-        agent_settings = {**org_agent_settings, **member_agent_settings_diff}
+        agent_settings = {
+            **org_agent_settings.model_dump(mode='json'),
+            **member_agent_settings_diff,
+        }
 
         member_conversation_settings_diff = (
             OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
         )
         org_conversation_settings = OrgStore.get_conversation_settings_from_org(org)
         conversation_settings = {
-            **org_conversation_settings,
+            **org_conversation_settings.model_dump(mode='json'),
             **member_conversation_settings_diff,
         }
 

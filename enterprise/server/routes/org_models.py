@@ -8,6 +8,7 @@ from pydantic import (
     StringConstraints,
     field_validator,
 )
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 from storage.org import Org
 from storage.org_member import OrgMember
 from storage.role import Role
@@ -150,8 +151,10 @@ class OrgResponse(BaseModel):
     sandbox_base_container_image: str | None = None
     sandbox_runtime_container_image: str | None = None
     org_version: int = 0
-    agent_settings: dict[str, Any] = Field(default_factory=dict)
-    conversation_settings: dict[str, Any] = Field(default_factory=dict)
+    agent_settings: AgentSettings = Field(default_factory=AgentSettings)
+    conversation_settings: ConversationSettings = Field(
+        default_factory=ConversationSettings
+    )
     search_api_key: str | None = None
     sandbox_api_key: str | None = None
     max_budget_per_task: float | None = None
@@ -179,8 +182,10 @@ class OrgResponse(BaseModel):
             sandbox_base_container_image=org.sandbox_base_container_image,
             sandbox_runtime_container_image=org.sandbox_runtime_container_image,
             org_version=org.org_version if org.org_version is not None else 0,
-            agent_settings=dict(org.agent_settings),
-            conversation_settings=dict(org.conversation_settings),
+            agent_settings=AgentSettings.model_validate(dict(org.agent_settings)),
+            conversation_settings=ConversationSettings.model_validate(
+                dict(org.conversation_settings)
+            ),
             search_api_key=None,
             sandbox_api_key=None,
             max_budget_per_task=org.max_budget_per_task,
@@ -226,8 +231,10 @@ class OrgUpdate(BaseModel):
 class OrgLLMSettingsResponse(BaseModel):
     """Response model for organization default LLM settings."""
 
-    agent_settings: dict[str, Any] = Field(default_factory=dict)
-    conversation_settings: dict[str, Any] = Field(default_factory=dict)
+    agent_settings: AgentSettings = Field(default_factory=AgentSettings)
+    conversation_settings: ConversationSettings = Field(
+        default_factory=ConversationSettings
+    )
     llm_api_key_set: bool = False
     search_api_key: str | None = None  # Masked in response
 
@@ -247,8 +254,10 @@ class OrgLLMSettingsResponse(BaseModel):
     def from_org(cls, org: Org) -> 'OrgLLMSettingsResponse':
         """Create response from Org entity."""
         return cls(
-            agent_settings=dict(org.agent_settings),
-            conversation_settings=dict(org.conversation_settings),
+            agent_settings=AgentSettings.model_validate(dict(org.agent_settings)),
+            conversation_settings=ConversationSettings.model_validate(
+                dict(org.conversation_settings)
+            ),
             llm_api_key_set=org.llm_api_key is not None,
             search_api_key=cls._mask_key(org.search_api_key),
         )

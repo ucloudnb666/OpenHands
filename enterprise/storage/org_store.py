@@ -2,7 +2,7 @@
 Store class for managing organizations.
 """
 
-from typing import Any, Optional
+from typing import Optional
 from uuid import UUID
 
 from server.constants import (
@@ -14,6 +14,7 @@ from server.constants import (
 from server.routes.org_models import OrgLLMSettingsUpdate, OrphanedUserError
 from sqlalchemy import select, text
 from sqlalchemy.orm import joinedload
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager
@@ -46,12 +47,12 @@ class OrgStore:
     """Store for managing organizations."""
 
     @staticmethod
-    def get_agent_settings_from_org(org: Org) -> dict[str, Any]:
-        return dict(org.agent_settings)
+    def get_agent_settings_from_org(org: Org) -> AgentSettings:
+        return AgentSettings.model_validate(dict(org.agent_settings))
 
     @staticmethod
-    def get_conversation_settings_from_org(org: Org) -> dict[str, Any]:
-        return dict(org.conversation_settings)
+    def get_conversation_settings_from_org(org: Org) -> ConversationSettings:
+        return ConversationSettings.model_validate(dict(org.conversation_settings))
 
     @staticmethod
     def sync_agent_settings(org: Org) -> None:
