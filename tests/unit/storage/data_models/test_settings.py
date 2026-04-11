@@ -5,11 +5,11 @@ from pydantic import SecretStr
 
 from openhands.app_server.settings.settings_router import convert_to_settings
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig as LegacyMCPConfig
+from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
 from openhands.core.config.security_config import SecurityConfig
-from openhands.storage.data_models.settings import Settings, sdk_mcp_config_to_legacy
+from openhands.storage.data_models.settings import Settings
 
 
 def test_settings_from_config():
@@ -156,7 +156,12 @@ def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
         agent_settings={
             'llm.model': 'sdk-model',
             'mcp_config': {
-                'sse_servers': [{'url': 'https://example.com/sse'}],
+                'mcpServers': {
+                    'sse_server': {
+                        'url': 'https://example.com/sse',
+                        'transport': 'sse',
+                    }
+                },
             },
         },
     )
@@ -164,17 +169,12 @@ def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
     mcp_config = settings.agent_settings.mcp_config
     assert mcp_config is not None
     servers = mcp_config.mcpServers
-    assert "sse_0" in servers
-    assert servers["sse_0"].transport == "sse"
-    assert servers["sse_0"].url == "https://example.com/sse"
+    assert 'sse_server' in servers
+    assert servers['sse_server'].transport == 'sse'
+    assert servers['sse_server'].url == 'https://example.com/sse'
 
     api_values = settings.agent_settings_values()
-    assert "sse_0" in api_values["mcp_config"]["mcpServers"]
-
-    legacy = sdk_mcp_config_to_legacy(mcp_config)
-    assert legacy == LegacyMCPConfig.model_validate(
-        {"sse_servers": [{"url": "https://example.com/sse"}]}
-    )
+    assert 'sse_server' in api_values['mcp_config']['mcpServers']
 
 
 def test_settings_update_mcp_config():
@@ -182,12 +182,12 @@ def test_settings_update_mcp_config():
 
     settings.update(
         {
-            "agent_settings": {
-                "mcp_config": {
-                    "mcpServers": {
-                        "custom": {
-                            "transport": "http",
-                            "url": "https://example.com/mcp",
+            'agent_settings': {
+                'mcp_config': {
+                    'mcpServers': {
+                        'custom': {
+                            'transport': 'http',
+                            'url': 'https://example.com/mcp',
                         }
                     }
                 }
@@ -197,14 +197,9 @@ def test_settings_update_mcp_config():
 
     mcp = settings.agent_settings.mcp_config
     assert mcp is not None
-    assert "custom" in mcp.mcpServers
-    assert mcp.mcpServers["custom"].transport == "http"
-    assert mcp.mcpServers["custom"].url == "https://example.com/mcp"
-
-    legacy = sdk_mcp_config_to_legacy(mcp)
-    assert legacy == LegacyMCPConfig.model_validate(
-        {"shttp_servers": [{"url": "https://example.com/mcp", "timeout": 60}]}
-    )
+    assert 'custom' in mcp.mcpServers
+    assert mcp.mcpServers['custom'].transport == 'http'
+    assert mcp.mcpServers['custom'].url == 'https://example.com/mcp'
 
 
 def test_settings_update_batch():
