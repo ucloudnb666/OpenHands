@@ -38,15 +38,26 @@ def mock_config():
 
 
 def test_member_settings_persist_full_effective_agent_settings(mock_config):
-    settings = Settings(
-        agent='CodeActAgent',
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_base_url='https://api.example.com',
-        max_iterations=42,
-        confirmation_mode=True,
-        security_analyzer='llm',
-        enable_default_condenser=False,
-        condenser_max_size=128,
+    settings = Settings()
+    settings.update(
+        {
+            'agent_settings': {
+                'agent': 'CodeActAgent',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'base_url': 'https://api.example.com',
+                },
+                'condenser': {
+                    'enabled': False,
+                    'max_size': 128,
+                },
+            },
+            'conversation_settings': {
+                'max_iterations': 42,
+                'confirmation_mode': True,
+                'security_analyzer': 'llm',
+            },
+        }
     )
 
     actual = settings.normalized_agent_settings(strip_secret_values=True)
@@ -423,11 +434,9 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
     with session_maker() as session:
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
-        assert org.agent_settings_diff['llm']['model'] == 'anthropic/claude-sonnet-4'
-        assert (
-            org.agent_settings_diff['llm']['base_url'] == 'https://api.anthropic.com/v1'
-        )
-        assert org.conversation_settings_diff['max_iterations'] == 100
+        assert org.agent_settings['llm']['model'] == 'anthropic/claude-sonnet-4'
+        assert org.agent_settings['llm']['base_url'] == 'https://api.anthropic.com/v1'
+        assert org.conversation_settings['max_iterations'] == 100
 
         members = {
             str(member.user_id): member
@@ -489,11 +498,11 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
         assert org is not None
         # Settings normalizes openhands/ → litellm_proxy/ during construction
         assert (
-            org.agent_settings_diff['llm']['model']
+            org.agent_settings['llm']['model']
             == 'litellm_proxy/claude-opus-4-5-20251101'
         )
-        assert org.agent_settings_diff['llm']['base_url'] == LITE_LLM_API_URL
-        assert org.conversation_settings_diff['max_iterations'] == 75
+        assert org.agent_settings['llm']['base_url'] == LITE_LLM_API_URL
+        assert org.conversation_settings['max_iterations'] == 75
 
         members = {
             str(member.user_id): member

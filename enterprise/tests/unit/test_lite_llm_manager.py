@@ -20,7 +20,6 @@ from storage.lite_llm_manager import (
 )
 from storage.user_settings import UserSettings
 
-from openhands.sdk.settings import AgentSettings, LLMSettings
 from openhands.server.settings import Settings
 
 
@@ -131,15 +130,18 @@ class TestLiteLlmManager:
     @pytest.fixture
     def mock_settings(self):
         """Create a mock Settings object."""
-        settings = Settings(
-            agent_settings=AgentSettings(
-                agent='TestAgent',
-                llm=LLMSettings(
-                    model='test-model',
-                    api_key=SecretStr('test-key'),
-                    base_url='http://test.com',
-                ),
-            ),
+        settings = Settings()
+        settings.update(
+            {
+                'agent_settings': {
+                    'agent': 'TestAgent',
+                    'llm': {
+                        'model': 'test-model',
+                        'api_key': 'test-key',
+                        'base_url': 'http://test.com',
+                    },
+                },
+            }
         )
         return settings
 
@@ -2492,9 +2494,9 @@ class TestBudgetPayloadHandling:
 
         # Verify that max_budget IS in the JSON payload with the correct value
         json_payload = call_args[1]['json']
-        assert (
-            'max_budget' in json_payload
-        ), 'max_budget should be in payload when set to a value'
+        assert 'max_budget' in json_payload, (
+            'max_budget should be in payload when set to a value'
+        )
         assert json_payload['max_budget'] == 100.0
 
     @pytest.mark.asyncio
@@ -2553,9 +2555,9 @@ class TestBudgetPayloadHandling:
 
         # Verify that max_budget_in_team IS in the JSON payload
         json_payload = call_args[1]['json']
-        assert (
-            'max_budget_in_team' in json_payload
-        ), 'max_budget_in_team should be in payload when set to a value'
+        assert 'max_budget_in_team' in json_payload, (
+            'max_budget_in_team should be in payload when set to a value'
+        )
         assert json_payload['max_budget_in_team'] == 50.0
 
     @pytest.mark.asyncio
@@ -2614,9 +2616,9 @@ class TestBudgetPayloadHandling:
 
         # Verify that max_budget_in_team IS in the JSON payload
         json_payload = call_args[1]['json']
-        assert (
-            'max_budget_in_team' in json_payload
-        ), 'max_budget_in_team should be in payload when set to a value'
+        assert 'max_budget_in_team' in json_payload, (
+            'max_budget_in_team should be in payload when set to a value'
+        )
         assert json_payload['max_budget_in_team'] == 75.0
 
 
