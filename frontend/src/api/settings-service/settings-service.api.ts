@@ -9,7 +9,7 @@ class SettingsService {
    * Get the settings from the server or use the default settings if not found
    */
   static async getSettings(): Promise<Settings> {
-    const { data } = await openHands.get<Settings>("/api/settings");
+    const { data } = await openHands.get<Settings>("/api/v1/settings");
     return data;
   }
 
@@ -37,7 +37,7 @@ class SettingsService {
   static async saveSettings(
     settings: Partial<Settings> & Record<string, unknown>,
   ): Promise<boolean> {
-    const data = await openHands.post("/api/settings", settings);
+    const data = await openHands.post("/api/v1/settings", settings);
     return data.status === 200;
   }
 }
