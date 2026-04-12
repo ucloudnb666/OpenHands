@@ -28,6 +28,7 @@ class UserSettings(Base):  # type: ignore
     sandbox_grouping_strategy = Column(String, nullable=True)
     user_version = Column(Integer, nullable=False, default=0)
     accepted_tos = Column(DateTime, nullable=True)
+    # Deprecated (v0): mcp_config now lives inside AgentSettings on Org / OrgMember.
     mcp_config = Column(JSON, nullable=True)
     disabled_skills = Column(JSON, nullable=True)
     search_api_key = Column(String, nullable=True)
