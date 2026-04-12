@@ -159,6 +159,7 @@ class TestLiteLlmManager:
             'llm': {
                 'model': 'test-model',
                 'base_url': 'http://test.com',
+                'api_key': 'test-key',
             },
         }
         user_settings.llm_api_key = SecretStr('test-key')
@@ -255,10 +256,7 @@ class TestLiteLlmManager:
 
                     assert result is not None
                     assert _agent_value(result, 'agent') == 'CodeActAgent'
-                    assert (
-                        _agent_value(result, 'llm.model')
-                        == get_default_litellm_model()
-                    )
+                    assert _agent_value(result, 'llm.model') == get_default_litellm_model()
                     assert _secret_value(result, 'llm.api_key') == 'test-key'
                     assert _agent_value(result, 'llm.base_url') == 'http://test.com'
 
@@ -778,7 +776,7 @@ class TestLiteLlmManager:
                             # migrate_entries should update user_settings with the new key
                             assert result is not None
                             assert (
-                                result.llm_api_key.get_secret_value()
+                                result.agent_settings['llm']['api_key']
                                 == 'new-generated-key'
                             )
                             assert result.llm_api_key_for_byor_secret is not None
