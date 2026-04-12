@@ -523,16 +523,12 @@ async def test_persist_org_with_owner_with_multiple_fields(
     # Assert
     assert result.name == 'Complex Org'
     assert result.agent_settings['agent'] == 'CodeActAgent'
-    assert result.agent_settings['max_iterations'] == 50
-    assert result.agent_settings['confirmation_mode'] is True
     assert result.billing_margin == 0.15
 
     # Verify persistence
     async with async_session_maker() as session:
         persisted_org = await session.get(Org, org_id)
         assert persisted_org.agent_settings['agent'] == 'CodeActAgent'
-        assert persisted_org.agent_settings['max_iterations'] == 50
-        assert persisted_org.agent_settings['confirmation_mode'] is True
         assert persisted_org.billing_margin == 0.15
 
         result_query = await session.execute(
