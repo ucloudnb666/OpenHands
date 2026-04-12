@@ -16,8 +16,6 @@ from server.constants import (
 from server.logger import logger
 from sqlalchemy import select, text
 from sqlalchemy.orm import selectinload
-
-from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
 from storage.database import a_session_maker
 from storage.encrypt_utils import (
     decrypt_legacy_model,
@@ -30,6 +28,8 @@ from storage.role_store import RoleStore
 from storage.user import User
 from storage.user_settings import UserSettings
 from utils.identity import resolve_display_name
+
+from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
 
 # The max possible time to wait for another process to finish creating a user before retrying
 _REDIS_CREATE_TIMEOUT_SECONDS = 30
@@ -234,14 +234,14 @@ class UserStore:
 
             # If the user has custom settings, keep the org defaults minimal.
             if custom_settings:
-                org_kwargs["agent_settings"] = {
-                    "schema_version": AGENT_SETTINGS_SCHEMA_VERSION,
-                    "llm": {
-                        "model": get_default_litellm_model(),
-                        "base_url": LITE_LLM_API_URL,
+                org_kwargs['agent_settings'] = {
+                    'schema_version': AGENT_SETTINGS_SCHEMA_VERSION,
+                    'llm': {
+                        'model': get_default_litellm_model(),
+                        'base_url': LITE_LLM_API_URL,
                     },
                 }
-                org_kwargs["org_version"] = ORG_SETTINGS_VERSION
+                org_kwargs['org_version'] = ORG_SETTINGS_VERSION
 
             for key, value in org_kwargs.items():
                 if hasattr(org, key):
@@ -281,7 +281,7 @@ class UserStore:
                 decrypted_user_settings
             )
             if not custom_settings:
-                org_member_kwargs["agent_settings_diff"] = (
+                org_member_kwargs['agent_settings_diff'] = (
                     OrgStore.get_agent_settings_from_org(org).model_dump(mode='json')
                 )
 
@@ -1021,20 +1021,24 @@ class UserStore:
             True if user has custom settings, False if using old defaults
         """
         persisted_agent_settings = user_settings.agent_settings or {}
-        llm_settings = persisted_agent_settings.get("llm", {})
+        llm_settings = persisted_agent_settings.get('llm', {})
         if isinstance(llm_settings, dict):
-            user_model = llm_settings.get("model")
-            user_base_url = llm_settings.get("base_url")
+            user_model = llm_settings.get('model')
+            user_base_url = llm_settings.get('base_url')
         else:
             user_model = None
             user_base_url = None
         # Fall back to legacy flat-key format or top-level attributes
-        user_model = user_model or persisted_agent_settings.get(
-            "llm.model"
-        ) or getattr(user_settings, "llm_model", None)
-        user_base_url = user_base_url or persisted_agent_settings.get(
-            "llm.base_url"
-        ) or getattr(user_settings, "llm_base_url", None)
+        user_model = (
+            user_model
+            or persisted_agent_settings.get('llm.model')
+            or getattr(user_settings, 'llm_model', None)
+        )
+        user_base_url = (
+            user_base_url
+            or persisted_agent_settings.get('llm.base_url')
+            or getattr(user_settings, 'llm_base_url', None)
+        )
 
         user_model = user_model.strip() or None if user_model else None
         user_base_url = user_base_url.strip() or None if user_base_url else None

@@ -40,7 +40,10 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
 
     assert kwargs['llm_api_key'] == 'legacy-secret'
     assert kwargs['agent_settings_diff']['agent'] == 'CodeActAgent'
-    assert kwargs['agent_settings_diff']['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert (
+        kwargs['agent_settings_diff']['llm']['model']
+        == 'anthropic/claude-sonnet-4-5-20250929'
+    )
     assert kwargs['agent_settings_diff']['llm']['base_url'] == 'https://api.example.com'
     assert kwargs['agent_settings_diff']['condenser']['enabled'] is False
     assert kwargs['agent_settings_diff']['condenser']['max_size'] == 128
@@ -63,8 +66,6 @@ def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides
 
     assert kwargs['llm_api_key'].get_secret_value() == 'member-secret'
     assert kwargs['agent_settings_diff'] == {}
-
-
 
 
 @pytest.fixture
@@ -339,7 +340,9 @@ async def test_add_user_to_org_with_llm_settings(async_session_maker):
     # Assert
     assert org_member is not None
     assert org_member.agent_settings_diff['llm']['model'] == 'claude-sonnet-4'
-    assert org_member.agent_settings_diff['llm']['base_url'] == 'https://api.example.com'
+    assert (
+        org_member.agent_settings_diff['llm']['base_url'] == 'https://api.example.com'
+    )
     assert org_member.agent_settings_diff['max_iterations'] == 50
 
 
@@ -1075,7 +1078,10 @@ async def test_update_all_members_llm_settings_async_with_non_encrypted_fields(
         updated_member = result.scalars().first()
 
         assert updated_member.agent_settings_diff['llm']['model'] == 'new-model'
-        assert updated_member.agent_settings_diff['llm']['base_url'] == 'https://new-url.com'
+        assert (
+            updated_member.agent_settings_diff['llm']['base_url']
+            == 'https://new-url.com'
+        )
         assert updated_member.agent_settings_diff['max_iterations'] == 50
 
 

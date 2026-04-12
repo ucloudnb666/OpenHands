@@ -11,7 +11,6 @@ from server.logger import logger
 from server.routes.org_models import OrgMemberLLMSettings
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
-from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager, get_openhands_cloud_key_alias
 from storage.org import Org
@@ -25,6 +24,7 @@ from storage.user_store import UserStore
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.server.settings import Settings
 from openhands.storage.settings.settings_store import SettingsStore
+from openhands.utils.jsonpatch_compat import deep_merge
 from openhands.utils.llm import is_openhands_model
 
 
@@ -78,7 +78,7 @@ class SaasSettingsStore(SettingsStore):
 
     @staticmethod
     def _get_persisted_agent_settings(item: Settings) -> dict[str, Any]:
-        return item.agent_settings.model_dump(mode="json")
+        return item.agent_settings.model_dump(mode='json')
 
     async def load(self) -> Settings | None:
         user = await UserStore.get_user_by_id(self.user_id)
@@ -136,10 +136,10 @@ class SaasSettingsStore(SettingsStore):
                 f'No effective LLM API key found for user {self.user_id} '
                 f'in org {org_id} (org key and member key are both unset)'
             )
-        kwargs["agent_settings"] = merged_agent_settings
+        kwargs['agent_settings'] = merged_agent_settings
         org_conversation = OrgStore.get_conversation_settings_from_org(org)
         member_conversation_diff = dict(org_member.conversation_settings_diff)
-        kwargs["conversation_settings"] = deep_merge(
+        kwargs['conversation_settings'] = deep_merge(
             org_conversation.model_dump(mode='json'),
             member_conversation_diff,
         )
@@ -207,8 +207,8 @@ class SaasSettingsStore(SettingsStore):
 
             llm_model = item.agent_settings.llm.model
             llm_base_url = item.agent_settings.llm.base_url
-            normalized_llm_base_url = llm_base_url.rstrip("/") if llm_base_url else None
-            normalized_managed_base_url = LITE_LLM_API_URL.rstrip("/")
+            normalized_llm_base_url = llm_base_url.rstrip('/') if llm_base_url else None
+            normalized_managed_base_url = LITE_LLM_API_URL.rstrip('/')
             uses_managed_llm_key = (
                 normalized_llm_base_url == normalized_managed_base_url
                 or (normalized_llm_base_url is None and is_openhands_model(llm_model))
@@ -226,7 +226,7 @@ class SaasSettingsStore(SettingsStore):
             )
 
             effective_conversation_diff = item.conversation_settings.model_dump(
-                mode="json"
+                mode='json'
             )
             org.conversation_settings = deep_merge(
                 OrgStore.get_conversation_settings_from_org(org).model_dump(
@@ -235,22 +235,18 @@ class SaasSettingsStore(SettingsStore):
                 effective_conversation_diff,
             )
 
-            kwargs = item.model_dump(context={"expose_secrets": True})
-            kwargs.pop("agent_settings", None)
-            kwargs.pop("conversation_settings", None)
+            kwargs = item.model_dump(context={'expose_secrets': True})
+            kwargs.pop('agent_settings', None)
+            kwargs.pop('conversation_settings', None)
 
             for key, value in kwargs.items():
                 if hasattr(user, key):
                     setattr(user, key, value)
-                if (
-                    hasattr(org, key)
-                    and key
-                    not in {
-                        "llm_api_key",
-                        "agent_settings",
-                        "conversation_settings",
-                    }
-                ):
+                if hasattr(org, key) and key not in {
+                    'llm_api_key',
+                    'agent_settings',
+                    'conversation_settings',
+                }:
                     setattr(org, key, value)
 
             current_member_llm_api_key = item.agent_settings.llm.api_key

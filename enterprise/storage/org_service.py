@@ -8,8 +8,6 @@ from uuid import UUID, uuid4
 from uuid import UUID as parse_uuid
 
 from server.constants import ORG_SETTINGS_VERSION, get_default_litellm_model
-
-from openhands.sdk.settings import AgentSettings, ConversationSettings
 from server.routes.org_models import (
     LiteLLMIntegrationError,
     OrgAuthorizationError,
@@ -27,6 +25,7 @@ from storage.role_store import RoleStore
 from storage.user_store import UserStore
 
 from openhands.core.logger import openhands_logger as logger
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.storage.data_models.settings import Settings
 
 

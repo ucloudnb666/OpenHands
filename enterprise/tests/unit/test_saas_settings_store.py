@@ -424,7 +424,9 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
         assert org.agent_settings_diff['llm']['model'] == 'anthropic/claude-sonnet-4'
-        assert org.agent_settings_diff['llm']['base_url'] == 'https://api.anthropic.com/v1'
+        assert (
+            org.agent_settings_diff['llm']['base_url'] == 'https://api.anthropic.com/v1'
+        )
         assert org.conversation_settings_diff['max_iterations'] == 100
 
         members = {
@@ -438,7 +440,10 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
         assert len(members) == 3
 
         for member in members.values():
-            assert member.agent_settings_diff['llm']['model'] == 'anthropic/claude-sonnet-4'
+            assert (
+                member.agent_settings_diff['llm']['model']
+                == 'anthropic/claude-sonnet-4'
+            )
             assert (
                 member.agent_settings_diff['llm']['base_url']
                 == 'https://api.anthropic.com/v1'
@@ -483,7 +488,10 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
         # Settings normalizes openhands/ → litellm_proxy/ during construction
-        assert org.agent_settings_diff['llm']['model'] == 'litellm_proxy/claude-opus-4-5-20251101'
+        assert (
+            org.agent_settings_diff['llm']['model']
+            == 'litellm_proxy/claude-opus-4-5-20251101'
+        )
         assert org.agent_settings_diff['llm']['base_url'] == LITE_LLM_API_URL
         assert org.conversation_settings_diff['max_iterations'] == 75
 
@@ -687,6 +695,5 @@ async def test_store_and_load_mcp_config_via_agent_settings(
     assert loaded is not None
     assert loaded.mcp_config is not None
     assert (
-        loaded.mcp_config.mcpServers['admin'].url
-        == 'https://admin-private-server.com'
+        loaded.mcp_config.mcpServers['admin'].url == 'https://admin-private-server.com'
     )

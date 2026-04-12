@@ -9,13 +9,13 @@ from server.routes.org_models import OrgMemberLLMSettings
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.org_member import OrgMember
 from storage.user import User
 from storage.user_settings import UserSettings
 
 from openhands.storage.data_models.settings import Settings
+from openhands.utils.jsonpatch_compat import deep_merge
 
 
 class OrgMemberStore:
@@ -150,18 +150,18 @@ class OrgMemberStore:
     def get_kwargs_from_settings(settings: Settings) -> dict[str, Any]:
         """Return kwargs for OrgMember construction (keys match column names)."""
         return {
-            "llm_api_key": settings.agent_settings.llm.api_key,
-            "agent_settings_diff": {},
-            "conversation_settings_diff": {},
+            'llm_api_key': settings.agent_settings.llm.api_key,
+            'agent_settings_diff': {},
+            'conversation_settings_diff': {},
         }
 
     @staticmethod
     def get_kwargs_from_user_settings(user_settings: UserSettings) -> dict[str, Any]:
         """Return kwargs for OrgMember construction (keys match column names)."""
         return {
-            "llm_api_key": user_settings.llm_api_key,
-            "agent_settings_diff": dict(user_settings.agent_settings),
-            "conversation_settings_diff": dict(user_settings.conversation_settings),
+            'llm_api_key': user_settings.llm_api_key,
+            'agent_settings_diff': dict(user_settings.agent_settings),
+            'conversation_settings_diff': dict(user_settings.conversation_settings),
         }
 
     @staticmethod
@@ -258,9 +258,9 @@ class OrgMemberStore:
         )
         org_members = list(result.scalars().all())
 
-        raw_key = values.pop("llm_api_key", None)
-        agent_settings_diff = values.pop("agent_settings_diff", None)
-        conversation_settings_diff = values.pop("conversation_settings_diff", None)
+        raw_key = values.pop('llm_api_key', None)
+        agent_settings_diff = values.pop('agent_settings_diff', None)
+        conversation_settings_diff = values.pop('conversation_settings_diff', None)
 
         for org_member in org_members:
             if raw_key is not None:

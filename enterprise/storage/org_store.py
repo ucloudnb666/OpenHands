@@ -14,8 +14,6 @@ from server.constants import (
 from server.routes.org_models import OrgLLMSettingsUpdate, OrphanedUserError
 from sqlalchemy import select, text
 from sqlalchemy.orm import joinedload
-from openhands.sdk.settings import AgentSettings, ConversationSettings
-from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
 from storage.lite_llm_manager import LiteLlmManager
 from storage.org import Org
@@ -24,22 +22,24 @@ from storage.user import User
 from storage.user_settings import UserSettings
 
 from openhands.core.logger import openhands_logger as logger
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.storage.data_models.settings import Settings
+from openhands.utils.jsonpatch_compat import deep_merge
 
 _ORG_SETTINGS_EXCLUDED_FIELDS = {
-    "id",
-    "name",
-    "contact_name",
-    "contact_email",
-    "org_version",
-    "agent_settings",
-    "conversation_settings",
-    "llm_api_key",
+    'id',
+    'name',
+    'contact_name',
+    'contact_email',
+    'org_version',
+    'agent_settings',
+    'conversation_settings',
+    'llm_api_key',
 }
 _ORG_SETTINGS_FIELDS = {
     normalized
     for column in Org.__table__.columns
-    if (normalized := column.name.lstrip("_")) not in _ORG_SETTINGS_EXCLUDED_FIELDS
+    if (normalized := column.name.lstrip('_')) not in _ORG_SETTINGS_EXCLUDED_FIELDS
 }
 
 
@@ -73,8 +73,8 @@ class OrgStore:
             org.agent_settings = deep_merge(
                 org.agent_settings,
                 {
-                    "llm": {
-                        "model": org.agent_settings.get("llm", {}).get("model")
+                    'llm': {
+                        'model': org.agent_settings.get('llm', {}).get('model')
                         or get_default_litellm_model()
                     }
                 },
@@ -134,10 +134,10 @@ class OrgStore:
                 org.id,
                 {
                     'org_version': ORG_SETTINGS_VERSION,
-                    "agent_settings_diff": {
-                        "llm": {
-                            "model": get_default_litellm_model(),
-                            "base_url": LITE_LLM_API_URL,
+                    'agent_settings_diff': {
+                        'llm': {
+                            'model': get_default_litellm_model(),
+                            'base_url': LITE_LLM_API_URL,
                         },
                     },
                 },
@@ -227,8 +227,8 @@ class OrgStore:
             if 'id' in kwargs:
                 kwargs.pop('id')
 
-            agent_settings_diff = kwargs.pop("agent_settings_diff", None)
-            conversation_settings_diff = kwargs.pop("conversation_settings_diff", None)
+            agent_settings_diff = kwargs.pop('agent_settings_diff', None)
+            conversation_settings_diff = kwargs.pop('conversation_settings_diff', None)
             for key, value in kwargs.items():
                 if hasattr(org, key):
                     setattr(org, key, value)
@@ -256,8 +256,8 @@ class OrgStore:
             for field in _ORG_SETTINGS_FIELDS
             if hasattr(settings, field)
         }
-        kwargs["agent_settings"] = settings.agent_settings
-        kwargs["conversation_settings"] = settings.conversation_settings
+        kwargs['agent_settings'] = settings.agent_settings
+        kwargs['conversation_settings'] = settings.conversation_settings
         return kwargs
 
     @staticmethod
@@ -267,10 +267,10 @@ class OrgStore:
             for field in _ORG_SETTINGS_FIELDS
             if hasattr(user_settings, field)
         }
-        kwargs["org_version"] = user_settings.user_version
+        kwargs['org_version'] = user_settings.user_version
         full_settings = user_settings.to_settings()
-        kwargs["agent_settings"] = full_settings.agent_settings
-        kwargs["conversation_settings"] = full_settings.conversation_settings
+        kwargs['agent_settings'] = full_settings.agent_settings
+        kwargs['conversation_settings'] = full_settings.conversation_settings
         return kwargs
 
     @staticmethod

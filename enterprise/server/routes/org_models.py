@@ -8,10 +8,11 @@ from pydantic import (
     StringConstraints,
     field_validator,
 )
-from openhands.sdk.settings import AgentSettings, ConversationSettings
 from storage.org import Org
 from storage.org_member import OrgMember
 from storage.role import Role
+
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 
 
 class OrgCreationError(Exception):
@@ -364,7 +365,7 @@ class MeResponse(BaseModel):
         member: OrgMember,
         role: Role,
         email: str,
-    ) -> "MeResponse":
+    ) -> 'MeResponse':
         """Create a MeResponse from an OrgMember, Role, and user email."""
         return cls(
             org_id=str(member.org_id),
