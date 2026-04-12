@@ -4,6 +4,7 @@ This module provides the V1 API routes for user settings under /api/v1/settings.
 """
 
 import os
+from typing import Any
 
 from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
@@ -42,63 +43,28 @@ router = APIRouter(
 )
 
 
-async def store_llm_settings(
-    settings: Settings, existing_settings: Settings
-) -> Settings:
-    """Merge LLM settings with existing settings."""
-    if not existing_settings:
-        return settings
+def _post_merge_llm_fixups(settings: Settings) -> None:
+    """Apply LLM-specific fixups after merging settings.
 
+    When the merged LLM base_url is empty-string, treat it as cleared.
+    When it is None, try to auto-detect the provider default.
+    """
     llm = settings.agent_settings.llm
-    existing_llm = existing_settings.agent_settings.llm
 
-    # Preserve unset LLM settings
-    llm.api_key = llm.api_key or existing_llm.api_key
-    llm.model = llm.model or existing_llm.model
-
-    if llm.base_url is None:
-        if existing_llm.base_url:
-            llm.base_url = existing_llm.base_url
-        elif is_openhands_model(llm.model):
+    if llm.base_url == '':
+        llm.base_url = None
+    elif llm.base_url is None and llm.model:
+        if is_openhands_model(llm.model):
             llm.base_url = LITE_LLM_API_URL
-        elif llm.model:
+        else:
             try:
                 api_base = get_provider_api_base(llm.model)
                 if api_base:
                     llm.base_url = api_base
-                else:
-                    logger.debug(f'No api_base found in litellm for model: {llm.model}')
             except Exception as e:
                 logger.error(
                     f'Failed to get api_base from litellm for model {llm.model}: {e}'
                 )
-    elif llm.base_url == '':
-        llm.base_url = None
-
-    settings.search_api_key = (
-        settings.search_api_key or existing_settings.search_api_key
-    )
-    return settings
-
-
-def convert_to_settings(settings_with_token_data: Settings) -> Settings:
-    """Convert settings with token data to Settings model."""
-    settings_data = settings_with_token_data.model_dump(
-        mode='json', context={'expose_secrets': True}
-    )
-
-    # Filter out additional fields from `SettingsWithTokenData`
-    filtered_settings_data = {
-        key: value
-        for key, value in settings_data.items()
-        if key in Settings.model_fields
-    }
-
-    filtered_settings_data['search_api_key'] = settings_with_token_data.search_api_key
-
-    # Create a new Settings instance
-    settings = Settings(**filtered_settings_data)
-    return settings
 
 
 # NOTE: We use response_model=None for endpoints that return JSONResponse directly.
@@ -197,40 +163,35 @@ async def load_settings(
     },
 )
 async def store_settings(
-    settings: Settings,
+    payload: dict[str, Any],
     settings_store: SettingsStore = Depends(get_user_settings_store),
 ) -> JSONResponse:
     """Store user settings.
 
-    Saves the user settings including LLM configuration, provider tokens,
-    and other user preferences.
+    Accepts a partial payload and deep-merges ``agent_settings`` and
+    ``conversation_settings`` with the existing persisted values so that
+    saving one settings page never overwrites fields owned by another.
 
     Returns:
         200: Settings stored successfully
         500: Error storing settings
     """
-    # Check provider tokens are valid
     try:
         existing_settings = await settings_store.load()
+        settings = existing_settings.model_copy() if existing_settings else Settings()
+        settings.update(payload)
 
-        # Convert to Settings model and merge with existing settings
+        _post_merge_llm_fixups(settings)
+
         if existing_settings:
-            settings = await store_llm_settings(settings, existing_settings)
-
-            # Keep existing analytics consent if not provided
+            if 'search_api_key' not in payload and settings.search_api_key is None:
+                settings.search_api_key = existing_settings.search_api_key
             if settings.user_consents_to_analytics is None:
                 settings.user_consents_to_analytics = (
                     existing_settings.user_consents_to_analytics
                 )
-
-            # Keep existing disabled_skills if not provided
             if settings.disabled_skills is None:
                 settings.disabled_skills = existing_settings.disabled_skills
-
-            if 'conversation_settings' not in settings.model_fields_set:
-                settings.conversation_settings = (
-                    existing_settings.conversation_settings.model_copy()
-                )
 
         # Update sandbox config with new settings
         if settings.remote_runtime_resource_factor is not None:
@@ -247,14 +208,11 @@ async def store_settings(
             config.git_user_email = settings.git_user_email
             git_config_updated = True
 
-        # Note: Git configuration will be applied when new sessions are initialized
-        # Existing sessions will continue with their current git configuration
         if git_config_updated:
             logger.info(
                 f'Updated global git configuration: name={config.git_user_name}, email={config.git_user_email}'
             )
 
-        settings = convert_to_settings(settings)
         await settings_store.store(settings)
         return JSONResponse(
             status_code=status.HTTP_200_OK,

@@ -7,7 +7,7 @@ import {
   MCPSSEServer,
   MCPStdioServer,
 } from "#/types/settings";
-import { parseMcpConfig } from "#/utils/mcp-config";
+import { parseMcpConfig, toSdkMcpConfig } from "#/utils/mcp-config";
 import { useSelectedOrganizationId } from "#/context/use-selected-organization";
 
 type MCPServerType = "sse" | "stdio" | "shttp";
@@ -71,17 +71,13 @@ export function useUpdateMcpServer() {
         newConfig.shttp_servers[index] = shttpServer;
       }
 
-      const apiSettings = {
-        mcp_config: newConfig,
-        v1_enabled: settings?.v1_enabled,
-      };
-
-      await SettingsService.saveSettings(apiSettings);
+      await SettingsService.saveSettings({
+        agent_settings: { mcp_config: toSdkMcpConfig(newConfig) },
+      });
     },
     onSuccess: () => {
-      // Invalidate the settings query to trigger a refetch
       queryClient.invalidateQueries({
-        queryKey: ["settings", organizationId],
+        queryKey: ["settings", "personal", organizationId],
       });
     },
   });

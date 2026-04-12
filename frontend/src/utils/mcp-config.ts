@@ -3,6 +3,7 @@ import {
   MCPSSEServer,
   MCPSHTTPServer,
   MCPStdioServer,
+  SettingsValue,
 } from "#/types/settings";
 
 const EMPTY_MCP_CONFIG: MCPConfig = {
@@ -10,6 +11,9 @@ const EMPTY_MCP_CONFIG: MCPConfig = {
   stdio_servers: [],
   shttp_servers: [],
 };
+
+type SdkMcpServerConfig = Record<string, SettingsValue>;
+type SdkMcpConfig = { mcpServers: Record<string, SdkMcpServerConfig> };
 
 /**
  * Parse an SDK mcp_config value ({ mcpServers: { ... } }) and convert it
@@ -80,4 +84,54 @@ export function parseMcpConfig(value: unknown): MCPConfig {
     stdio_servers: stdioServers,
     shttp_servers: shttpServers,
   };
+}
+
+/**
+ * Convert the frontend MCPConfig format back to the SDK { mcpServers: { ... } }
+ * shape expected by agent_settings.mcp_config on the backend.
+ */
+export function toSdkMcpConfig(config: MCPConfig): SdkMcpConfig {
+  const mcpServers: Record<string, SdkMcpServerConfig> = {};
+  let counter = 0;
+
+  const nextName = (base: string): string => {
+    const name = counter === 0 ? base : `${base}_${counter}`;
+    counter += 1;
+    return name;
+  };
+
+  for (const entry of config.sse_servers) {
+    const server: SdkMcpServerConfig = {};
+    if (typeof entry === "string") {
+      server.url = entry;
+    } else {
+      server.url = entry.url;
+      if (entry.api_key) server.auth = entry.api_key;
+    }
+    server.transport = "sse";
+    mcpServers[nextName("sse")] = server;
+  }
+
+  for (const entry of config.shttp_servers) {
+    const server: SdkMcpServerConfig = {};
+    if (typeof entry === "string") {
+      server.url = entry;
+    } else {
+      server.url = entry.url;
+      if (entry.api_key) server.auth = entry.api_key;
+      if (entry.timeout != null) server.timeout = entry.timeout;
+    }
+    mcpServers[nextName("shttp")] = server;
+  }
+
+  for (const entry of config.stdio_servers) {
+    const server: SdkMcpServerConfig = {
+      command: entry.command,
+    };
+    if (entry.args) server.args = entry.args;
+    if (entry.env) server.env = entry.env;
+    mcpServers[nextName(entry.name || "stdio")] = server;
+  }
+
+  return { mcpServers };
 }

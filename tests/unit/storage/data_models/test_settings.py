@@ -3,7 +3,6 @@ from unittest.mock import patch
 
 from pydantic import SecretStr
 
-from openhands.app_server.settings.settings_router import convert_to_settings
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
@@ -96,17 +95,21 @@ def test_settings_handles_sensitive_data():
     assert llm_api_key.get_secret_value() == 'test-key'
 
 
-def test_convert_to_settings():
-    settings_with_token_data = Settings(
+def test_settings_update_deep_merges_agent_settings():
+    """Updating agent_settings with a partial dict must not overwrite sibling sub-fields."""
+    settings = Settings(
         agent_settings={
-            'llm': {'model': 'test-model', 'api_key': 'test-key'},
+            'llm': {'model': 'existing-model', 'api_key': 'existing-key'},
+            'condenser': {'enabled': True, 'max_size': 200},
         },
     )
 
-    settings = convert_to_settings(settings_with_token_data)
+    settings.update({'agent_settings': {'condenser': {'max_size': 300}}})
 
-    assert settings.agent_settings.llm.api_key is not None
-    assert settings.agent_settings.llm.api_key.get_secret_value() == 'test-key'
+    assert settings.agent_settings.llm.model == 'existing-model'
+    assert settings.agent_settings.llm.api_key.get_secret_value() == 'existing-key'
+    assert settings.agent_settings.condenser.max_size == 300
+    assert settings.agent_settings.condenser.enabled is True
 
 
 def test_settings_preserve_agent_settings():
