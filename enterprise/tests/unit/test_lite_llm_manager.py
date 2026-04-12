@@ -255,10 +255,9 @@ class TestLiteLlmManager:
 
                     assert result is not None
                     assert _agent_value(result, 'agent') == 'CodeActAgent'
-                    assert _agent_value(
-                        result, 'llm.model'
-                    ) == get_default_litellm_model().replace(
-                        'litellm_proxy/', 'openhands/'
+                    assert (
+                        _agent_value(result, 'llm.model')
+                        == get_default_litellm_model()
                     )
                     assert _secret_value(result, 'llm.api_key') == 'test-key'
                     assert _agent_value(result, 'llm.base_url') == 'http://test.com'
@@ -306,9 +305,7 @@ class TestLiteLlmManager:
 
             assert result is not None
             assert _agent_value(result, 'agent') == 'CodeActAgent'
-            assert _agent_value(
-                result, 'llm.model'
-            ) == get_default_litellm_model().replace('litellm_proxy/', 'openhands/')
+            assert _agent_value(result, 'llm.model') == get_default_litellm_model()
             assert _secret_value(result, 'llm.api_key') == 'test-api-key'
             assert _agent_value(result, 'llm.base_url') == 'http://test.com'
 

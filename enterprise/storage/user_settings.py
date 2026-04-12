@@ -70,8 +70,8 @@ class UserSettings(Base):  # type: ignore
         from openhands.storage.data_models.settings import Settings
 
         return Settings(
-            agent_settings=AgentSettings.model_validate(self.agent_settings),
+            agent_settings=AgentSettings.model_validate(self.agent_settings or {}),
             conversation_settings=ConversationSettings.model_validate(
-                self.conversation_settings
+                self.conversation_settings or {}
             ),
         )

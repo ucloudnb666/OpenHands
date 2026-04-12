@@ -361,14 +361,15 @@ class LiteLlmManager:
                 # If not, generate a new key to prevent verification failures later
                 db_key = None
                 llm_base_url = None
-                if user_settings and user_settings.agent_settings:
-                    llm_base_url = user_settings.agent_settings.llm.base_url
-                if (
-                    user_settings
-                    and user_settings.agent_settings.llm.api_key
-                    and llm_base_url == LITE_LLM_API_URL
-                ):
-                    db_key = user_settings.agent_settings.llm.api_key
+                # agent_settings is a JSON column (dict) on UserSettings
+                llm_cfg = (
+                    (user_settings.agent_settings or {}).get('llm', {})
+                    if user_settings
+                    else {}
+                )
+                llm_base_url = llm_cfg.get('base_url')
+                if llm_base_url == LITE_LLM_API_URL:
+                    db_key = llm_cfg.get('api_key')
                     if hasattr(db_key, 'get_secret_value'):
                         db_key = db_key.get_secret_value()
 
@@ -401,7 +402,12 @@ class LiteLlmManager:
                             extra={'org_id': org_id, 'user_id': keycloak_user_id},
                         )
                         # Update user_settings with the new key so it gets stored in org_member
-                        user_settings.agent_settings.llm.api_key = SecretStr(new_key)
+                        # agent_settings is a JSON column (dict) on UserSettings
+                        if user_settings.agent_settings is None:
+                            user_settings.agent_settings = {}
+                        user_settings.agent_settings.setdefault('llm', {})[
+                            'api_key'
+                        ] = new_key
                         user_settings.llm_api_key_for_byor_secret = SecretStr(new_key)
 
         logger.info(
