@@ -114,13 +114,21 @@ const BASE_SETTINGS: Settings = {
   },
   agent_settings: {
     agent: "CodeActAgent",
-    "critic.mode": "finish_and_message",
-    "critic.enabled": false,
-    "llm.api_key": null,
-    "llm.model": "openai/gpt-4o",
-    "verification.confirmation_mode": false,
-    "condenser.enabled": true,
-    "condenser.max_size": 240,
+    critic: {
+      mode: "finish_and_message",
+      enabled: false,
+    },
+    llm: {
+      api_key: null,
+      model: "openai/gpt-4o",
+    },
+    verification: {
+      confirmation_mode: false,
+    },
+    condenser: {
+      enabled: true,
+      max_size: 240,
+    },
   },
 };
 
@@ -144,7 +152,11 @@ describe("sdk settings schema helpers", () => {
       ...BASE_SETTINGS,
       agent_settings: {
         ...BASE_SETTINGS.agent_settings,
-        "critic.mode": "all_actions",
+        critic: {
+          ...(BASE_SETTINGS.agent_settings as Record<string, unknown>)
+            .critic as Record<string, unknown>,
+          mode: "all_actions",
+        },
       },
     };
     expect(hasAdvancedSettingsOverrides(withMinorOverride)).toBe(true);
@@ -209,9 +221,11 @@ describe("sdk settings schema helpers", () => {
     );
 
     expect(payload).toEqual({
-      "critic.enabled": true,
-      "llm.api_key": "new-key",
-      "llm.litellm_extra_body": { metadata: { tier: "enterprise" } },
+      critic: { enabled: true },
+      llm: {
+        api_key: "new-key",
+        litellm_extra_body: { metadata: { tier: "enterprise" } },
+      },
     });
   });
 
@@ -256,29 +270,32 @@ describe("sdk settings schema helpers", () => {
     };
 
     expect(buildSdkSettingsPayloadForView(schema, values, dirty, "basic")).toEqual({
-      "llm.model": "anthropic/claude-sonnet-4-20250514",
-      "llm.timeout": 30,
-      "critic.enabled": true,
-      "critic.mode": "finish_and_message",
-      "llm.litellm_extra_body": {},
+      llm: {
+        model: "anthropic/claude-sonnet-4-20250514",
+        timeout: 30,
+        litellm_extra_body: {},
+      },
+      critic: { enabled: true, mode: "finish_and_message" },
     });
 
     expect(
       buildSdkSettingsPayloadForView(schema, values, dirty, "advanced"),
     ).toEqual({
-      "llm.model": "anthropic/claude-sonnet-4-20250514",
-      "llm.timeout": 90,
-      "critic.enabled": true,
-      "critic.mode": "finish_and_message",
-      "llm.litellm_extra_body": {},
+      llm: {
+        model: "anthropic/claude-sonnet-4-20250514",
+        timeout: 90,
+        litellm_extra_body: {},
+      },
+      critic: { enabled: true, mode: "finish_and_message" },
     });
 
     expect(buildSdkSettingsPayloadForView(schema, values, dirty, "all")).toEqual({
-      "llm.model": "anthropic/claude-sonnet-4-20250514",
-      "llm.timeout": 90,
-      "critic.enabled": true,
-      "critic.mode": "all_actions",
-      "llm.litellm_extra_body": { metadata: { tier: "enterprise" } },
+      llm: {
+        model: "anthropic/claude-sonnet-4-20250514",
+        timeout: 90,
+        litellm_extra_body: { metadata: { tier: "enterprise" } },
+      },
+      critic: { enabled: true, mode: "all_actions" },
     });
   });
 });

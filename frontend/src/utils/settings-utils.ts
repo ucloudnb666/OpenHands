@@ -1,5 +1,5 @@
 import { WebClientFeatureFlags } from "#/api/option-service/option.types";
-import { Settings } from "#/types/settings";
+import { Settings, SettingsValue } from "#/types/settings";
 import { getProviderId } from "#/utils/map-provider";
 
 const extractBasicFormData = (formData: FormData) => {
@@ -38,10 +38,19 @@ export const extractSettings = (
   const { llmModel, llmApiKey, agent, language } =
     extractBasicFormData(formData);
 
+  const llm: Record<string, unknown> = {};
+  if (llmModel) llm.model = llmModel;
+  if (llmApiKey !== undefined) llm.api_key = llmApiKey;
+
+  const agentSettings: Record<string, SettingsValue> = {};
+  if (Object.keys(llm).length > 0)
+    agentSettings.llm = llm as Record<string, SettingsValue>;
+  if (agent) agentSettings.agent = agent;
+
   return {
-    ...(llmModel ? { "llm.model": llmModel } : {}),
-    ...(llmApiKey !== undefined ? { "llm.api_key": llmApiKey } : {}),
-    ...(agent ? { agent } : {}),
+    ...(Object.keys(agentSettings).length > 0
+      ? { agent_settings: agentSettings }
+      : {}),
     ...(language ? { language } : {}),
   };
 };

@@ -7,8 +7,10 @@ import {
 } from "#/types/org";
 
 const MOCK_MEMBER_AGENT_SETTINGS = {
-  "llm.model": "gpt-4",
-  "llm.base_url": "https://api.openai.com",
+  llm: {
+    model: "gpt-4",
+    base_url: "https://api.openai.com",
+  },
   max_iterations: 20,
 };
 
@@ -45,10 +47,14 @@ export const createMockOrganization = (
     max_iterations: 20,
     security_analyzer: "standard",
     confirmation_mode: false,
-    "llm.model": "gpt-5-1",
-    "llm.base_url": "https://api.example-llm.com",
-    "condenser.enabled": true,
-    "condenser.max_size": 240,
+    llm: {
+      model: "gpt-5-1",
+      base_url: "https://api.example-llm.com",
+    },
+    condenser: {
+      enabled: true,
+      max_size: 240,
+    },
     mcp_config: {
       tools: [],
       settings: {},

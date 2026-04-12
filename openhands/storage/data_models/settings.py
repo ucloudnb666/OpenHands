@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from enum import Enum
-from functools import lru_cache
 from typing import Annotated, Any
 
 from fastmcp.mcp_config import MCPConfig as SDKMCPConfig
@@ -22,19 +21,6 @@ from openhands.storage.data_models.secrets import Secrets
 from openhands.utils.jsonpatch_compat import deep_merge
 
 
-@lru_cache(maxsize=1)
-def _sdk_schema_field_metadata() -> tuple[set[str], set[str]]:
-    schema = AgentSettings.export_schema()
-    field_keys: set[str] = set()
-    secret_keys: set[str] = set()
-    for section in schema.sections:
-        for field in section.fields:
-            field_keys.add(field.key)
-            if field.secret:
-                secret_keys.add(field.key)
-    return field_keys, secret_keys
-
-
 def _coerce_value(value: Any) -> Any:
     """Unwrap SecretStr to plain values."""
     if isinstance(value, SecretStr):
@@ -44,30 +30,18 @@ def _coerce_value(value: Any) -> Any:
     return value
 
 
-def _set_nested(target: dict[str, Any], path: list[str], value: Any) -> None:
-    """Set a value in a nested dict given a path like ['llm', 'model']."""
-    current = target
-    for part in path[:-1]:
-        current = current.setdefault(part, {})
-    current[path[-1]] = value
+def _coerce_dict_secrets(d: dict[str, Any]) -> dict[str, Any]:
+    """Recursively coerce SecretStr / MCPConfig leaves to plain values."""
+    out: dict[str, Any] = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            out[k] = _coerce_dict_secrets(v)
+        else:
+            out[k] = _coerce_value(v)
+    return out
 
 
-def _lookup_dotted(source: dict[str, Any], dotted_key: str) -> Any:
-    """Lookup a value in a nested dict using a dotted key like 'llm.model'."""
-    current: Any = source
-    for part in dotted_key.split("."):
-        if not isinstance(current, dict) or part not in current:
-            return None
-        current = current[part]
-    return current
 
-
-def _normalize_model_name(key: str, value: Any) -> Any:
-    """Normalize litellm_proxy/ prefix → openhands/ for model names."""
-    if key == "llm.model" and isinstance(value, str):
-        if value.startswith("litellm_proxy/"):
-            return f"openhands/{value.removeprefix('litellm_proxy/')}"
-    return value
 
 
 def _merge_sdk_mcp_configs(
@@ -222,26 +196,6 @@ class Settings(BaseModel):
                         value = SecretStr(value) if value else None
                 setattr(self, key, value)
 
-    # ── Flattened values for API responses ──────────────────────────
-
-    def agent_settings_values(self) -> dict[str, Any]:
-        """Return agent settings as a flat dotted-key dict for API responses."""
-        field_keys, _ = _sdk_schema_field_metadata()
-        payload = self.agent_settings.model_dump(
-            mode="json", context={"expose_secrets": True}
-        )
-        values: dict[str, Any] = {
-            "schema_version": payload.get(
-                "schema_version",
-                AgentSettings.model_fields["schema_version"].default,
-            )
-        }
-        for key in field_keys:
-            value = _lookup_dotted(payload, key)
-            if value is not None:
-                values[key] = _normalize_model_name(key, value)
-        return values
-
     # ── Serialization ───────────────────────────────────────────────
 
     @field_serializer('search_api_key')
@@ -270,24 +224,14 @@ class Settings(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_inputs(cls, data: dict | object) -> dict | object:
-        """Normalize agent_settings dotted keys and secrets_store dicts."""
+        """Normalize agent_settings and secrets_store inputs."""
         if not isinstance(data, dict):
             return data
 
-        # --- Agent settings: expand dotted keys to nested dicts ---
+        # --- Agent settings: coerce SecretStr leaves to plain strings ---
         agent_settings = data.get("agent_settings")
         if isinstance(agent_settings, dict):
-            expanded: dict[str, Any] = {}
-            for key, value in agent_settings.items():
-                if "." in key:
-                    _set_nested(expanded, key.split("."), _coerce_value(value))
-                else:
-                    expanded[key] = (
-                        _coerce_value(value)
-                        if not isinstance(value, dict)
-                        else value
-                    )
-            data["agent_settings"] = expanded
+            data["agent_settings"] = _coerce_dict_secrets(agent_settings)
         elif isinstance(agent_settings, AgentSettings):
             data["agent_settings"] = agent_settings.model_dump(
                 mode="json", context={"expose_secrets": True}

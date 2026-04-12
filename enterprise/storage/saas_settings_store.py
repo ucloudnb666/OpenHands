@@ -151,15 +151,18 @@ class SaasSettingsStore(SettingsStore):
                 if (normalized := c.name.lstrip('_')) in Settings.model_fields
             },
         }
-        effective_llm_api_key = self._get_effective_llm_api_key(org, org_member)
-        if effective_llm_api_key is not None:
-            kwargs["llm_api_key"] = effective_llm_api_key
-        if org_member.mcp_config is not None:
-            kwargs['mcp_config'] = org_member.mcp_config
-        kwargs["agent_settings"] = deep_merge(
+        merged_agent_settings = deep_merge(
             org_agent_settings.model_dump(mode='json'),
             member_agent_settings_diff,
         )
+        effective_llm_api_key = self._get_effective_llm_api_key(org, org_member)
+        if effective_llm_api_key is not None:
+            merged_agent_settings.setdefault('llm', {})['api_key'] = (
+                effective_llm_api_key.get_secret_value()
+                if isinstance(effective_llm_api_key, SecretStr)
+                else effective_llm_api_key
+            )
+        kwargs["agent_settings"] = merged_agent_settings
         org_conversation = OrgStore.get_conversation_settings_from_org(org)
         member_conversation_diff = (
             OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
@@ -175,6 +178,9 @@ class SaasSettingsStore(SettingsStore):
             kwargs.pop('sandbox_grouping_strategy', None)
 
         settings = Settings(**kwargs)
+        if org_member.mcp_config is not None:
+            from openhands.core.config.mcp_config import MCPConfig
+            settings.agent_settings.mcp_config = MCPConfig(**org_member.mcp_config)
         return settings
 
     async def store(self, item: Settings):

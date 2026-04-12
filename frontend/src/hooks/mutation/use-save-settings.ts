@@ -19,7 +19,6 @@ const saveSettingsMutationFn = async (
 ) => {
   const settingsToSave: SettingsUpdate = { ...settings };
   delete settingsToSave.agent_settings_schema;
-  delete settingsToSave.agent_settings;
   delete settingsToSave.conversation_settings_schema;
 
   const conversationSettings: Record<string, SettingsValue> = {
@@ -35,9 +34,13 @@ const saveSettingsMutationFn = async (
     delete settingsToSave.conversation_settings;
   }
 
-  if (typeof settingsToSave["llm.api_key"] === "string") {
-    const apiKey = settingsToSave["llm.api_key"].trim();
-    settingsToSave["llm.api_key"] = apiKey === "" ? "" : apiKey;
+  const agentSettings = settingsToSave.agent_settings as
+    | Record<string, unknown>
+    | undefined;
+  const llmSettings = agentSettings?.llm as Record<string, unknown> | undefined;
+  if (llmSettings && typeof llmSettings.api_key === "string") {
+    const apiKey = llmSettings.api_key.trim();
+    llmSettings.api_key = apiKey === "" ? "" : apiKey;
   }
 
   if (typeof settingsToSave.search_api_key === "string") {

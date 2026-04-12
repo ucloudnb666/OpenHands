@@ -201,7 +201,7 @@ export function SdkSectionPage({
       const defaultPayload =
         settingsSource === "conversation_settings"
           ? { conversation_settings: basePayload }
-          : basePayload;
+          : { agent_settings: basePayload };
       payload = buildPayload
         ? buildPayload(basePayload, { values, dirty, view })
         : defaultPayload;

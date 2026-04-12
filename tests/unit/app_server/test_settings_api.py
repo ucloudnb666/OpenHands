@@ -222,24 +222,32 @@ async def test_settings_api_endpoints(test_client):
         ],
     }
 
-    # Test data with remote_runtime_resource_factor
+    # Test data using nested format
     settings_data = {
         'language': 'en',
-        'agent': 'test-agent',
-        'max_iterations': 100,
-        'security_analyzer': 'llm',
-        'confirmation_mode': True,
-        'llm.model': 'test-model',
-        'llm.api_key': 'test-key',
-        'llm.base_url': 'https://test.com',
-        'llm.timeout': 123,
-        'llm.litellm_extra_body': {'metadata': {'tier': 'pro'}},
         'remote_runtime_resource_factor': 2,
-        'verification.critic_enabled': True,
-        'verification.critic_mode': 'all_actions',
-        'verification.enable_iterative_refinement': True,
-        'verification.critic_threshold': 0.7,
-        'verification.max_refinement_iterations': 4,
+        'agent_settings': {
+            'agent': 'test-agent',
+            'llm': {
+                'model': 'test-model',
+                'api_key': 'test-key',
+                'base_url': 'https://test.com',
+                'timeout': 123,
+                'litellm_extra_body': {'metadata': {'tier': 'pro'}},
+            },
+            'verification': {
+                'critic_enabled': True,
+                'critic_mode': 'all_actions',
+                'enable_iterative_refinement': True,
+                'critic_threshold': 0.7,
+                'max_refinement_iterations': 4,
+            },
+        },
+        'conversation_settings': {
+            'max_iterations': 100,
+            'confirmation_mode': True,
+            'security_analyzer': 'llm',
+        },
     }
 
     with (
@@ -264,14 +272,14 @@ async def test_settings_api_endpoints(test_client):
         response_data = response.json()
         assert 'agent_settings_schema' not in response_data
         vals = response_data['agent_settings']
-        assert vals['llm.model'] == 'test-model'
-        assert vals['llm.timeout'] == 123
-        assert vals['llm.litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
-        assert vals['verification.critic_enabled'] is True
-        assert vals['verification.critic_mode'] == 'all_actions'
-        assert vals['verification.enable_iterative_refinement'] is True
-        assert vals['verification.critic_threshold'] == 0.7
-        assert vals['verification.max_refinement_iterations'] == 4
+        assert vals['llm']['model'] == 'test-model'
+        assert vals['llm']['timeout'] == 123
+        assert vals['llm']['litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
+        assert vals['verification']['critic_enabled'] is True
+        assert vals['verification']['critic_mode'] == 'all_actions'
+        assert vals['verification']['enable_iterative_refinement'] is True
+        assert vals['verification']['critic_threshold'] == 0.7
+        assert vals['verification']['max_refinement_iterations'] == 4
         cs = response_data['conversation_settings']
         assert cs['confirmation_mode'] is True
         assert cs['security_analyzer'] == 'llm'
@@ -281,7 +289,7 @@ async def test_settings_api_endpoints(test_client):
             'confirmation_mode': True,
             'security_analyzer': 'llm',
         }
-        assert vals['llm.api_key'] == '<hidden>'
+        assert vals['llm']['api_key'] == '**********'
 
         # Test updating with partial settings
         partial_settings = {
@@ -295,7 +303,7 @@ async def test_settings_api_endpoints(test_client):
 
         response = test_client.get('/api/settings')
         assert response.status_code == 200
-        assert response.json()['agent_settings']['llm.timeout'] == 123
+        assert response.json()['agent_settings']['llm']['timeout'] == 123
 
         # Test the unset-provider-tokens endpoint
         response = test_client.post('/api/unset-provider-tokens')
@@ -310,7 +318,7 @@ async def test_saving_settings_with_frozen_secrets_store(test_client):
     """
     settings_data = {
         'language': 'en',
-        'llm.model': 'gpt-4',
+        'agent_settings': {'llm': {'model': 'gpt-4'}},
         'secrets_store': {'provider_tokens': {}},
     }
     response = test_client.post('/api/settings', json=settings_data)
@@ -322,7 +330,7 @@ async def test_search_api_key_explicit_clear(test_client):
     """Explicit empty search_api_key payloads should clear the stored secret."""
     initial_settings = {
         'search_api_key': 'initial-secret-key',
-        'llm.model': 'gpt-4',
+        'agent_settings': {'llm': {'model': 'gpt-4'}},
     }
     response = test_client.post('/api/settings', json=initial_settings)
     assert response.status_code == 200
@@ -333,7 +341,7 @@ async def test_search_api_key_explicit_clear(test_client):
 
     update_settings = {
         'search_api_key': '',
-        'llm.model': 'claude-3-opus',
+        'agent_settings': {'llm': {'model': 'claude-3-opus'}},
     }
     response = test_client.post('/api/settings', json=update_settings)
     assert response.status_code == 200
@@ -341,7 +349,7 @@ async def test_search_api_key_explicit_clear(test_client):
     response = test_client.get('/api/settings')
     assert response.status_code == 200
     assert response.json()['search_api_key_set'] is False
-    assert response.json()['agent_settings']['llm.model'] == 'claude-3-opus'
+    assert response.json()['agent_settings']['llm']['model'] == 'claude-3-opus'
 
 
 @pytest.mark.asyncio
@@ -351,7 +359,7 @@ async def test_disabled_skills_persistence(test_client):
         '/api/settings',
         json={
             'disabled_skills': ['skill_a', 'skill_b'],
-            'llm.model': 'test-model',
+            'agent_settings': {'llm': {'model': 'test-model'}},
         },
     )
     assert response.status_code == 200

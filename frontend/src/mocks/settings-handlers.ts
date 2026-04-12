@@ -3,10 +3,39 @@ import { WebClientConfig } from "#/api/option-service/option.types";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { Provider, Settings, SettingsValue } from "#/types/settings";
 
+/** Simple recursive merge — objects merge, scalars overwrite. */
+function deepMerge(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (
+      value != null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof result[key] === "object" &&
+      result[key] != null &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = deepMerge(
+        result[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 const DEFAULT_AGENT_SETTINGS = DEFAULT_SETTINGS.agent_settings ?? {};
+const llmDefaults = (DEFAULT_AGENT_SETTINGS as Record<string, unknown>).llm as
+  | Record<string, unknown>
+  | undefined;
 const DEFAULT_MODEL =
-  typeof DEFAULT_AGENT_SETTINGS["llm.model"] === "string"
-    ? DEFAULT_AGENT_SETTINGS["llm.model"]
+  typeof llmDefaults?.model === "string"
+    ? llmDefaults.model
     : "openhands/claude-opus-4-5-20251101";
 
 export const createMockWebClientConfig = (
@@ -192,10 +221,15 @@ export const MOCK_DEFAULT_USER_SETTINGS: Settings = {
   agent_settings_schema: MOCK_AGENT_SETTINGS_SCHEMA,
   agent_settings: {
     ...DEFAULT_AGENT_SETTINGS,
-    "critic.mode": "finish_and_message",
-    "critic.enabled": false,
-    "llm.api_key": null,
-    "llm.model": DEFAULT_MODEL,
+    critic: {
+      mode: "finish_and_message",
+      enabled: false,
+    },
+    llm: {
+      ...(llmDefaults ?? {}),
+      api_key: null,
+      model: DEFAULT_MODEL,
+    },
   },
   conversation_settings_schema: MOCK_CONVERSATION_SETTINGS_SCHEMA,
   conversation_settings: {
@@ -313,78 +347,42 @@ export const SETTINGS_HANDLERS = [
       const current =
         MOCK_USER_PREFERENCES.settings ||
         structuredClone(MOCK_DEFAULT_USER_SETTINGS);
-      const agentFieldKeys = new Set(
-        current.agent_settings_schema?.sections.flatMap((section) =>
-          section.fields.map((field) => field.key),
-        ) ?? [],
-      );
-      const conversationFieldKeys = new Set(
-        current.conversation_settings_schema?.sections.flatMap((section) =>
-          section.fields.map((field) => field.key),
-        ) ?? [],
-      );
-      const agentSettings = {
-        ...(current.agent_settings ?? {}),
-      } as Record<string, SettingsValue>;
-      const conversationSettings = {
-        ...(current.conversation_settings ?? {}),
-      } as Record<string, SettingsValue>;
 
-      const nextSettings: Settings = {
-        ...current,
-        ...(body as Partial<Settings>),
-      };
+      const nextSettings: Settings = { ...current };
 
-      for (const [key, value] of Object.entries(body)) {
-        if (agentFieldKeys.has(key)) {
-          agentSettings[key] =
-            value === null ||
-            typeof value === "boolean" ||
-            typeof value === "number" ||
-            typeof value === "string" ||
-            Array.isArray(value) ||
-            (typeof value === "object" && value !== null)
-              ? (value as SettingsValue)
-              : null;
-        }
-        if (conversationFieldKeys.has(key)) {
-          conversationSettings[key] =
-            value === null ||
-            typeof value === "boolean" ||
-            typeof value === "number" ||
-            typeof value === "string" ||
-            Array.isArray(value) ||
-            (typeof value === "object" && value !== null)
-              ? (value as SettingsValue)
-              : null;
-        }
+      // Deep-merge nested agent_settings
+      if (body.agent_settings && typeof body.agent_settings === "object") {
+        const merged = deepMerge(
+          (current.agent_settings ?? {}) as Record<string, unknown>,
+          body.agent_settings as Record<string, unknown>,
+        );
+        nextSettings.agent_settings = merged as Settings["agent_settings"];
       }
 
-      const nestedConversationSettings = body.conversation_settings;
+      // Deep-merge nested conversation_settings
       if (
-        nestedConversationSettings &&
-        typeof nestedConversationSettings === "object" &&
-        !Array.isArray(nestedConversationSettings)
+        body.conversation_settings &&
+        typeof body.conversation_settings === "object"
       ) {
-        for (const [key, value] of Object.entries(nestedConversationSettings)) {
-          if (conversationFieldKeys.has(key)) {
-            conversationSettings[key] =
-              value === null ||
-              typeof value === "boolean" ||
-              typeof value === "number" ||
-              typeof value === "string" ||
-              Array.isArray(value) ||
-              (typeof value === "object" && value !== null)
-                ? (value as SettingsValue)
-                : null;
-          }
+        nextSettings.conversation_settings = {
+          ...(current.conversation_settings ?? {}),
+          ...(body.conversation_settings as Record<string, SettingsValue>),
+        };
+      }
+
+      // Apply top-level fields (excluding nested settings)
+      for (const [key, value] of Object.entries(body)) {
+        if (
+          key !== "agent_settings" &&
+          key !== "conversation_settings" &&
+          key !== "agent_settings_schema" &&
+          key !== "conversation_settings_schema"
+        ) {
+          (nextSettings as Record<string, unknown>)[key] = value;
         }
       }
 
-      nextSettings.agent_settings = agentSettings;
-      nextSettings.conversation_settings = conversationSettings;
       MOCK_USER_PREFERENCES.settings = nextSettings;
-
       return HttpResponse.json(null, { status: 200 });
     }
 

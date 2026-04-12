@@ -14,13 +14,24 @@ import {
 } from "#/utils/settings-value-pickers";
 import { parseMcpConfig } from "#/utils/mcp-config";
 
+/** Look up a value in a nested object by dotted key path. */
+const lookupNested = (obj: Record<string, unknown>, key: string): unknown => {
+  const parts = key.split(".");
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+};
+
 const resolveSdkString = (
-  agentSettings: Record<string, SettingsValue>,
+  agentSettings: Record<string, unknown>,
   key: string,
   defaultValue: string,
   allowEmpty = false,
 ): string => {
-  const value = agentSettings[key];
+  const value = lookupNested(agentSettings, key);
   if (typeof value === "string" && (value.length > 0 || allowEmpty)) {
     return value;
   }
@@ -30,7 +41,7 @@ const resolveSdkString = (
 const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
   const agentSettings = (settings.agent_settings ?? {}) as Record<
     string,
-    SettingsValue
+    unknown
   >;
   const conversationSettings = {
     ...(DEFAULT_SETTINGS.conversation_settings ?? {}),
@@ -54,11 +65,7 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
       DEFAULT_SETTINGS.llm_base_url,
       true,
     ),
-    agent: resolveSdkString(
-      agentSettings,
-      "agent",
-      DEFAULT_SETTINGS.agent,
-    ),
+    agent: resolveSdkString(agentSettings, "agent", DEFAULT_SETTINGS.agent),
     llm_api_key: settings.llm_api_key ?? null,
     llm_api_key_set: settings.llm_api_key_set ?? false,
     confirmation_mode:
@@ -71,12 +78,15 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
       pickFirstNumber(conversationSettings.max_iterations) ??
       DEFAULT_SETTINGS.max_iterations,
     enable_default_condenser:
-      pickFirstBoolean(agentSettings["condenser.enabled"]) ??
+      pickFirstBoolean(lookupNested(agentSettings, "condenser.enabled")) ??
       DEFAULT_SETTINGS.enable_default_condenser,
     condenser_max_size:
-      pickFirstNumber(agentSettings["condenser.max_size"]) ??
+      pickFirstNumber(lookupNested(agentSettings, "condenser.max_size")) ??
       DEFAULT_SETTINGS.condenser_max_size,
-    mcp_config: parseMcpConfig(settings.mcp_config ?? agentSettings.mcp_config),
+    mcp_config: parseMcpConfig(
+      settings.mcp_config ??
+        (agentSettings.mcp_config as typeof settings.mcp_config),
+    ),
     search_api_key: settings.search_api_key || "",
     email: settings.email || "",
     git_user_name: settings.git_user_name || DEFAULT_SETTINGS.git_user_name,

@@ -28,31 +28,24 @@ from openhands.server.user_auth import (
     get_user_settings,
     get_user_settings_store,
 )
-from openhands.storage.data_models.settings import (
-    Settings,
-    _lookup_dotted,
-    _sdk_schema_field_metadata,
-    _set_nested,
-)
+from openhands.storage.data_models.settings import Settings
 from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.settings_store import SettingsStore
 
 
-_SECRET_REDACTED = "<hidden>"
-
-
 def _extract_agent_settings(settings: Settings) -> dict[str, Any]:
-    """Build the agent_settings dict for the GET response.
+    """Build the nested agent_settings dict for the GET response.
 
-    Secret fields with a value are redacted to ``"<hidden>"``;
-    unset secrets become ``None``.
+    Model names with ``litellm_proxy/`` prefix are normalised to ``openhands/``
+    for display purposes. Secrets are masked by Pydantic's default serialiser.
     """
-    _, secret_keys = _sdk_schema_field_metadata()
-    values = settings.agent_settings_values()
-    for field_key in secret_keys:
-        raw = values.get(field_key)
-        values[field_key] = _SECRET_REDACTED if raw else None
-    return values
+    data = settings.agent_settings.model_dump(mode="json")
+    llm = data.get("llm")
+    if isinstance(llm, dict):
+        model = llm.get("model")
+        if isinstance(model, str) and model.startswith("litellm_proxy/"):
+            llm["model"] = f"openhands/{model.removeprefix('litellm_proxy/')}"
+    return data
 
 
 def _apply_settings_payload(
@@ -61,47 +54,11 @@ def _apply_settings_payload(
 ) -> Settings:
     """Apply an incoming settings payload using Settings.update().
 
-    SDK dotted keys (e.g. ``llm.model``) are converted to nested dicts
-    and routed to ``agent_settings``. Conversation keys go to
-    ``conversation_settings``. Everything else is a top-level field.
+    Expects ``agent_settings`` and ``conversation_settings`` as nested dicts.
+    Everything else is a top-level Settings field.
     """
     settings = existing_settings.model_copy() if existing_settings else Settings()
-
-    field_keys, secret_keys = _sdk_schema_field_metadata()
-    conv_keys = frozenset(
-        f.key for s in ConversationSettings.export_schema().sections for f in s.fields
-    )
-
-    agent_update: dict[str, Any] = {}
-    conv_update: dict[str, Any] = {}
-    top_level: dict[str, Any] = {}
-
-    for key, value in payload.items():
-        if key in field_keys:
-            if key in secret_keys and value == _SECRET_REDACTED:
-                continue
-            if key in secret_keys and (value is None or value == ""):
-                value = None
-            # Convert dotted key to nested dict
-            _set_nested(agent_update, key.split("."), value)
-            continue
-        if key in conv_keys:
-            conv_update[key] = value
-            continue
-        if key == 'conversation_settings' and isinstance(value, dict):
-            for conv_key, conv_value in value.items():
-                if conv_key in conv_keys:
-                    conv_update[conv_key] = conv_value
-            continue
-        top_level[key] = value
-
-    update_payload: dict[str, Any] = {}
-    if agent_update:
-        update_payload["agent_settings"] = agent_update
-    if conv_update:
-        update_payload["conversation_settings"] = conv_update
-    update_payload.update(top_level)
-    settings.update(update_payload)
+    settings.update(payload)
     return settings
 
 

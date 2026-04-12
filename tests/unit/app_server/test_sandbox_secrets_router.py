@@ -157,9 +157,11 @@ class TestGetCurrentUserExposeSecrets:
         user_info = UserInfo(
             id=USER_ID,
             agent_settings={
-                'llm.model': 'anthropic/claude-sonnet-4-20250514',
-                'llm.api_key': 'sk-test-key-123',
-                'llm.base_url': 'https://litellm.example.com',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-20250514',
+                    'api_key': 'sk-test-key-123',
+                    'base_url': 'https://litellm.example.com',
+                },
             },
         )
         mock_context = AsyncMock()
@@ -180,9 +182,9 @@ class TestGetCurrentUserExposeSecrets:
 
         body = json.loads(result.body)
         sdk_vals = body['agent_settings']
-        assert sdk_vals['llm.model'] == 'anthropic/claude-sonnet-4-20250514'
-        assert sdk_vals['llm.api_key'] == 'sk-test-key-123'
-        assert sdk_vals['llm.base_url'] == 'https://litellm.example.com'
+        assert sdk_vals['llm']['model'] == 'anthropic/claude-sonnet-4-20250514'
+        assert sdk_vals['llm']['api_key'] == 'sk-test-key-123'
+        assert sdk_vals['llm']['base_url'] == 'https://litellm.example.com'
 
     async def test_expose_secrets_rejects_missing_session_key(self):
         """expose_secrets=true without X-Session-API-Key is rejected."""
@@ -234,7 +236,7 @@ class TestGetCurrentUserExposeSecrets:
         """Without expose_secrets, llm_api_key is masked (no session key needed)."""
         user_info = UserInfo(
             id=USER_ID,
-            agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-test-key-123'},
+            agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-test-key-123'}},
         )
         mock_context = AsyncMock()
         mock_context.get_user_info = AsyncMock(return_value=user_info)
@@ -246,8 +248,8 @@ class TestGetCurrentUserExposeSecrets:
         # Returns UserInfo directly (FastAPI will serialize with masking)
         assert isinstance(result, UserInfo)
         dumped = result.model_dump(mode='json')
-        assert dumped['agent_settings']['llm.api_key'] != 'sk-test-key-123'
-        assert dumped['agent_settings']['llm.api_key'] == '**********'
+        assert dumped['agent_settings']['llm']['api_key'] != 'sk-test-key-123'
+        assert dumped['agent_settings']['llm']['api_key'] == '**********'
 
 
 # ---------------------------------------------------------------------------
@@ -448,7 +450,7 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-secret-123'},
+                agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-secret-123'}},
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -467,7 +469,7 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-secret-123'},
+                agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-secret-123'}},
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -497,7 +499,7 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id='user-A',
-                agent_settings={'llm.model': 'gpt-4o', 'llm.api_key': 'sk-secret-123'},
+                agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-secret-123'}},
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value='user-A')
@@ -531,11 +533,11 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={
-                    'llm.model': 'anthropic/claude-sonnet-4-20250514',
-                    'llm.api_key': 'sk-real-secret',
-                    'llm.base_url': 'https://litellm.example.com',
-                },
+                agent_settings={'llm': {
+                    'model': 'anthropic/claude-sonnet-4-20250514',
+                    'api_key': 'sk-real-secret',
+                    'base_url': 'https://litellm.example.com',
+                }},
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -562,9 +564,9 @@ class TestExposeSecretsIntegration:
         assert response.status_code == 200
         body = response.json()
         sdk_vals = body['agent_settings']
-        assert sdk_vals['llm.api_key'] == 'sk-real-secret'
-        assert sdk_vals['llm.model'] == 'anthropic/claude-sonnet-4-20250514'
-        assert sdk_vals['llm.base_url'] == 'https://litellm.example.com'
+        assert sdk_vals['llm']['api_key'] == 'sk-real-secret'
+        assert sdk_vals['llm']['model'] == 'anthropic/claude-sonnet-4-20250514'
+        assert sdk_vals['llm']['base_url'] == 'https://litellm.example.com'
 
     def test_default_masks_secrets_via_http(self):
         """Without expose_secrets, secrets are in agent_settings."""
@@ -572,10 +574,10 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={
-                    'llm.model': 'gpt-4o',
-                    'llm.api_key': 'sk-should-be-masked',
-                },
+                agent_settings={'llm': {
+                    'model': 'gpt-4o',
+                    'api_key': 'sk-should-be-masked',
+                }},
             )
         )
 
@@ -586,7 +588,7 @@ class TestExposeSecretsIntegration:
 
         assert response.status_code == 200
         body = response.json()
-        assert body['agent_settings']['llm.api_key'] == '**********'
+        assert body['agent_settings']['llm']['api_key'] == '**********'
 
 
 class TestSandboxSecretsIntegration:

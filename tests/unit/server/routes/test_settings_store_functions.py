@@ -21,11 +21,15 @@ from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.data_models.settings import Settings
 from openhands.storage.secrets.file_secrets_store import FileSecretsStore
 
-def _make_settings(**sdk_vals: Any) -> Settings:
-    """Helper to create Settings with agent_settings."""
-    if 'llm.api_key' in sdk_vals and 'llm.model' not in sdk_vals:
-        sdk_vals['llm.model'] = 'anthropic/claude-sonnet-4-5-20250929'
-    return Settings(agent_settings=sdk_vals)
+def _make_settings(agent_settings: dict[str, Any] | None = None) -> Settings:
+    """Helper to create Settings with nested agent_settings dict."""
+    if agent_settings is None:
+        agent_settings = {}
+    llm = agent_settings.get('llm', {})
+    if 'api_key' in llm and 'model' not in llm:
+        llm['model'] = 'anthropic/claude-sonnet-4-5-20250929'
+        agent_settings['llm'] = llm
+    return Settings(agent_settings=agent_settings)
 
 
 @pytest.fixture(autouse=True)
@@ -170,11 +174,13 @@ async def test_check_provider_tokens_no_tokens():
 
 # Tests for _apply_settings_payload (SDK-first settings)
 def test_apply_payload_sdk_keys_stored_and_readable():
-    """SDK dotted keys should be stored in agent_settings and readable via properties."""
+    """Nested SDK keys should be stored in agent_settings and readable via properties."""
     payload = {
-        'llm.model': 'gpt-4',
-        'llm.api_key': 'test-api-key',
-        'llm.base_url': 'https://api.example.com',
+        'agent_settings': {'llm': {
+            'model': 'gpt-4',
+            'api_key': 'test-api-key',
+            'base_url': 'https://api.example.com',
+        }},
     }
 
     result = _apply_settings_payload(
@@ -191,19 +197,19 @@ def test_apply_payload_sdk_keys_stored_and_readable():
 
 
 def test_apply_payload_updates_existing():
-    """SDK keys should update existing settings."""
-    existing = _make_settings(
-        **{
-            'llm.model': 'gpt-3.5',
-            'llm.api_key': 'old-api-key',
-            'llm.base_url': 'https://old.example.com',
-        }
-    )
+    """Nested SDK keys should update existing settings."""
+    existing = _make_settings({'llm': {
+        'model': 'gpt-3.5',
+        'api_key': 'old-api-key',
+        'base_url': 'https://old.example.com',
+    }})
 
     payload = {
-        'llm.model': 'gpt-4',
-        'llm.api_key': 'new-api-key',
-        'llm.base_url': 'https://new.example.com',
+        'agent_settings': {'llm': {
+            'model': 'gpt-4',
+            'api_key': 'new-api-key',
+            'base_url': 'https://new.example.com',
+        }},
     }
 
     result = _apply_settings_payload(
@@ -217,14 +223,12 @@ def test_apply_payload_updates_existing():
 
 def test_apply_payload_preserves_secrets_when_not_provided():
     """When the API key is not in the payload, the existing value is preserved."""
-    existing = _make_settings(
-        **{
-            'llm.model': 'gpt-3.5',
-            'llm.api_key': 'existing-api-key',
-        }
-    )
+    existing = _make_settings({'llm': {
+        'model': 'gpt-3.5',
+        'api_key': 'existing-api-key',
+    }})
 
-    payload = {'llm.model': 'gpt-4'}
+    payload = {'agent_settings': {'llm': {'model': 'gpt-4'}}}
 
     result = _apply_settings_payload(
         payload, existing
@@ -237,27 +241,29 @@ def test_apply_payload_preserves_secrets_when_not_provided():
 
 def test_apply_payload_mcp_update_preserves_existing_llm_settings():
     existing_settings = Settings(
-        agent_settings={
-            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
-            'llm.api_key': 'existing-api-key',
-            'llm.base_url': 'https://my-custom-proxy.example.com',
-        },
+        agent_settings={'llm': {
+            'model': 'anthropic/claude-sonnet-4-5-20250929',
+            'api_key': 'existing-api-key',
+            'base_url': 'https://my-custom-proxy.example.com',
+        }},
     )
 
     result = _apply_settings_payload(
         {
-            'mcp_config': {
-                'stdio_servers': [
-                    {
-                        'name': 'my-server',
-                        'command': 'npx',
-                        'args': ['-y', '@my/mcp-server'],
-                        'env': {
-                            'API_TOKEN': 'secret123',
-                            'ENDPOINT': 'https://example.com',
-                        },
-                    }
-                ]
+            'agent_settings': {
+                'mcp_config': {
+                    'stdio_servers': [
+                        {
+                            'name': 'my-server',
+                            'command': 'npx',
+                            'args': ['-y', '@my/mcp-server'],
+                            'env': {
+                                'API_TOKEN': 'secret123',
+                                'ENDPOINT': 'https://example.com',
+                            },
+                        }
+                    ]
+                }
             }
         },
         existing_settings,
@@ -270,15 +276,15 @@ def test_apply_payload_mcp_update_preserves_existing_llm_settings():
 
 def test_apply_payload_clears_secrets_when_explicitly_null_or_empty():
     """Explicit null/empty secret values should clear existing SDK secrets."""
-    existing = _make_settings(**{'llm.api_key': 'existing-api-key'})
+    existing = _make_settings({'llm': {'api_key': 'existing-api-key'}})
 
-    payload = {'llm.api_key': None}
+    payload = {'agent_settings': {'llm': {'api_key': None}}}
     result = _apply_settings_payload(
         payload, existing
     )
     assert result.agent_settings.llm.api_key is None
 
-    payload = {'llm.api_key': ''}
+    payload = {'agent_settings': {'llm': {'api_key': ''}}}
     result = _apply_settings_payload(
         payload, existing
     )
@@ -287,15 +293,13 @@ def test_apply_payload_clears_secrets_when_explicitly_null_or_empty():
 
 def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
     """Explicit null non-secret SDK values should survive for inherited-settings clearing."""
-    existing = _make_settings(
-        **{
-            'llm.model': 'openai/gpt-4o',
-            'llm.base_url': 'https://custom.example/v1',
-        }
-    )
+    existing = _make_settings({'llm': {
+        'model': 'openai/gpt-4o',
+        'base_url': 'https://custom.example/v1',
+    }})
 
     result = _apply_settings_payload(
-        {'llm.base_url': None}, existing
+        {'agent_settings': {'llm': {'base_url': None}}}, existing
     )
 
     assert _agent_value(result, 'llm.base_url') is None
@@ -304,23 +308,23 @@ def test_apply_payload_preserves_explicit_null_non_secret_sdk_resets():
 
 def test_apply_payload_mcp_preserves_llm_settings():
     """Non-LLM payloads (e.g. MCP config) should not affect existing LLM settings."""
-    existing = _make_settings(
-        **{
-            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
-            'llm.api_key': 'existing-api-key',
-            'llm.base_url': 'https://my-custom-proxy.example.com',
-        }
-    )
+    existing = _make_settings({'llm': {
+        'model': 'anthropic/claude-sonnet-4-5-20250929',
+        'api_key': 'existing-api-key',
+        'base_url': 'https://my-custom-proxy.example.com',
+    }})
 
     payload = {
-        'mcp_config': {
-            'stdio_servers': [
-                {
-                    'name': 'my-server',
-                    'command': 'npx',
-                    'args': ['-y', '@my/mcp-server'],
-                }
-            ],
+        'agent_settings': {
+            'mcp_config': {
+                'stdio_servers': [
+                    {
+                        'name': 'my-server',
+                        'command': 'npx',
+                        'args': ['-y', '@my/mcp-server'],
+                    }
+                ],
+            },
         },
     }
 
@@ -351,8 +355,10 @@ def test_apply_payload_non_sdk_flat_keys_applied():
 def test_apply_payload_conversation_settings_stored_top_level():
     """Conversation security settings should be applied as top-level Settings fields."""
     payload = {
-        'confirmation_mode': True,
-        'security_analyzer': 'llm',
+        'conversation_settings': {
+            'confirmation_mode': True,
+            'security_analyzer': 'llm',
+        },
     }
 
     result = _apply_settings_payload(
@@ -361,7 +367,7 @@ def test_apply_payload_conversation_settings_stored_top_level():
 
     assert result.conversation_settings.confirmation_mode is True
     assert result.conversation_settings.security_analyzer == 'llm'
-    assert 'confirmation_mode' not in result.agent_settings_values()
+    assert not hasattr(result.agent_settings, 'confirmation_mode')
 
 
 def test_agent_settings_nested_dict_construction():
@@ -392,7 +398,7 @@ def test_agent_settings_nested_dict_construction():
 def test_agent_settings_normalized_with_schema_version_and_extras():
     s = Settings(
         agent_settings={
-            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
+            'llm': {'model': 'anthropic/claude-sonnet-4-5-20250929'},
         },
         conversation_settings={
             'max_iterations': 64,
@@ -410,8 +416,7 @@ def test_agent_settings_normalized_with_schema_version_and_extras():
 def test_agent_settings_persistence_strips_secret_values():
     s = Settings(
         agent_settings={
-            'llm.model': 'anthropic/claude-sonnet-4-5-20250929',
-            'llm.api_key': 'super-secret',
+            'llm': {'model': 'anthropic/claude-sonnet-4-5-20250929', 'api_key': 'super-secret'},
         },
         conversation_settings={'max_iterations': 64},
     )
@@ -426,21 +431,23 @@ def test_agent_settings_persistence_strips_secret_values():
 
 
 def test_openhands_model_settings_remain_user_facing():
-    s = Settings(agent_settings={'llm.model': 'openhands/claude-opus-4-5-20251101'})
+    from openhands.server.routes.settings import _extract_agent_settings
+
+    s = Settings(agent_settings={'llm': {'model': 'openhands/claude-opus-4-5-20251101'}})
 
     assert _persisted_value(s, 'llm.model') == 'litellm_proxy/claude-opus-4-5-20251101'
-    assert (
-        s.agent_settings_values()['llm.model'] == 'openhands/claude-opus-4-5-20251101'
-    )
+    api_data = _extract_agent_settings(s)
+    assert api_data['llm']['model'] == 'openhands/claude-opus-4-5-20251101'
 
 
 def test_litellm_proxy_model_settings_migrate_back_to_openhands_prefix():
-    s = Settings(agent_settings={'llm.model': 'litellm_proxy/claude-opus-4-5-20251101'})
+    from openhands.server.routes.settings import _extract_agent_settings
+
+    s = Settings(agent_settings={'llm': {'model': 'litellm_proxy/claude-opus-4-5-20251101'}})
 
     assert _persisted_value(s, 'llm.model') == 'litellm_proxy/claude-opus-4-5-20251101'
-    assert (
-        s.agent_settings_values()['llm.model'] == 'openhands/claude-opus-4-5-20251101'
-    )
+    api_data = _extract_agent_settings(s)
+    assert api_data['llm']['model'] == 'openhands/claude-opus-4-5-20251101'
 
 
 # Tests for store_provider_tokens

@@ -13,12 +13,14 @@ describe("hasAdvancedSettingsSet", () => {
 
   describe("should be true if", () => {
     test("llm.base_url is set", () => {
+      const as = DEFAULT_SETTINGS.agent_settings as Record<string, unknown>;
+      const llm = (as?.llm ?? {}) as Record<string, unknown>;
       expect(
         hasAdvancedSettingsSet({
           ...DEFAULT_SETTINGS,
           agent_settings: {
-            ...DEFAULT_SETTINGS.agent_settings,
-            "llm.base_url": "test",
+            ...as,
+            llm: { ...llm, base_url: "test" },
           },
         }),
       ).toBe(true);
@@ -37,53 +39,50 @@ describe("hasAdvancedSettingsSet", () => {
     });
 
     test("condenser.enabled is disabled", () => {
-      // Arrange
+      const as = DEFAULT_SETTINGS.agent_settings as Record<string, unknown>;
+      const condenser = (as?.condenser ?? {}) as Record<string, unknown>;
       const settings = {
         ...DEFAULT_SETTINGS,
         agent_settings: {
-          ...DEFAULT_SETTINGS.agent_settings,
-          "condenser.enabled": false,
+          ...as,
+          condenser: { ...condenser, enabled: false },
         },
       };
 
-      // Act
       const result = hasAdvancedSettingsSet(settings);
 
-      // Assert
       expect(result).toBe(true);
     });
 
     test("condenser.max_size is customized above default", () => {
-      // Arrange
+      const as = DEFAULT_SETTINGS.agent_settings as Record<string, unknown>;
+      const condenser = (as?.condenser ?? {}) as Record<string, unknown>;
       const settings = {
         ...DEFAULT_SETTINGS,
         agent_settings: {
-          ...DEFAULT_SETTINGS.agent_settings,
-          "condenser.max_size": 200,
+          ...as,
+          condenser: { ...condenser, max_size: 200 },
         },
       };
 
-      // Act
       const result = hasAdvancedSettingsSet(settings);
 
-      // Assert
       expect(result).toBe(true);
     });
 
     test("condenser.max_size is customized below default", () => {
-      // Arrange
+      const as = DEFAULT_SETTINGS.agent_settings as Record<string, unknown>;
+      const condenser = (as?.condenser ?? {}) as Record<string, unknown>;
       const settings = {
         ...DEFAULT_SETTINGS,
         agent_settings: {
-          ...DEFAULT_SETTINGS.agent_settings,
-          "condenser.max_size": 50,
+          ...as,
+          condenser: { ...condenser, max_size: 50 },
         },
       };
 
-      // Act
       const result = hasAdvancedSettingsSet(settings);
 
-      // Assert
       expect(result).toBe(true);
     });
 

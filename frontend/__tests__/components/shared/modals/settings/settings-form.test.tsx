@@ -38,7 +38,11 @@ describe("SettingsForm", () => {
 
     expect(saveSettingsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        "llm.model": getAgentSettingValue(DEFAULT_SETTINGS, "llm.model"),
+        agent_settings: expect.objectContaining({
+          llm: expect.objectContaining({
+            model: getAgentSettingValue(DEFAULT_SETTINGS, "llm.model"),
+          }),
+        }),
       }),
     );
   });

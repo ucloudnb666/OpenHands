@@ -221,8 +221,10 @@ describe("LlmSettingsScreen", () => {
         llm_model: "openai/gpt-4o",
         llm_base_url: "https://custom.example/v1",
         agent_settings: {
-          "llm.model": "openai/gpt-4o",
-          "llm.base_url": "https://custom.example/v1",
+          llm: {
+            model: "openai/gpt-4o",
+            base_url: "https://custom.example/v1",
+          },
         },
       }),
     );
@@ -272,7 +274,9 @@ describe("LlmSettingsScreen", () => {
       buildSettings({
         llm_base_url: "",
         agent_settings: {
-          "llm.model": "openai/gpt-4o",
+          llm: {
+            model: "openai/gpt-4o",
+          },
         },
         agent_settings_schema: schema,
       }),
@@ -302,7 +306,7 @@ describe("LlmSettingsScreen", () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
         llm_model: "openai/gpt-4o",
-        agent_settings: { "llm.model": "openai/gpt-4o" },
+        agent_settings: { llm: { model: "openai/gpt-4o" } },
       }),
     );
 
@@ -395,7 +399,7 @@ describe("LlmSettingsScreen", () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
       buildSettings({
         llm_model: "openai/gpt-4o",
-        agent_settings: { "llm.model": "openai/gpt-4o" },
+        agent_settings: { llm: { model: "openai/gpt-4o" } },
       }),
     );
     const saveSettingsSpy = vi
@@ -411,7 +415,9 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.api_key": "test-api-key",
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ api_key: "test-api-key" }),
+          }),
         }),
       );
     });
@@ -475,10 +481,12 @@ describe("LlmSettingsScreen", () => {
         llm_base_url: "https://custom.example/v1",
         agent_settings_schema: schema,
         agent_settings: {
-          "llm.model": "openai/gpt-4o",
-          "llm.base_url": "https://custom.example/v1",
-          "llm.timeout": 90,
           agent: "BrowsingAgent",
+          llm: {
+            model: "openai/gpt-4o",
+            base_url: "https://custom.example/v1",
+            timeout: 90,
+          },
         },
       }),
     );
@@ -498,10 +506,10 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.api_key": "test-api-key",
-          "llm.base_url": "https://schema.default/v1",
-          "llm.timeout": 30,
-          agent: "CodeActAgent",
+          agent_settings: expect.objectContaining({
+            agent: "CodeActAgent",
+            llm: expect.objectContaining({ api_key: "test-api-key", base_url: "https://schema.default/v1", timeout: 30 }),
+          }),
         }),
       );
     });
@@ -513,7 +521,9 @@ describe("LlmSettingsScreen", () => {
       search_api_key: "tavily-key",
       search_api_key_set: true,
       agent_settings: {
-        "llm.model": "openai/gpt-4o",
+        llm: {
+          model: "openai/gpt-4o",
+        },
       },
     });
 
@@ -560,8 +570,10 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.api_key": "test-api-key",
           search_api_key: "",
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ api_key: "test-api-key" }),
+          }),
         }),
       );
     });
@@ -583,7 +595,9 @@ describe("LlmSettingsScreen", () => {
       llm_model: "openai/gpt-4o",
       search_api_key_set: true,
       agent_settings: {
-        "llm.model": "openai/gpt-4o",
+        llm: {
+          model: "openai/gpt-4o",
+        },
       },
     });
 
@@ -624,7 +638,9 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.api_key": "test-api-key",
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ api_key: "test-api-key" }),
+          }),
         }),
       );
     });
@@ -653,8 +669,10 @@ describe("LlmSettingsScreen", () => {
       llm_base_url: "https://custom.example/v1",
       search_api_key: "****1234",
       agent_settings: {
-        "llm.model": "openai/gpt-4o",
-        "llm.base_url": "https://custom.example/v1",
+        llm: {
+          model: "openai/gpt-4o",
+          base_url: "https://custom.example/v1",
+        },
       },
     });
 
@@ -696,8 +714,9 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveOrganizationSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.api_key": "test-api-key",
-          "llm.base_url": null,
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ api_key: "test-api-key", base_url: null }),
+          }),
         }),
       );
     });
@@ -724,7 +743,9 @@ describe("LlmSettingsScreen", () => {
     let persistedSettings = buildSettingsWithAdvancedToggle({
       llm_base_url: "https://stale.example/v1",
       agent_settings: {
-        "llm.base_url": "https://stale.example/v1",
+        llm: {
+          base_url: "https://stale.example/v1",
+        },
       },
     });
 
@@ -764,8 +785,9 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.api_key": "test-api-key",
-          "llm.base_url": null,
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ api_key: "test-api-key", base_url: null }),
+          }),
         }),
       );
     });
@@ -806,9 +828,10 @@ describe("LlmSettingsScreen", () => {
           llm_model: "openai/gpt-4o",
           llm_base_url: "https://api.openai.com/v1",
           agent_settings: {
-            ...nextAgentSettings,
-            "llm.model": "openai/gpt-4o",
-            "llm.base_url": "https://api.openai.com/v1",
+            llm: {
+              model: "openai/gpt-4o",
+              base_url: "https://api.openai.com/v1",
+            },
           },
         });
 
@@ -829,8 +852,9 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.model": "openai/gpt-4o",
-          "llm.api_key": "test-api-key",
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ model: "openai/gpt-4o", api_key: "test-api-key" }),
+          }),
         }),
       );
     });
@@ -876,8 +900,10 @@ describe("LlmSettingsScreen", () => {
       buildSettings({
         llm_model: "openai/gpt-4o",
         agent_settings: {
-          "llm.model": "openai/gpt-4o",
-          "llm.base_url": "https://custom.example/v1",
+          llm: {
+            model: "openai/gpt-4o",
+            base_url: "https://custom.example/v1",
+          },
         },
       }),
     );
@@ -900,7 +926,9 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          "llm.base_url": "https://custom.example/v1/extra",
+          agent_settings: expect.objectContaining({
+            llm: expect.objectContaining({ base_url: "https://custom.example/v1/extra" }),
+          }),
         }),
       );
     });
@@ -934,7 +962,7 @@ describe("LlmSettingsScreen", () => {
       vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
         buildSettings({
           llm_model: "openai/gpt-4o",
-          agent_settings: { "llm.model": "openai/gpt-4o" },
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
         }),
       );
 
@@ -983,7 +1011,7 @@ describe("LlmSettingsScreen", () => {
       vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
         buildSettings({
           llm_model: "openai/gpt-4o",
-          agent_settings: { "llm.model": "openai/gpt-4o" },
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
         }),
       );
 
@@ -1009,7 +1037,7 @@ describe("LlmSettingsScreen", () => {
       vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
         buildSettings({
           llm_model: "openai/gpt-4o",
-          agent_settings: { "llm.model": "openai/gpt-4o" },
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
         }),
       );
 
@@ -1063,7 +1091,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1132,7 +1160,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1160,7 +1188,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettingsWithAdvancedToggle({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1194,7 +1222,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1222,7 +1250,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
         const saveSettingsSpy = vi
@@ -1253,7 +1281,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1281,7 +1309,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettingsWithAdvancedToggle({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1315,7 +1343,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
 
@@ -1343,7 +1371,7 @@ describe("LlmSettingsScreen", () => {
         vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
           buildSettings({
             llm_model: "openai/gpt-4o",
-            agent_settings: { "llm.model": "openai/gpt-4o" },
+            agent_settings: { llm: { model: "openai/gpt-4o" } },
           }),
         );
         const saveSettingsSpy = vi

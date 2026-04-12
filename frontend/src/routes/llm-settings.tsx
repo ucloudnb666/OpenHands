@@ -163,7 +163,10 @@ export function LlmSettingsScreen({
   const verifiedProviders = resources?.verifiedProviders || [];
   const defaultModel =
     resources?.defaultModel ||
-    String(DEFAULT_SETTINGS.agent_settings?.["llm.model"] ?? "");
+    String(
+      (DEFAULT_SETTINGS.agent_settings?.llm as Record<string, unknown>)
+        ?.model ?? "",
+    );
 
   const isSaasMode = config?.app_mode === "saas";
   const hasAgentField = hasSchemaField(schema, "agent");
@@ -449,10 +452,12 @@ export function LlmSettingsScreen({
         view: SettingsView;
       },
     ) => {
-      const payload = { ...basePayload };
+      // basePayload is a nested dict (e.g. {llm: {model: "gpt-4"}})
+      const agentSettings = structuredClone(basePayload);
+      const topLevel: Record<string, unknown> = {};
 
       if (!isSaasMode && searchApiKeyDirty) {
-        payload.search_api_key = searchApiKey.trim();
+        topLevel.search_api_key = searchApiKey.trim();
       }
 
       const modelValue =
@@ -469,26 +474,26 @@ export function LlmSettingsScreen({
       const shouldUseOpenHandsKey =
         isSaasMode && activeProvider === "openhands";
 
-      if (shouldUseOpenHandsKey && payload["llm.model"] !== undefined) {
-        payload["llm.api_key"] = "";
+      const llm = (agentSettings.llm ?? {}) as Record<string, unknown>;
+      if (shouldUseOpenHandsKey && llm.model !== undefined) {
+        llm.api_key = "";
+        agentSettings.llm = llm;
       }
 
       if (context.view === "basic") {
-        payload["llm.base_url"] = getSchemaFieldDefaultValue(
-          schema,
-          "llm.base_url",
-        );
+        llm.base_url = getSchemaFieldDefaultValue(schema, "llm.base_url");
+        agentSettings.llm = llm;
 
         if (!isSaasMode) {
-          payload.search_api_key = DEFAULT_SETTINGS.search_api_key;
+          topLevel.search_api_key = DEFAULT_SETTINGS.search_api_key;
         }
 
         if (hasAgentField) {
-          payload.agent = getSchemaFieldDefaultValue(schema, "agent");
+          agentSettings.agent = getSchemaFieldDefaultValue(schema, "agent");
         }
       }
 
-      return payload;
+      return { agent_settings: agentSettings, ...topLevel };
     },
     [
       hasAgentField,

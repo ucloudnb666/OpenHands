@@ -33,12 +33,50 @@ function getSchemaFields(schema: SettingsSchema): SettingsFieldSchema[] {
   return schema.sections.flatMap((section) => section.fields);
 }
 
+/** Traverse a nested object using a dotted key path (e.g. "llm.model"). */
+function lookupDotted(
+  obj: Record<string, unknown> | null | undefined,
+  key: string,
+): unknown {
+  if (!obj) return undefined;
+  const parts = key.split(".");
+  let current: unknown = obj;
+  for (const part of parts) {
+    if (current == null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+/** Set a value in a nested object at a dotted key path (e.g. "llm.model"). */
+function setDotted(
+  obj: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  const parts = key.split(".");
+  let current: Record<string, unknown> = obj;
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const part = parts[i];
+    if (
+      current[part] == null ||
+      typeof current[part] !== "object" ||
+      Array.isArray(current[part])
+    ) {
+      current[part] = {};
+    }
+    current = current[part] as Record<string, unknown>;
+  }
+  current[parts[parts.length - 1]] = value;
+}
+
 export function getSettingValue(
   settings: Settings,
   key: string,
   source: SettingsValueSource = "agent_settings",
 ): SettingsValue {
-  return settings[source]?.[key] ?? null;
+  return (lookupDotted(settings[source] as Record<string, unknown>, key) ??
+    null) as SettingsValue;
 }
 
 export function getAgentSettingValue(
@@ -176,8 +214,6 @@ export function buildInitialSettingsFormValues(
   );
 }
 
-/** Determine which view tier to default to based on whether the user has
- *  overridden any non-critical settings. */
 export function inferInitialView(
   settings: Settings,
   schemaOverride?: SettingsSchema | null,
@@ -217,6 +253,12 @@ export function inferInitialView(
   if (hasMinorOverride) return "all";
   if (hasMajorOverride) return "advanced";
   return "basic";
+}
+
+/** Determine which view tier to default to based on whether the user has
+ *  overridden any non-critical settings. */
+export function hasAdvancedSettingsOverrides(settings: Settings): boolean {
+  return inferInitialView(settings) !== "basic";
 }
 
 export function isSettingsFieldVisible(
@@ -314,15 +356,15 @@ export function buildSdkSettingsPayload(
   values: SettingsFormValues,
   dirty: SettingsDirtyState,
 ): SdkSettingsPayload {
-  const payload: SdkSettingsPayload = {};
+  const payload: Record<string, unknown> = {};
 
   for (const field of getSchemaFields(schema)) {
     if (dirty[field.key]) {
-      payload[field.key] = coerceFieldValue(field, values[field.key]);
+      setDotted(payload, field.key, coerceFieldValue(field, values[field.key]));
     }
   }
 
-  return payload;
+  return payload as SdkSettingsPayload;
 }
 
 function isFieldVisibleInView(
@@ -338,15 +380,18 @@ export function buildSdkSettingsPayloadForView(
   dirty: SettingsDirtyState,
   view: SettingsView,
 ): SdkSettingsPayload {
-  const payload = buildSdkSettingsPayload(schema, values, dirty);
+  const payload = buildSdkSettingsPayload(schema, values, dirty) as Record<
+    string,
+    unknown
+  >;
 
   for (const field of getSchemaFields(schema)) {
     if (!isFieldVisibleInView(field, view)) {
-      payload[field.key] = field.default ?? null;
+      setDotted(payload, field.key, field.default ?? null);
     }
   }
 
-  return payload;
+  return payload as SdkSettingsPayload;
 }
 
 /** Return sections with fields filtered for the current view tier.

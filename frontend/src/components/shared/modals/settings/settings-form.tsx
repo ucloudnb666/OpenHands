@@ -49,9 +49,12 @@ export function SettingsForm({
       onSuccess: () => {
         onClose();
 
+        const agentLlm =
+          ((newSettings.agent_settings as Record<string, unknown>)
+            ?.llm as Record<string, unknown>) ?? {};
         posthog.capture("settings_saved", {
-          LLM_MODEL: newSettings["llm.model"],
-          LLM_API_KEY_SET: newSettings["llm.api_key"] ? "SET" : "UNSET",
+          LLM_MODEL: agentLlm.model,
+          LLM_API_KEY_SET: agentLlm.api_key ? "SET" : "UNSET",
           SEARCH_API_KEY_SET: newSettings.search_api_key ? "SET" : "UNSET",
           REMOTE_RUNTIME_RESOURCE_FACTOR:
             newSettings.remote_runtime_resource_factor,

@@ -113,11 +113,15 @@ def test_convert_to_settings():
 def test_settings_preserve_agent_settings():
     settings = Settings(
         agent_settings={
-            'llm.model': 'test-model',
-            'llm.api_key': 'test-key',
-            'verification.critic_enabled': True,
-            'verification.critic_mode': 'all_actions',
-            'llm.litellm_extra_body': {'metadata': {'tier': 'pro'}},
+            'llm': {
+                'model': 'test-model',
+                'api_key': 'test-key',
+                'litellm_extra_body': {'metadata': {'tier': 'pro'}},
+            },
+            'verification': {
+                'critic_enabled': True,
+                'critic_mode': 'all_actions',
+            },
         },
     )
 
@@ -137,13 +141,13 @@ def test_settings_preserve_agent_settings():
 def test_settings_to_agent_settings_uses_agent_vals():
     settings = Settings(
         agent_settings={
-            'llm.model': 'sdk-model',
-            'llm.base_url': 'https://sdk.example.com',
-            'llm.litellm_extra_body': {'metadata': {'tier': 'enterprise'}},
-            'condenser.enabled': False,
-            'condenser.max_size': 88,
-            'verification.critic_enabled': True,
-            'verification.critic_mode': 'all_actions',
+            'llm': {
+                'model': 'sdk-model',
+                'base_url': 'https://sdk.example.com',
+                'litellm_extra_body': {'metadata': {'tier': 'enterprise'}},
+            },
+            'condenser': {'enabled': False, 'max_size': 88},
+            'verification': {'critic_enabled': True, 'critic_mode': 'all_actions'},
         },
     )
 
@@ -161,7 +165,7 @@ def test_settings_to_agent_settings_uses_agent_vals():
 def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
     settings = Settings(
         agent_settings={
-            'llm.model': 'sdk-model',
+            'llm': {'model': 'sdk-model'},
             'mcp_config': {
                 'mcpServers': {
                     'sse_server': {
@@ -180,12 +184,12 @@ def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
     assert servers['sse_server'].transport == 'sse'
     assert servers['sse_server'].url == 'https://example.com/sse'
 
-    api_values = settings.agent_settings_values()
+    api_values = settings.agent_settings.model_dump(mode="json")
     assert 'sse_server' in api_values['mcp_config']['mcpServers']
 
 
 def test_settings_update_mcp_config():
-    settings = Settings(agent_settings={'llm.model': 'sdk-model'})
+    settings = Settings(agent_settings={'llm': {'model': 'sdk-model'}})
 
     settings.update(
         {

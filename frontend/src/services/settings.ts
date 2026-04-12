@@ -40,9 +40,13 @@ export const DEFAULT_SETTINGS: Settings = {
   agent_settings: {
     schema_version: 1,
     agent: "CodeActAgent",
-    "llm.model": "openhands/claude-opus-4-5-20251101",
-    "condenser.enabled": true,
-    "condenser.max_size": 240,
+    llm: {
+      model: "openhands/claude-opus-4-5-20251101",
+    },
+    condenser: {
+      enabled: true,
+      max_size: 240,
+    },
     mcp_config: {
       sse_servers: [],
       stdio_servers: [],

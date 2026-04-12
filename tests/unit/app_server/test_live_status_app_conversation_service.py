@@ -49,25 +49,23 @@ from openhands.storage.data_models.settings import SandboxGroupingStrategy, Sett
 
 
 def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
-    agent_vals: dict = {}
+    llm_vals: dict = {}
     model = getattr(user, 'llm_model', '') or ''
-    agent_vals.setdefault('llm.model', model)
+    llm_vals['model'] = model
 
     llm_api_key = getattr(user, 'llm_api_key', None)
     if llm_api_key:
-        agent_vals.setdefault('llm.api_key', llm_api_key)
-
-    mcp_config = getattr(user, "_mcp_config", None)
-    if mcp_config and 'mcp_config' not in agent_vals:
-        agent_vals['mcp_config'] = mcp_config.model_dump(mode='python')
+        llm_vals['api_key'] = llm_api_key
 
     llm_base_url = getattr(user, 'llm_base_url', None)
-    if (
-        llm_base_url
-        and 'llm.base_url' not in agent_vals
-        and not model.startswith('openhands/')
-    ):
-        agent_vals['llm.base_url'] = llm_base_url
+    if llm_base_url and not model.startswith('openhands/'):
+        llm_vals['base_url'] = llm_base_url
+
+    agent_vals: dict = {'llm': llm_vals}
+
+    mcp_config = getattr(user, "_mcp_config", None)
+    if mcp_config:
+        agent_vals['mcp_config'] = mcp_config.model_dump(mode='python')
 
     return Settings(agent_settings=agent_vals).agent_settings
 
