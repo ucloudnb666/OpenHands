@@ -58,7 +58,7 @@ def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
         llm_vals['api_key'] = llm_api_key
 
     llm_base_url = getattr(user, 'llm_base_url', None)
-    if llm_base_url and not model.startswith('openhands/'):
+    if llm_base_url:
         llm_vals['base_url'] = llm_base_url
 
     agent_vals: dict = {'llm': llm_vals}
@@ -1179,7 +1179,7 @@ class TestLiveStatusAppConversationService:
             AgentType.DEFAULT,
             'Test suffix',
             mock_mcp_config,
-            self.mock_user.condenser_max_size,
+            self.mock_user.agent_settings.condenser.max_size,
             secrets=mock_secrets,
             git_provider=ProviderType.GITHUB,
             working_dir='/test/dir/repo',

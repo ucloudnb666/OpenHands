@@ -12,7 +12,7 @@ from storage.org_store import OrgStore
 from storage.role import Role
 from storage.user import User
 
-from openhands.sdk.settings import AgentSettings, LLMSettings
+from openhands.sdk.settings import AgentSettings
 from openhands.storage.data_models.settings import Settings
 
 
@@ -1050,7 +1050,7 @@ async def test_update_org_llm_settings_async_with_llm_api_key():
     mock_org = Org(
         id=org_id,
         name='Test Organization',
-        agent_settings=AgentSettings(llm=LLMSettings(model='old-model')),
+        agent_settings=AgentSettings(llm={'model': 'old-model'}),
     )
 
     llm_settings = OrgLLMSettingsUpdate(

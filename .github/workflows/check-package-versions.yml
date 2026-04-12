@@ -40,6 +40,9 @@ jobs:
               "dependencies": poetry.get("dependencies", {}),
           }
 
+          # Packages that are allowed to use git rev pins (e.g. unreleased SDK builds)
+          ALLOWED_REV_PACKAGES = {"openhands-sdk", "openhands-agent-server"}
+
           errors = []
 
           print("🔍 Checking for any dependencies with 'rev' fields...\n")
@@ -49,9 +52,12 @@ jobs:
 
               for pkg_name, cfg in deps.items():
                   if isinstance(cfg, dict) and "rev" in cfg:
-                      msg = f"  ✖ {pkg_name} in [{section_name}] uses rev='{cfg['rev']}' (NOT ALLOWED)"
-                      print(msg)
-                      errors.append(msg)
+                      if pkg_name in ALLOWED_REV_PACKAGES:
+                          print(f"  • {pkg_name}: OK (rev allowed)")
+                      else:
+                          msg = f"  ✖ {pkg_name} in [{section_name}] uses rev='{cfg['rev']}' (NOT ALLOWED)"
+                          print(msg)
+                          errors.append(msg)
                   else:
                       print(f"  • {pkg_name}: OK")
 

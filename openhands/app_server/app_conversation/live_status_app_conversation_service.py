@@ -904,9 +904,20 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         if model and (
             model.startswith('openhands/') or model.startswith('litellm_proxy/')
         ):
-            base_url = (
-                user.agent_settings.llm.base_url or self.openhands_provider_base_url
-            )
+            # The SDK auto-fills base_url with the default public proxy for
+            # openhands/ models.  We need to distinguish "user explicitly set a
+            # custom URL" from "SDK auto-filled the default".
+            #
+            # Priority: user-explicit URL > deployment provider URL > SDK default
+            _SDK_DEFAULT_PROXY = 'https://llm-proxy.app.all-hands.dev/'
+            user_set_custom = base_url and base_url.rstrip(
+                '/'
+            ) != _SDK_DEFAULT_PROXY.rstrip('/')
+            if user_set_custom:
+                pass  # keep user's explicit base_url
+            elif self.openhands_provider_base_url:
+                base_url = self.openhands_provider_base_url
+            # else: keep the SDK default
 
         return LLM(
             model=model,
