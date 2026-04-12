@@ -24,11 +24,16 @@ from openhands.server.settings import Settings
 
 
 def _agent_value(settings: Settings, key: str):
-    return settings.get_agent_setting(key)
+    """Navigate into settings.agent_settings using a dot-separated key."""
+    obj = settings.agent_settings
+    for part in key.split('.'):
+        obj = getattr(obj, part)
+    return obj
 
 
 def _secret_value(settings: Settings, key: str):
-    secret = settings.get_secret_agent_setting(key)
+    """Navigate into settings.agent_settings and unwrap SecretStr values."""
+    secret = _agent_value(settings, key)
     return secret.get_secret_value() if secret else None
 
 

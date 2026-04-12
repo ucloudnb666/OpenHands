@@ -70,11 +70,12 @@ class OrgStore:
         async with a_session_maker() as session:
             org = Org(**kwargs)
             org.org_version = ORG_SETTINGS_VERSION
+            agent_settings = org.agent_settings or {}
             org.agent_settings = deep_merge(
-                org.agent_settings,
+                agent_settings,
                 {
                     'llm': {
-                        'model': org.agent_settings.get('llm', {}).get('model')
+                        'model': agent_settings.get('llm', {}).get('model')
                         or get_default_litellm_model()
                     }
                 },

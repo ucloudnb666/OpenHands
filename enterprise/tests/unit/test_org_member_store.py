@@ -53,13 +53,22 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
 
 
 def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides():
-    settings = Settings(
-        llm_api_key='member-secret',
-        agent='CodeActAgent',
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_base_url='https://api.example.com',
-        max_iterations=42,
-        confirmation_mode=True,
+    settings = Settings()
+    settings.update(
+        {
+            'agent_settings': {
+                'agent': 'CodeActAgent',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'base_url': 'https://api.example.com',
+                    'api_key': 'member-secret',
+                },
+            },
+            'conversation_settings': {
+                'max_iterations': 42,
+                'confirmation_mode': True,
+            },
+        }
     )
 
     kwargs = OrgMemberStore.get_kwargs_from_settings(settings)

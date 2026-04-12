@@ -52,8 +52,16 @@ def test_get_kwargs_from_settings():
     settings = Settings(
         language='es',
         enable_sound_notifications=True,
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key=SecretStr('test-key'),
+    )
+    settings.update(
+        {
+            'agent_settings': {
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'api_key': 'test-key',
+                },
+            },
+        }
     )
 
     kwargs = UserStore.get_kwargs_from_settings(settings)
@@ -82,12 +90,18 @@ async def test_create_default_settings_with_litellm(mock_litellm_api):
     user_id = str(uuid.uuid4())
 
     # Mock LiteLlmManager.create_entries to return a Settings object
-    mock_settings = Settings(
-        language='en',
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key=SecretStr('test_api_key'),
-        llm_base_url='http://test.url',
-        agent='CodeActAgent',
+    mock_settings = Settings(language='en')
+    mock_settings.update(
+        {
+            'agent_settings': {
+                'agent': 'CodeActAgent',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'api_key': 'test_api_key',
+                    'base_url': 'http://test.url',
+                },
+            },
+        }
     )
 
     with patch(
@@ -100,10 +114,9 @@ async def test_create_default_settings_with_litellm(mock_litellm_api):
     # With mock, should return settings with API key from LiteLLM
     assert settings is not None
     assert (
-        settings.get_secret_agent_setting('llm.api_key').get_secret_value()
-        == 'test_api_key'
+        settings.agent_settings.llm.api_key.get_secret_value() == 'test_api_key'
     )
-    assert settings.get_agent_setting('llm.base_url') == 'http://test.url'
+    assert settings.agent_settings.llm.base_url == 'http://test.url'
 
 
 @pytest.mark.asyncio

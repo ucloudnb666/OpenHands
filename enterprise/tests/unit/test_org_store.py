@@ -284,12 +284,19 @@ async def test_get_current_org_from_keycloak_user_id(
 
 def test_get_kwargs_from_settings():
     # Test extracting org kwargs from settings
-    settings = Settings(
-        language='es',
-        agent='CodeActAgent',
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key=SecretStr('test-key'),
-        enable_sound_notifications=True,
+    settings = Settings()
+    settings.update(
+        {
+            'language': 'es',
+            'enable_sound_notifications': True,
+            'agent_settings': {
+                'agent': 'CodeActAgent',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'api_key': 'test-key',
+                },
+            },
+        }
     )
 
     kwargs = OrgStore.get_kwargs_from_settings(settings)
@@ -1051,7 +1058,7 @@ async def test_update_org_llm_settings_async_with_llm_api_key():
     mock_org = Org(
         id=org_id,
         name='Test Organization',
-        agent_settings_diff={'schema_version': 1, 'llm': {'model': 'old-model'}},
+        agent_settings={'schema_version': 1, 'llm': {'model': 'old-model'}},
     )
 
     llm_settings = OrgLLMSettingsUpdate(
@@ -1083,7 +1090,7 @@ async def test_update_org_llm_settings_async_with_llm_api_key():
 
         # Assert - Org is returned
         assert result is not None
-        assert result.agent_settings_diff['llm']['model'] == 'new-model'
+        assert result.agent_settings['llm']['model'] == 'new-model'
 
         # Assert - Member update was called with correct settings
         mock_member_update.assert_called_once()

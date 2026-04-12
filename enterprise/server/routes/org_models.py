@@ -183,9 +183,13 @@ class OrgResponse(BaseModel):
             sandbox_base_container_image=org.sandbox_base_container_image,
             sandbox_runtime_container_image=org.sandbox_runtime_container_image,
             org_version=org.org_version if org.org_version is not None else 0,
-            agent_settings=AgentSettings.model_validate(dict(org.agent_settings)),
+            agent_settings=AgentSettings.model_validate(
+                dict(org.agent_settings) if org.agent_settings else {}
+            ),
             conversation_settings=ConversationSettings.model_validate(
                 dict(org.conversation_settings)
+                if org.conversation_settings
+                else {}
             ),
             search_api_key=None,
             sandbox_api_key=None,
@@ -255,9 +259,13 @@ class OrgLLMSettingsResponse(BaseModel):
     def from_org(cls, org: Org) -> 'OrgLLMSettingsResponse':
         """Create response from Org entity."""
         return cls(
-            agent_settings=AgentSettings.model_validate(dict(org.agent_settings)),
+            agent_settings=AgentSettings.model_validate(
+                dict(org.agent_settings) if org.agent_settings else {}
+            ),
             conversation_settings=ConversationSettings.model_validate(
                 dict(org.conversation_settings)
+                if org.conversation_settings
+                else {}
             ),
             llm_api_key_set=org.llm_api_key is not None,
             search_api_key=cls._mask_key(org.search_api_key),
@@ -374,8 +382,8 @@ class MeResponse(BaseModel):
             role=role.name,
             llm_api_key=cls._mask_key(member.llm_api_key),
             llm_api_key_for_byor=cls._mask_key(member.llm_api_key_for_byor) or None,
-            agent_settings_diff=dict(member.agent_settings_diff),
-            conversation_settings_diff=dict(member.conversation_settings_diff),
+            agent_settings_diff=dict(member.agent_settings_diff or {}),
+            conversation_settings_diff=dict(member.conversation_settings_diff or {}),
             status=member.status,
         )
 

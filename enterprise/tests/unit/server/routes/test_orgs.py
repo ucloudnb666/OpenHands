@@ -3033,7 +3033,7 @@ class TestGetMeEndpoint:
             email=email,
             role=role,
             llm_api_key=llm_api_key,
-            agent_settings=agent_settings,
+            agent_settings_diff=agent_settings,
             status=status_val,
         )
 
@@ -3068,9 +3068,9 @@ class TestGetMeEndpoint:
         assert data['user_id'] == test_user_id
         assert data['email'] == 'owner@example.com'
         assert data['role'] == 'owner'
-        assert data['agent_settings']['llm']['model'] == 'gpt-4'
-        assert data['agent_settings']['llm']['base_url'] == 'https://api.example.com'
-        assert data['agent_settings']['max_iterations'] == 50
+        assert data['agent_settings_diff']['llm']['model'] == 'gpt-4'
+        assert data['agent_settings_diff']['llm']['base_url'] == 'https://api.example.com'
+        assert data['agent_settings_diff']['max_iterations'] == 50
         assert data['status'] == 'active'
 
     @pytest.mark.asyncio
@@ -3194,7 +3194,7 @@ class TestGetMeEndpoint:
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data['agent_settings'] == {'schema_version': 1}
+        assert data['agent_settings_diff'] == {'schema_version': 1}
 
     @pytest.mark.asyncio
     async def test_get_me_with_admin_role(self, mock_me_app, test_user_id, test_org_id):

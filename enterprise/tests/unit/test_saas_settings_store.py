@@ -10,12 +10,50 @@ from openhands.storage.data_models.settings import Settings as DataSettings
 
 
 def _agent_value(settings: Settings, key: str):
-    return settings.get_agent_setting(key)
+    """Navigate into settings.agent_settings using a dot-separated key."""
+    obj = settings.agent_settings
+    for part in key.split('.'):
+        obj = getattr(obj, part)
+    return obj
 
 
 def _secret_value(settings: Settings, key: str):
-    secret = settings.get_secret_agent_setting(key)
+    """Navigate into settings.agent_settings and unwrap SecretStr values."""
+    secret = _agent_value(settings, key)
     return secret.get_secret_value() if secret else None
+
+
+def _make_settings(
+    model: str | None = None,
+    base_url: str | None = None,
+    api_key: str | None = None,
+    max_iterations: int | None = None,
+    **extra_agent: object,
+) -> DataSettings:
+    """Build a DataSettings with the new nested agent_settings API."""
+    s = DataSettings()
+    llm: dict = {}
+    if model is not None:
+        llm['model'] = model
+    if base_url is not None:
+        llm['base_url'] = base_url
+    if api_key is not None:
+        llm['api_key'] = api_key
+    agent_settings: dict = {}
+    if llm:
+        agent_settings['llm'] = llm
+    agent_settings.update(extra_agent)
+    payload: dict = {}
+    if agent_settings:
+        payload['agent_settings'] = agent_settings
+    conv: dict = {}
+    if max_iterations is not None:
+        conv['max_iterations'] = max_iterations
+    if conv:
+        payload['conversation_settings'] = conv
+    if payload:
+        s.update(payload)
+    return s
 
 
 # Mock the database module before importing
@@ -60,13 +98,12 @@ def test_member_settings_persist_full_effective_agent_settings(mock_config):
         }
     )
 
-    actual = settings.normalized_agent_settings(strip_secret_values=True)
-    # Agent settings are now nested format
-    assert actual['agent'] == 'CodeActAgent'
-    assert actual['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
-    assert actual['llm']['base_url'] == 'https://api.example.com'
-    assert actual['condenser']['enabled'] is False
-    assert actual['condenser']['max_size'] == 128
+    agent = settings.agent_settings
+    assert agent.agent == 'CodeActAgent'
+    assert agent.llm.model == 'anthropic/claude-sonnet-4-5-20250929'
+    assert agent.llm.base_url == 'https://api.example.com'
+    assert agent.condenser.enabled is False
+    assert agent.condenser.max_size == 128
 
     # Conversation settings live on the Settings object, not in agent_settings
     assert settings.conversation_settings.max_iterations == 42
@@ -140,8 +177,8 @@ def settings_store(async_session_maker, mock_config):
                 value = item_dict.get(key)
                 if value is not None:
                     item_dict[key] = encrypt_legacy_value(value)
-            item_dict['agent_settings'] = item.normalized_agent_settings(
-                strip_secret_values=True
+            item_dict['agent_settings'] = item.agent_settings.model_dump(
+                mode='json', exclude_none=True
             )
 
             # Continue with the original implementation
@@ -263,9 +300,7 @@ async def test_ensure_api_key_keeps_valid_key(mock_config):
     """When the existing key is valid, it should be kept unchanged."""
     store = SaasSettingsStore('test-user-id-123', mock_config)
     existing_key = 'sk-existing-key'
-    item = DataSettings(
-        llm_model='openhands/gpt-4', llm_api_key=SecretStr(existing_key)
-    )
+    item = _make_settings(model='openhands/gpt-4', api_key=existing_key)
 
     with patch(
         'storage.saas_settings_store.LiteLlmManager.verify_existing_key',
@@ -286,9 +321,7 @@ async def test_ensure_api_key_generates_new_key_when_verification_fails(
     """When verification fails, a new key should be generated."""
     store = SaasSettingsStore('test-user-id-123', mock_config)
     new_key = 'sk-new-key'
-    item = DataSettings(
-        llm_model='openhands/gpt-4', llm_api_key=SecretStr('sk-invalid-key')
-    )
+    item = _make_settings(model='openhands/gpt-4', api_key='sk-invalid-key')
 
     with (
         patch(
@@ -421,11 +454,11 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
     decrypt_value = fixture['decrypt_value']
 
     store = SaasSettingsStore(str(fixture['admin_user_id']), mock_config)
-    new_settings = DataSettings(
-        llm_model='anthropic/claude-sonnet-4',
-        llm_base_url='https://api.anthropic.com/v1',
+    new_settings = _make_settings(
+        model='anthropic/claude-sonnet-4',
+        base_url='https://api.anthropic.com/v1',
         max_iterations=100,
-        llm_api_key=SecretStr('shared-external-api-key'),
+        api_key='shared-external-api-key',
     )
 
     with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
@@ -476,11 +509,11 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
     decrypt_value = fixture['decrypt_value']
 
     store = SaasSettingsStore(admin_user_id, mock_config)
-    new_settings = DataSettings(
-        llm_model='openhands/claude-opus-4-5-20251101',
-        llm_base_url=LITE_LLM_API_URL,
+    new_settings = _make_settings(
+        model='openhands/claude-opus-4-5-20251101',
+        base_url=LITE_LLM_API_URL,
         max_iterations=75,
-        llm_api_key=SecretStr('admin-managed-api-key'),
+        api_key='admin-managed-api-key',
     )
 
     with (
@@ -553,11 +586,18 @@ async def test_store_saves_mcp_config_in_agent_settings(
             'user1': {'url': 'https://user1-mcp-server.com', 'transport': 'sse'}
         },
     }
-    new_settings = DataSettings(
-        llm_model='test-model',
-        llm_base_url='http://non-litellm-url.com',
-        llm_api_key=SecretStr('test-api-key'),
-        mcp_config=user_mcp_config,
+    new_settings = DataSettings()
+    new_settings.update(
+        {
+            'agent_settings': {
+                'llm': {
+                    'model': 'test-model',
+                    'base_url': 'http://non-litellm-url.com',
+                    'api_key': 'test-api-key',
+                },
+                'mcp_config': user_mcp_config,
+            },
+        }
     )
 
     with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
@@ -604,10 +644,9 @@ async def test_store_skips_ensure_api_key_for_non_openhands_model_without_base_u
     admin_user_id = str(fixture['admin_user_id'])
     store = SaasSettingsStore(admin_user_id, mock_config)
 
-    settings = DataSettings(
-        llm_model='openai/gpt-5.2',
-        llm_base_url=None,
-        llm_api_key=SecretStr('sk-user-custom-openai-key'),
+    settings = _make_settings(
+        model='openai/gpt-5.2',
+        api_key='sk-user-custom-openai-key',
     )
 
     with (
@@ -628,10 +667,9 @@ async def test_store_calls_ensure_api_key_for_openhands_model_without_base_url(
     admin_user_id = str(fixture['admin_user_id'])
     store = SaasSettingsStore(admin_user_id, mock_config)
 
-    settings = DataSettings(
-        llm_model='openhands/claude-opus-4-5-20251101',
-        llm_base_url=None,
-        llm_api_key=SecretStr('sk-stale-openai-key'),
+    settings = _make_settings(
+        model='openhands/claude-opus-4-5-20251101',
+        api_key='sk-stale-openai-key',
     )
 
     with (
@@ -652,10 +690,10 @@ async def test_store_calls_ensure_api_key_when_base_url_is_litellm_proxy(
     admin_user_id = str(fixture['admin_user_id'])
     store = SaasSettingsStore(admin_user_id, mock_config)
 
-    settings = DataSettings(
-        llm_model='openai/gpt-5.2',
-        llm_base_url=LITE_LLM_API_URL,
-        llm_api_key=SecretStr('sk-some-key'),
+    settings = _make_settings(
+        model='openai/gpt-5.2',
+        base_url=LITE_LLM_API_URL,
+        api_key='sk-some-key',
     )
 
     with (
@@ -684,15 +722,22 @@ async def test_store_and_load_mcp_config_via_agent_settings(
 
     admin_store = SaasSettingsStore(admin_user_id, mock_config)
 
+    admin_settings = DataSettings()
+    admin_settings.update(
+        {
+            'agent_settings': {
+                'llm': {
+                    'model': 'test-model',
+                    'base_url': 'http://non-litellm-url.com',
+                    'api_key': 'test-api-key',
+                },
+                'mcp_config': admin_mcp_config,
+            },
+        }
+    )
+
     with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
-        await admin_store.store(
-            DataSettings(
-                llm_model='test-model',
-                llm_base_url='http://non-litellm-url.com',
-                llm_api_key=SecretStr('test-api-key'),
-                mcp_config=admin_mcp_config,
-            )
-        )
+        await admin_store.store(admin_settings)
 
     with (
         patch('storage.saas_settings_store.a_session_maker', async_session_maker),
@@ -702,7 +747,8 @@ async def test_store_and_load_mcp_config_via_agent_settings(
         loaded = await admin_store.load()
 
     assert loaded is not None
-    assert loaded.mcp_config is not None
+    assert loaded.agent_settings.mcp_config is not None
     assert (
-        loaded.mcp_config.mcpServers['admin'].url == 'https://admin-private-server.com'
+        loaded.agent_settings.mcp_config.mcpServers['admin'].url
+        == 'https://admin-private-server.com'
     )

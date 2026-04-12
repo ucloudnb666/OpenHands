@@ -336,7 +336,7 @@ class TestAcceptInvitationEmailValidation:
             mock_get_user.return_value = mock_user
             mock_get_member.return_value = None
             mock_settings = MagicMock()
-            mock_settings.get_secret_agent_setting.return_value = SecretStr('test-key')
+            mock_settings.agent_settings.llm.api_key = SecretStr('test-key')
             mock_create_litellm.return_value = mock_settings
             mock_get_org.return_value = mock_org
             mock_update_status.return_value = mock_invitation
