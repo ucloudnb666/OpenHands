@@ -976,13 +976,13 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         assert org_data['contact_email'] == 'john@example.com'
         assert org_data['conversation_expiration'] == 3600
         assert org_data['agent_settings']['agent'] == 'CodeActAgent'
-        assert org_data['agent_settings']['max_iterations'] == 50
-        assert org_data['agent_settings']['security_analyzer'] == 'enabled'
-        assert org_data['agent_settings']['confirmation_mode'] is True
         assert org_data['agent_settings']['llm']['model'] == 'claude-opus-4-5-20251101'
         assert (
             org_data['agent_settings']['llm']['base_url'] == 'https://api.example.com'
         )
+        assert org_data['conversation_settings']['max_iterations'] == 50
+        assert org_data['conversation_settings']['security_analyzer'] == 'llm'
+        assert org_data['conversation_settings']['confirmation_mode'] is True
         assert org_data['remote_runtime_resource_factor'] == 2
         assert org_data['billing_margin'] == 0.15
         assert org_data['enable_proactive_conversation_starters'] is True

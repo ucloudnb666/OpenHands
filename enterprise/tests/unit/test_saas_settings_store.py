@@ -28,10 +28,15 @@ def _make_settings(
     base_url: str | None = None,
     api_key: str | None = None,
     max_iterations: int | None = None,
+    agent: str | None = None,
+    language: str | None = None,
     **extra_agent: object,
 ) -> DataSettings:
     """Build a DataSettings with the new nested agent_settings API."""
-    s = DataSettings()
+    top_level: dict = {}
+    if language is not None:
+        top_level['language'] = language
+    s = DataSettings(**top_level)
     llm: dict = {}
     if model is not None:
         llm['model'] = model
@@ -40,6 +45,8 @@ def _make_settings(
     if api_key is not None:
         llm['api_key'] = api_key
     agent_settings: dict = {}
+    if agent is not None:
+        agent_settings['agent'] = agent
     if llm:
         agent_settings['llm'] = llm
     agent_settings.update(extra_agent)
@@ -129,34 +136,31 @@ def settings_store(async_session_maker, mock_config):
             user_settings = result.scalars().first()
             if not user_settings:
                 # Return default settings
-                return Settings(
-                    llm_model='anthropic/claude-sonnet-4-5-20250929',
-                    llm_api_key=SecretStr('test_api_key'),
-                    llm_base_url='http://test.url',
+                return _make_settings(
+                    model='anthropic/claude-sonnet-4-5-20250929',
+                    api_key='test_api_key',
+                    base_url='http://test.url',
                     agent='CodeActAgent',
                     language='en',
                 )
 
-            # Decrypt and convert to Settings
-            kwargs = {}
-            for column in UserSettings.__table__.columns:
-                if column.name == 'keycloak_user_id':
-                    continue
-                value = getattr(user_settings, column.name, None)
-                if value is None:
-                    continue
-                if column.name in {
-                    'llm_api_key',
-                    'llm_api_key_for_byor',
-                    'search_api_key',
-                    'sandbox_api_key',
-                }:
-                    value = decrypt_legacy_value(value)
-                kwargs[column.name] = value
+            # Decrypt and reconstruct Settings
+            agent_dict = user_settings.agent_settings or {}
+            # Decrypt llm_api_key into agent_settings.llm.api_key
+            if user_settings.llm_api_key:
+                decrypted = decrypt_legacy_value(user_settings.llm_api_key)
+                agent_dict.setdefault('llm', {})['api_key'] = decrypted
 
-            settings = Settings(**kwargs)
-            settings.email = 'test@example.com'
-            settings.email_verified = True
+            settings = Settings(
+                language=user_settings.language,
+                email='test@example.com',
+                email_verified=True,
+            )
+            payload: dict = {}
+            if agent_dict:
+                payload['agent_settings'] = agent_dict
+            if payload:
+                settings.update(payload)
             return settings
 
     # Patch the store method to write to UserSettings table directly (for testing)
@@ -214,17 +218,25 @@ def settings_store(async_session_maker, mock_config):
 async def test_store_and_load_keycloak_user(settings_store):
     # Set a UUID-like Keycloak user ID
     settings_store.user_id = '550e8400-e29b-41d4-a716-446655440000'
-    settings = Settings(
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key=SecretStr('secret_key'),
-        llm_base_url=LITE_LLM_API_URL,
-        agent='smith',
+    settings = DataSettings(
         email='test@example.com',
         email_verified=True,
-        agent_settings={
-            'verification.critic_mode': 'all_actions',
-            'verification.critic_enabled': True,
-        },
+    )
+    settings.update(
+        {
+            'agent_settings': {
+                'agent': 'smith',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'api_key': 'secret_key',
+                    'base_url': LITE_LLM_API_URL,
+                },
+                'verification': {
+                    'critic_mode': 'all_actions',
+                    'critic_enabled': True,
+                },
+            },
+        }
     )
 
     await settings_store.store(settings)
@@ -270,13 +282,21 @@ async def test_load_returns_default_when_not_found(settings_store, async_session
 @pytest.mark.asyncio
 async def test_encryption(settings_store):
     settings_store.user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'  # GitHub user ID
-    settings = Settings(
-        llm_model='anthropic/claude-sonnet-4-5-20250929',
-        llm_api_key=SecretStr('secret_key'),
-        agent='smith',
-        llm_base_url=LITE_LLM_API_URL,
+    settings = DataSettings(
         email='test@example.com',
         email_verified=True,
+    )
+    settings.update(
+        {
+            'agent_settings': {
+                'agent': 'smith',
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'api_key': 'secret_key',
+                    'base_url': LITE_LLM_API_URL,
+                },
+            },
+        }
     )
     await settings_store.store(settings)
     from sqlalchemy import select
