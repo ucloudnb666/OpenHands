@@ -187,9 +187,7 @@ class OrgResponse(BaseModel):
                 dict(org.agent_settings) if org.agent_settings else {}
             ),
             conversation_settings=ConversationSettings.model_validate(
-                dict(org.conversation_settings)
-                if org.conversation_settings
-                else {}
+                dict(org.conversation_settings) if org.conversation_settings else {}
             ),
             search_api_key=None,
             sandbox_api_key=None,
@@ -263,9 +261,7 @@ class OrgLLMSettingsResponse(BaseModel):
                 dict(org.agent_settings) if org.agent_settings else {}
             ),
             conversation_settings=ConversationSettings.model_validate(
-                dict(org.conversation_settings)
-                if org.conversation_settings
-                else {}
+                dict(org.conversation_settings) if org.conversation_settings else {}
             ),
             llm_api_key_set=org.llm_api_key is not None,
             search_api_key=cls._mask_key(org.search_api_key),

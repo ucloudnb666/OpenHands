@@ -113,9 +113,7 @@ async def test_create_default_settings_with_litellm(mock_litellm_api):
 
     # With mock, should return settings with API key from LiteLLM
     assert settings is not None
-    assert (
-        settings.agent_settings.llm.api_key.get_secret_value() == 'test_api_key'
-    )
+    assert settings.agent_settings.llm.api_key.get_secret_value() == 'test_api_key'
     assert settings.agent_settings.llm.base_url == 'http://test.url'
 
 

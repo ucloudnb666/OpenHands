@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from storage.org import Org

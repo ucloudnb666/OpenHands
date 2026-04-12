@@ -3069,7 +3069,10 @@ class TestGetMeEndpoint:
         assert data['email'] == 'owner@example.com'
         assert data['role'] == 'owner'
         assert data['agent_settings_diff']['llm']['model'] == 'gpt-4'
-        assert data['agent_settings_diff']['llm']['base_url'] == 'https://api.example.com'
+        assert (
+            data['agent_settings_diff']['llm']['base_url']
+            == 'https://api.example.com'
+        )
         assert data['agent_settings_diff']['max_iterations'] == 50
         assert data['status'] == 'active'
 
