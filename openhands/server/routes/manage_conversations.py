@@ -743,7 +743,7 @@ async def get_prompt(
     )
     llm_config = LLMConfig(
         model=agent_settings.llm.model,
-        api_key=settings.agent_settings.llm.api_key,
+        api_key=settings.agent_settings.llm.api_key,  # type: ignore[arg-type]
         base_url=effective_base_url,
     )
 

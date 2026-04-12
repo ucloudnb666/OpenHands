@@ -301,7 +301,7 @@ class Settings(BaseModel):
             agent_settings=agent_settings_dict,  # type: ignore[arg-type]
             conversation_settings=ConversationSettings(
                 confirmation_mode=bool(app_config.security.confirmation_mode),
-                security_analyzer=app_config.security.security_analyzer,
+                security_analyzer=app_config.security.security_analyzer,  # type: ignore[arg-type]
                 max_iterations=app_config.max_iterations,
             ),
         )

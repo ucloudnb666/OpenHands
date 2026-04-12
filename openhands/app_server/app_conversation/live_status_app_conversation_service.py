@@ -895,12 +895,18 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         Returns:
             Configured LLM instance
         """
-        model: str = llm_model or user.llm_model or LLM.model_fields['model'].default
-        base_url = user.llm_base_url
+        model: str = (
+            llm_model
+            or user.agent_settings.llm.model
+            or LLM.model_fields['model'].default
+        )
+        base_url = user.agent_settings.llm.base_url
         if model and (
             model.startswith('openhands/') or model.startswith('litellm_proxy/')
         ):
-            base_url = user.llm_base_url or self.openhands_provider_base_url
+            base_url = (
+                user.agent_settings.llm.base_url or self.openhands_provider_base_url
+            )
 
         return LLM(
             model=model,
@@ -1158,20 +1164,22 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         # Update condenser LLM if it exists and is an openhands model
         if agent.condenser and hasattr(agent.condenser, 'llm'):
             condenser_llm = agent.condenser.llm
+            condenser_updates: dict[str, Any] = {'usage_id': 'condenser'}
             if should_set_litellm_extra_body(condenser_llm.model):
                 condenser_metadata = get_llm_metadata(
                     model_name=condenser_llm.model,
-                    llm_type=condenser_llm.usage_id or 'condenser',
+                    llm_type='condenser',
                     conversation_id=conversation_id,
                     user_id=user_id,
                 )
-                updated_condenser_llm = condenser_llm.model_copy(
-                    update={'litellm_extra_body': {'metadata': condenser_metadata}}
-                )
-                updated_condenser = agent.condenser.model_copy(
-                    update={'llm': updated_condenser_llm}
-                )
-                updates['condenser'] = updated_condenser
+                condenser_updates['litellm_extra_body'] = {
+                    'metadata': condenser_metadata
+                }
+            updated_condenser_llm = condenser_llm.model_copy(update=condenser_updates)
+            updated_condenser = agent.condenser.model_copy(
+                update={'llm': updated_condenser_llm}
+            )
+            updates['condenser'] = updated_condenser
 
         # Return updated agent if there are changes
         if updates:
@@ -1440,7 +1448,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             agent_type,
             system_message_suffix,
             mcp_config,
-            user.condenser_max_size,
+            user.agent_settings.condenser.max_size,
             secrets=secrets,
             git_provider=git_provider,
             working_dir=project_dir,

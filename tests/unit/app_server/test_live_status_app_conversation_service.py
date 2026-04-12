@@ -63,7 +63,7 @@ def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
 
     agent_vals: dict = {'llm': llm_vals}
 
-    mcp_config = getattr(user, '_mcp_config', None)
+    mcp_config = getattr(user, '_mcp_config', None) or getattr(user, 'mcp_config', None)
     if mcp_config:
         agent_vals['mcp_config'] = mcp_config.model_dump(mode='python')
 

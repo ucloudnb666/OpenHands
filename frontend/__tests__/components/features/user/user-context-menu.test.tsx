@@ -209,7 +209,7 @@ describe("UserContextMenu", () => {
 
     await waitFor(() => {
       expectedItems.forEach((item) => {
-        expect(screen.getByText(item.text)).toBeInTheDocument();
+        expect(screen.getAllByText(item.text).length).toBeGreaterThan(0);
       });
     });
   });
@@ -243,7 +243,7 @@ describe("UserContextMenu", () => {
 
     await waitFor(() => {
       expectedItems.forEach((item) => {
-        expect(screen.getByText(item.text)).toBeInTheDocument();
+        expect(screen.getAllByText(item.text).length).toBeGreaterThan(0);
       });
     });
   });

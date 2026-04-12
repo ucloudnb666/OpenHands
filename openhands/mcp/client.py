@@ -59,7 +59,9 @@ class MCPClient(BaseModel):
     ):
         """Connect to MCP server using streamable HTTP or SSE transport."""
         server_url = server.url
-        api_key = server.auth  # SDK uses `auth` for bearer token
+        api_key = (
+            str(server.auth) if server.auth else None
+        )  # SDK uses `auth` for bearer token
 
         if not server_url:
             raise ValueError('Server URL is required.')
@@ -67,7 +69,9 @@ class MCPClient(BaseModel):
         transport_type = server.transport or 'http'
 
         try:
-            headers = dict(server.headers) if server.headers else {}
+            headers: dict[str, str] = (
+                {k: str(v) for k, v in server.headers.items()} if server.headers else {}
+            )
             if api_key:
                 headers.update(
                     {
@@ -80,6 +84,7 @@ class MCPClient(BaseModel):
             if conversation_id:
                 headers['X-OpenHands-ServerConversation-ID'] = conversation_id
 
+            transport: SSETransport | StreamableHttpTransport
             if transport_type == 'sse':
                 transport = SSETransport(
                     url=server_url,

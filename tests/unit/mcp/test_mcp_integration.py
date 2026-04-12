@@ -25,24 +25,28 @@ def _sdk_mcp_config(settings: Settings) -> MCPConfig | None:
 async def test_user_auth_mcp_merging_integration():
     """Test that MCP merging works in the user auth flow."""
     config_settings = Settings(
-        mcp_config=MCPConfig(
-            mcpServers={
-                'config': MCPRemoteServerConfig(
-                    url='http://config-server.com', transport='sse'
-                )
-            }
-        )
+        agent_settings={
+            'mcp_config': MCPConfig(
+                mcpServers={
+                    'config': MCPRemoteServerConfig(
+                        url='http://config-server.com', transport='sse'
+                    )
+                }
+            )
+        }
     )
 
     stored_settings = Settings(
-        llm_model='gpt-4',
-        mcp_config=MCPConfig(
-            mcpServers={
-                'frontend': MCPRemoteServerConfig(
-                    url='http://frontend-server.com', transport='sse'
-                )
-            }
-        ),
+        agent_settings={
+            'llm': {'model': 'gpt-4'},
+            'mcp_config': MCPConfig(
+                mcpServers={
+                    'frontend': MCPRemoteServerConfig(
+                        url='http://frontend-server.com', transport='sse'
+                    )
+                }
+            ),
+        }
     )
 
     user_auth = DefaultUserAuth()
@@ -58,7 +62,7 @@ async def test_user_auth_mcp_merging_integration():
 
     assert merged_settings is not None
     merged_mcp = _sdk_mcp_config(merged_settings)
-    assert merged_settings.llm_model == 'gpt-4'
+    assert merged_settings.agent_settings.llm.model == 'gpt-4'
     assert merged_mcp is not None
     assert len(merged_mcp.mcpServers) == 2
     assert 'config' in merged_mcp.mcpServers
@@ -69,24 +73,28 @@ async def test_user_auth_mcp_merging_integration():
 async def test_user_auth_caching_behavior():
     """Test that user auth caches the merged settings correctly."""
     config_settings = Settings(
-        mcp_config=MCPConfig(
-            mcpServers={
-                'config': MCPRemoteServerConfig(
-                    url='http://config-server.com', transport='sse'
-                )
-            }
-        )
+        agent_settings={
+            'mcp_config': MCPConfig(
+                mcpServers={
+                    'config': MCPRemoteServerConfig(
+                        url='http://config-server.com', transport='sse'
+                    )
+                }
+            )
+        }
     )
 
     stored_settings = Settings(
-        llm_model='gpt-4',
-        mcp_config=MCPConfig(
-            mcpServers={
-                'frontend': MCPRemoteServerConfig(
-                    url='http://frontend-server.com', transport='sse'
-                )
-            }
-        ),
+        agent_settings={
+            'llm': {'model': 'gpt-4'},
+            'mcp_config': MCPConfig(
+                mcpServers={
+                    'frontend': MCPRemoteServerConfig(
+                        url='http://frontend-server.com', transport='sse'
+                    )
+                }
+            ),
+        }
     )
 
     user_auth = DefaultUserAuth()

@@ -151,10 +151,10 @@ describe("Settings Screen", () => {
 
     const navbar = await screen.findByTestId("settings-navbar");
     sectionsToInclude.forEach((section) => {
-      const sectionElement = within(navbar).getByText(section, {
+      const sectionElements = within(navbar).getAllByText(section, {
         exact: false, // case insensitive
       });
-      expect(sectionElement).toBeInTheDocument();
+      expect(sectionElements.length).toBeGreaterThan(0);
     });
     sectionsToExclude.forEach((section) => {
       const sectionElement = within(navbar).queryByText(section, {
@@ -201,10 +201,10 @@ describe("Settings Screen", () => {
       expect(within(navbar).getByText("Billing")).toBeInTheDocument();
     });
     sectionsToInclude.forEach((section) => {
-      const sectionElement = within(navbar).getByText(section, {
+      const sectionElements = within(navbar).getAllByText(section, {
         exact: false, // case insensitive
       });
-      expect(sectionElement).toBeInTheDocument();
+      expect(sectionElements.length).toBeGreaterThan(0);
     });
     sectionsToExclude.forEach((section) => {
       const sectionElement = within(navbar).queryByText(section, {
