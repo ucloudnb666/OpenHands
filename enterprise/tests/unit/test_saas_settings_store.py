@@ -351,10 +351,10 @@ def org_with_multiple_members_fixture(session_maker):
             user_id=admin_user_id,
             role_id=10,
             llm_api_key='admin-initial-key',
-            agent_settings={
+            agent_settings_diff={
                 'llm': {'model': 'old-model-v1', 'base_url': 'http://old-url-1.com'},
             },
-            conversation_settings={'max_iterations': 10},
+            conversation_settings_diff={'max_iterations': 10},
             status='active',
         )
         session.add(admin_member)
@@ -364,10 +364,10 @@ def org_with_multiple_members_fixture(session_maker):
             user_id=member1_user_id,
             role_id=10,
             llm_api_key='member1-initial-key',
-            agent_settings={
+            agent_settings_diff={
                 'llm': {'model': 'old-model-v2', 'base_url': 'http://old-url-2.com'},
             },
-            conversation_settings={'max_iterations': 20},
+            conversation_settings_diff={'max_iterations': 20},
             status='active',
         )
         session.add(member1)
@@ -377,10 +377,10 @@ def org_with_multiple_members_fixture(session_maker):
             user_id=member2_user_id,
             role_id=10,
             llm_api_key='member2-initial-key',
-            agent_settings={
+            agent_settings_diff={
                 'llm': {'model': 'old-model-v3', 'base_url': 'http://old-url-3.com'},
             },
-            conversation_settings={'max_iterations': 30},
+            conversation_settings_diff={'max_iterations': 30},
             status='active',
         )
         session.add(member2)
@@ -423,9 +423,9 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
     with session_maker() as session:
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
-        assert org.agent_settings['llm']['model'] == 'anthropic/claude-sonnet-4'
-        assert org.agent_settings['llm']['base_url'] == 'https://api.anthropic.com/v1'
-        assert org.conversation_settings['max_iterations'] == 100
+        assert org.agent_settings_diff['llm']['model'] == 'anthropic/claude-sonnet-4'
+        assert org.agent_settings_diff['llm']['base_url'] == 'https://api.anthropic.com/v1'
+        assert org.conversation_settings_diff['max_iterations'] == 100
 
         members = {
             str(member.user_id): member
@@ -438,12 +438,12 @@ async def test_store_updates_org_defaults_and_all_members_for_shared_keys(
         assert len(members) == 3
 
         for member in members.values():
-            assert member.agent_settings['llm']['model'] == 'anthropic/claude-sonnet-4'
+            assert member.agent_settings_diff['llm']['model'] == 'anthropic/claude-sonnet-4'
             assert (
-                member.agent_settings['llm']['base_url']
+                member.agent_settings_diff['llm']['base_url']
                 == 'https://api.anthropic.com/v1'
             )
-            assert member.conversation_settings['max_iterations'] == 100
+            assert member.conversation_settings_diff['max_iterations'] == 100
             assert decrypt_value(member._llm_api_key) == 'shared-external-api-key'
 
 
@@ -483,9 +483,9 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
         # Settings normalizes openhands/ → litellm_proxy/ during construction
-        assert org.agent_settings['llm']['model'] == 'litellm_proxy/claude-opus-4-5-20251101'
-        assert org.agent_settings['llm']['base_url'] == LITE_LLM_API_URL
-        assert org.conversation_settings['max_iterations'] == 75
+        assert org.agent_settings_diff['llm']['model'] == 'litellm_proxy/claude-opus-4-5-20251101'
+        assert org.agent_settings_diff['llm']['base_url'] == LITE_LLM_API_URL
+        assert org.conversation_settings_diff['max_iterations'] == 75
 
         members = {
             str(member.user_id): member
@@ -507,17 +507,19 @@ async def test_store_keeps_openhands_managed_keys_member_specific(
 
         for member in members.values():
             assert (
-                member.agent_settings['llm']['model']
+                member.agent_settings_diff['llm']['model']
                 == 'litellm_proxy/claude-opus-4-5-20251101'
             )
-            assert member.agent_settings['llm']['base_url'] == LITE_LLM_API_URL
-            assert member.conversation_settings['max_iterations'] == 75
+            assert member.agent_settings_diff['llm']['base_url'] == LITE_LLM_API_URL
+            assert member.conversation_settings_diff['max_iterations'] == 75
 
 
 @pytest.mark.asyncio
-async def test_store_saves_mcp_config_to_current_member_only(
+async def test_store_saves_mcp_config_in_agent_settings(
     session_maker, async_session_maker, mock_config, org_with_multiple_members_fixture
 ):
+    """mcp_config now flows through agent_settings / agent_settings_diff,
+    so it is persisted on both the org and all members."""
     from sqlalchemy import select
     from storage.org import Org
     from storage.org_member import OrgMember
@@ -547,7 +549,7 @@ async def test_store_saves_mcp_config_to_current_member_only(
     with session_maker() as session:
         org = session.execute(select(Org).where(Org.id == org_id)).scalars().first()
         assert org is not None
-        assert org.agent_settings.get('mcp_config') is None
+        assert org.agent_settings.get('mcp_config') == user_mcp_config
 
         members = {
             str(m.user_id): m
@@ -557,12 +559,18 @@ async def test_store_saves_mcp_config_to_current_member_only(
             .scalars()
             .all()
         }
-        assert members[admin_user_id].mcp_config == user_mcp_config
-        assert members[member1_user_id].mcp_config is None
-        assert members[member2_user_id].mcp_config is None
-        assert members[admin_user_id].agent_settings.get('mcp_config') is None
-        assert members[member1_user_id].agent_settings.get('mcp_config') is None
-        assert members[member2_user_id].agent_settings.get('mcp_config') is None
+        assert (
+            members[admin_user_id].agent_settings_diff.get('mcp_config')
+            == user_mcp_config
+        )
+        assert (
+            members[member1_user_id].agent_settings_diff.get('mcp_config')
+            == user_mcp_config
+        )
+        assert (
+            members[member2_user_id].agent_settings_diff.get('mcp_config')
+            == user_mcp_config
+        )
 
 
 @pytest.mark.asyncio
@@ -643,78 +651,21 @@ async def test_store_calls_ensure_api_key_when_base_url_is_litellm_proxy(
 
 
 @pytest.mark.asyncio
-async def test_store_does_not_overwrite_other_members_mcp_config(
-    session_maker, async_session_maker, mock_config, org_with_multiple_members_fixture
-):
-    from sqlalchemy import select
-    from storage.org_member import OrgMember
-
-    fixture = org_with_multiple_members_fixture
-    admin_user_id = str(fixture['admin_user_id'])
-    member1_user_id = str(fixture['member1_user_id'])
-
-    admin_store = SaasSettingsStore(admin_user_id, mock_config)
-    member_store = SaasSettingsStore(member1_user_id, mock_config)
-
-    admin_mcp_config = {
-        'mcpServers': {
-            'admin': {'url': 'https://admin-private-server.com', 'transport': 'sse'}
-        },
-    }
-    member_mcp_config = {
-        'mcpServers': {
-            'member': {'url': 'https://member-private-server.com', 'transport': 'sse'}
-        },
-    }
-
-    with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
-        await admin_store.store(
-            DataSettings(
-                llm_model='test-model',
-                llm_base_url='http://non-litellm-url.com',
-                llm_api_key=SecretStr('test-api-key'),
-                mcp_config=admin_mcp_config,
-            )
-        )
-        await member_store.store(
-            DataSettings(
-                llm_model='test-model',
-                llm_base_url='http://non-litellm-url.com',
-                llm_api_key=SecretStr('test-api-key'),
-                mcp_config=member_mcp_config,
-            )
-        )
-
-    with session_maker() as session:
-        members = {
-            str(m.user_id): m
-            for m in session.execute(select(OrgMember)).scalars().all()
-        }
-        assert members[admin_user_id].mcp_config == admin_mcp_config
-        assert members[member1_user_id].mcp_config == member_mcp_config
-
-
-@pytest.mark.asyncio
-async def test_load_returns_current_member_specific_mcp_config(
+async def test_store_and_load_mcp_config_via_agent_settings(
     async_session_maker, mock_config, org_with_multiple_members_fixture
 ):
+    """mcp_config is persisted inside agent_settings / agent_settings_diff and
+    round-trips correctly through store → load."""
     fixture = org_with_multiple_members_fixture
     admin_user_id = str(fixture['admin_user_id'])
-    member1_user_id = str(fixture['member1_user_id'])
 
     admin_mcp_config = {
         'mcpServers': {
             'admin': {'url': 'https://admin-private-server.com', 'transport': 'sse'}
         },
     }
-    member_mcp_config = {
-        'mcpServers': {
-            'member': {'url': 'https://member-private-server.com', 'transport': 'sse'}
-        },
-    }
 
     admin_store = SaasSettingsStore(admin_user_id, mock_config)
-    member_store = SaasSettingsStore(member1_user_id, mock_config)
 
     with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
         await admin_store.store(
@@ -723,14 +674,6 @@ async def test_load_returns_current_member_specific_mcp_config(
                 llm_base_url='http://non-litellm-url.com',
                 llm_api_key=SecretStr('test-api-key'),
                 mcp_config=admin_mcp_config,
-            )
-        )
-        await member_store.store(
-            DataSettings(
-                llm_model='test-model',
-                llm_base_url='http://non-litellm-url.com',
-                llm_api_key=SecretStr('test-api-key'),
-                mcp_config=member_mcp_config,
             )
         )
 
@@ -739,19 +682,11 @@ async def test_load_returns_current_member_specific_mcp_config(
         patch('storage.user_store.a_session_maker', async_session_maker),
         patch('storage.org_store.a_session_maker', async_session_maker),
     ):
-        admin_loaded_settings = await admin_store.load()
-        member_loaded_settings = await member_store.load()
+        loaded = await admin_store.load()
 
-    assert admin_loaded_settings is not None
-    assert admin_loaded_settings.mcp_config is not None
+    assert loaded is not None
+    assert loaded.mcp_config is not None
     assert (
-        admin_loaded_settings.mcp_config.mcpServers['admin'].url
+        loaded.mcp_config.mcpServers['admin'].url
         == 'https://admin-private-server.com'
-    )
-
-    assert member_loaded_settings is not None
-    assert member_loaded_settings.mcp_config is not None
-    assert (
-        member_loaded_settings.mcp_config.mcpServers['member'].url
-        == 'https://member-private-server.com'
     )

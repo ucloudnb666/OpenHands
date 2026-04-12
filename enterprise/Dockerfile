@@ -24,7 +24,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install poetry and export before importing current code.
-RUN /app/.venv/bin/pip install poetry poetry-plugin-export
+# Pin to the same version that generated poetry.lock for reproducibility.
+RUN /app/.venv/bin/pip install 'poetry==2.3.2' poetry-plugin-export
 
 # Install Python dependencies from poetry.lock for reproducible builds
 # Copy lock files first for better Docker layer caching

@@ -770,13 +770,13 @@ def test_create_user_settings_from_entities():
     # Create mock entities
     org_member = MagicMock()
     org_member.llm_api_key = SecretStr('test-api-key')
-    org_member.agent_settings = {
+    org_member.agent_settings_diff = {
         'llm': {
             'model': 'claude-3-5-sonnet',
             'base_url': 'https://api.example.com',
         },
     }
-    org_member.conversation_settings = {
+    org_member.conversation_settings_diff = {
         'max_iterations': 50,
     }
 
@@ -831,8 +831,8 @@ def test_create_user_settings_from_entities_with_org_fallback():
     # Create mock entities with None in OrgMember
     org_member = MagicMock()
     org_member.llm_api_key = None
-    org_member.agent_settings = {}
-    org_member.conversation_settings = {}
+    org_member.agent_settings_diff = {}
+    org_member.conversation_settings_diff = {}
 
     user = MagicMock()
     user.accepted_tos = None

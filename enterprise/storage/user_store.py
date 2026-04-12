@@ -281,7 +281,7 @@ class UserStore:
                 decrypted_user_settings
             )
             if not custom_settings:
-                org_member_kwargs["agent_settings"] = (
+                org_member_kwargs["agent_settings_diff"] = (
                     OrgStore.get_agent_settings_from_org(org).model_dump(mode='json')
                 )
 
@@ -953,21 +953,16 @@ class UserStore:
         Returns:
             A new UserSettings object populated from the entities
         """
-        from storage.org_member_store import OrgMemberStore
         from storage.org_store import OrgStore
 
-        member_agent_settings_diff = (
-            OrgMemberStore.get_agent_settings_diff_from_org_member(org_member)
-        )
+        member_agent_settings_diff = dict(org_member.agent_settings_diff)
         org_agent_settings = OrgStore.get_agent_settings_from_org(org)
         agent_settings = {
             **org_agent_settings.model_dump(mode='json'),
             **member_agent_settings_diff,
         }
 
-        member_conversation_settings_diff = (
-            OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
-        )
+        member_conversation_settings_diff = dict(org_member.conversation_settings_diff)
         org_conversation_settings = OrgStore.get_conversation_settings_from_org(org)
         conversation_settings = {
             **org_conversation_settings.model_dump(mode='json'),

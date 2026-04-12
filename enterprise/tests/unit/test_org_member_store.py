@@ -39,14 +39,14 @@ def test_get_kwargs_from_user_settings_uses_agent_settings_as_source_of_truth():
     kwargs = OrgMemberStore.get_kwargs_from_user_settings(user_settings)
 
     assert kwargs['llm_api_key'] == 'legacy-secret'
-    assert kwargs['agent_settings']['agent'] == 'CodeActAgent'
-    assert kwargs['agent_settings']['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
-    assert kwargs['agent_settings']['llm']['base_url'] == 'https://api.example.com'
-    assert kwargs['agent_settings']['condenser']['enabled'] is False
-    assert kwargs['agent_settings']['condenser']['max_size'] == 128
-    assert kwargs['conversation_settings']['confirmation_mode'] is True
-    assert kwargs['conversation_settings']['security_analyzer'] == 'llm'
-    assert kwargs['conversation_settings']['max_iterations'] == 42
+    assert kwargs['agent_settings_diff']['agent'] == 'CodeActAgent'
+    assert kwargs['agent_settings_diff']['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert kwargs['agent_settings_diff']['llm']['base_url'] == 'https://api.example.com'
+    assert kwargs['agent_settings_diff']['condenser']['enabled'] is False
+    assert kwargs['agent_settings_diff']['condenser']['max_size'] == 128
+    assert kwargs['conversation_settings_diff']['confirmation_mode'] is True
+    assert kwargs['conversation_settings_diff']['security_analyzer'] == 'llm'
+    assert kwargs['conversation_settings_diff']['max_iterations'] == 42
 
 
 def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides():
@@ -62,41 +62,9 @@ def test_get_kwargs_from_settings_starts_members_without_agent_setting_overrides
     kwargs = OrgMemberStore.get_kwargs_from_settings(settings)
 
     assert kwargs['llm_api_key'].get_secret_value() == 'member-secret'
-    assert kwargs['agent_settings'] == {}
+    assert kwargs['agent_settings_diff'] == {}
 
 
-def test_get_agent_settings_diff_from_org_member_uses_canonical_snapshot_json():
-    org_member = OrgMember(
-        org_id=uuid.uuid4(),
-        user_id=uuid.uuid4(),
-        role_id=1,
-        llm_api_key='legacy-secret',
-        agent_settings={
-            'agent': 'CodeActAgent',
-            'llm': {
-                'model': 'member-model',
-                'base_url': 'https://member.example.com',
-            },
-        },
-        conversation_settings={
-            'max_iterations': 42,
-            'confirmation_mode': True,
-        },
-    )
-
-    assert OrgMemberStore.get_agent_settings_diff_from_org_member(org_member) == {
-        'agent': 'CodeActAgent',
-        'llm': {
-            'model': 'member-model',
-            'base_url': 'https://member.example.com',
-        },
-    }
-    assert OrgMemberStore.get_conversation_settings_diff_from_org_member(
-        org_member
-    ) == {
-        'max_iterations': 42,
-        'confirmation_mode': True,
-    }
 
 
 @pytest.fixture
@@ -370,9 +338,9 @@ async def test_add_user_to_org_with_llm_settings(async_session_maker):
 
     # Assert
     assert org_member is not None
-    assert org_member.agent_settings['llm']['model'] == 'claude-sonnet-4'
-    assert org_member.agent_settings['llm']['base_url'] == 'https://api.example.com'
-    assert org_member.agent_settings['max_iterations'] == 50
+    assert org_member.agent_settings_diff['llm']['model'] == 'claude-sonnet-4'
+    assert org_member.agent_settings_diff['llm']['base_url'] == 'https://api.example.com'
+    assert org_member.agent_settings_diff['max_iterations'] == 50
 
 
 @pytest.mark.asyncio
@@ -1069,7 +1037,7 @@ async def test_update_all_members_llm_settings_async_with_non_encrypted_fields(
             user_id=user.id,
             role_id=role.id,
             llm_api_key='test-key',
-            agent_settings={
+            agent_settings_diff={
                 'schema_version': 1,
                 'llm': {'model': 'old-model'},
                 'max_iterations': 10,
@@ -1106,9 +1074,9 @@ async def test_update_all_members_llm_settings_async_with_non_encrypted_fields(
         )
         updated_member = result.scalars().first()
 
-        assert updated_member.agent_settings['llm']['model'] == 'new-model'
-        assert updated_member.agent_settings['llm']['base_url'] == 'https://new-url.com'
-        assert updated_member.agent_settings['max_iterations'] == 50
+        assert updated_member.agent_settings_diff['llm']['model'] == 'new-model'
+        assert updated_member.agent_settings_diff['llm']['base_url'] == 'https://new-url.com'
+        assert updated_member.agent_settings_diff['max_iterations'] == 50
 
 
 @pytest.mark.asyncio
@@ -1141,7 +1109,7 @@ async def test_update_all_members_llm_settings_async_with_empty_settings(
             user_id=user.id,
             role_id=role.id,
             llm_api_key='original-key',
-            agent_settings={
+            agent_settings_diff={
                 'schema_version': 1,
                 'llm': {'model': 'original-model'},
             },
@@ -1169,7 +1137,7 @@ async def test_update_all_members_llm_settings_async_with_empty_settings(
         )
         member = result.scalars().first()
 
-        assert member.agent_settings['llm']['model'] == 'original-model'
+        assert member.agent_settings_diff['llm']['model'] == 'original-model'
         # Original key should still be there (encrypted)
         assert member._llm_api_key is not None
 

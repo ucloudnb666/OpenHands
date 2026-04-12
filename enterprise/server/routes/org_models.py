@@ -373,8 +373,8 @@ class MeResponse(BaseModel):
             role=role.name,
             llm_api_key=cls._mask_key(member.llm_api_key),
             llm_api_key_for_byor=cls._mask_key(member.llm_api_key_for_byor) or None,
-            agent_settings_diff=dict(member.agent_settings),
-            conversation_settings_diff=dict(member.conversation_settings),
+            agent_settings_diff=dict(member.agent_settings_diff),
+            conversation_settings_diff=dict(member.conversation_settings_diff),
             status=member.status,
         )
 

@@ -39,8 +39,8 @@ class OrgMemberStore:
                 role_id=role_id,
                 llm_api_key=llm_api_key,
                 status=status,
-                agent_settings=dict(agent_settings_diff or {}),
-                conversation_settings=dict(conversation_settings_diff or {}),
+                agent_settings_diff=dict(agent_settings_diff or {}),
+                conversation_settings_diff=dict(conversation_settings_diff or {}),
             )
             session.add(org_member)
             await session.commit()
@@ -147,24 +147,12 @@ class OrgMemberStore:
             return True
 
     @staticmethod
-    def get_agent_settings_diff_from_org_member(
-        org_member: OrgMember,
-    ) -> dict[str, Any]:
-        return dict(org_member.agent_settings)
-
-    @staticmethod
-    def get_conversation_settings_diff_from_org_member(
-        org_member: OrgMember,
-    ) -> dict[str, Any]:
-        return dict(org_member.conversation_settings)
-
-    @staticmethod
     def get_kwargs_from_settings(settings: Settings) -> dict[str, Any]:
         """Return kwargs for OrgMember construction (keys match column names)."""
         return {
             "llm_api_key": settings.agent_settings.llm.api_key,
-            "agent_settings": {},
-            "conversation_settings": {},
+            "agent_settings_diff": {},
+            "conversation_settings_diff": {},
         }
 
     @staticmethod
@@ -172,8 +160,8 @@ class OrgMemberStore:
         """Return kwargs for OrgMember construction (keys match column names)."""
         return {
             "llm_api_key": user_settings.llm_api_key,
-            "agent_settings": dict(user_settings.agent_settings or {}),
-            "conversation_settings": dict(user_settings.conversation_settings or {}),
+            "agent_settings_diff": dict(user_settings.agent_settings),
+            "conversation_settings_diff": dict(user_settings.conversation_settings),
         }
 
     @staticmethod
@@ -279,14 +267,14 @@ class OrgMemberStore:
                 org_member.llm_api_key = raw_key
 
             if agent_settings_diff is not None:
-                org_member.agent_settings = deep_merge(
-                    org_member.agent_settings,
+                org_member.agent_settings_diff = deep_merge(
+                    org_member.agent_settings_diff,
                     agent_settings_diff,
                 )
 
             if conversation_settings_diff is not None:
-                org_member.conversation_settings = deep_merge(
-                    org_member.conversation_settings,
+                org_member.conversation_settings_diff = deep_merge(
+                    org_member.conversation_settings_diff,
                     conversation_settings_diff,
                 )
 

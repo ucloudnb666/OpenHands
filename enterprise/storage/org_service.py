@@ -117,8 +117,8 @@ class OrgService:
             contact_name=contact_name,
             contact_email=contact_email,
             org_version=ORG_SETTINGS_VERSION,
-            agent_settings=default_agent_settings.model_dump(mode='json'),
-            conversation_settings=ConversationSettings().model_dump(mode='json'),
+            agent_settings=default_agent_settings,
+            conversation_settings=ConversationSettings(),
         )
 
     @staticmethod

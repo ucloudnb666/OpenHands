@@ -12,6 +12,8 @@ class UserSettings(Base):  # type: ignore
     id = Column(Integer, Identity(), primary_key=True)
     keycloak_user_id = Column(String, nullable=True, index=True)
     language = Column(String, nullable=True)
+    # Deprecated (v0): API keys now live on Org / OrgMember.
+    # Kept for backward-compat during migration; do not use in new code.
     llm_api_key = Column(String, nullable=True)
     llm_api_key_for_byor = Column(String, nullable=True)
     remote_runtime_resource_factor = Column(Integer, nullable=True)
@@ -63,9 +65,12 @@ class UserSettings(Base):  # type: ignore
     )  # False = not migrated, True = migrated
 
     def to_settings(self):
+        from openhands.sdk.settings import AgentSettings, ConversationSettings
         from openhands.storage.data_models.settings import Settings
 
         return Settings(
-            agent_settings=dict(self.agent_settings or {}),
-            conversation_settings=dict(self.conversation_settings or {}),
+            agent_settings=AgentSettings.model_validate(self.agent_settings),
+            conversation_settings=ConversationSettings.model_validate(
+                self.conversation_settings
+            ),
         )

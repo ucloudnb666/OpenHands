@@ -40,13 +40,16 @@ def upgrade() -> None:
     op.add_column(
         "org_member",
         sa.Column(
-            "agent_settings", sa.JSON(), nullable=False, server_default=_EMPTY_JSON
+            "agent_settings_diff",
+            sa.JSON(),
+            nullable=False,
+            server_default=_EMPTY_JSON,
         ),
     )
     op.add_column(
         "org_member",
         sa.Column(
-            "conversation_settings",
+            "conversation_settings_diff",
             sa.JSON(),
             nullable=False,
             server_default=_EMPTY_JSON,
@@ -103,13 +106,14 @@ def upgrade() -> None:
         sa.text(
             """
             UPDATE org_member
-            SET agent_settings = jsonb_strip_nulls(
+            SET agent_settings_diff = jsonb_strip_nulls(
                 jsonb_build_object(
                     'schema_version', 1,
                     'llm.model', llm_model,
                     'llm.base_url', llm_base_url,
-                    'max_iterations', max_iterations
-                ) || COALESCE(agent_settings::jsonb, '{}'::jsonb)
+                    'max_iterations', max_iterations,
+                    'mcp_config', mcp_config
+                ) || COALESCE(agent_settings_diff::jsonb, '{}'::jsonb)
             )::json
             """
         )
@@ -138,8 +142,8 @@ def upgrade() -> None:
 
     op.alter_column("user_settings", "agent_settings", server_default=None)
     op.alter_column("user_settings", "conversation_settings", server_default=None)
-    op.alter_column("org_member", "agent_settings", server_default=None)
-    op.alter_column("org_member", "conversation_settings", server_default=None)
+    op.alter_column("org_member", "agent_settings_diff", server_default=None)
+    op.alter_column("org_member", "conversation_settings_diff", server_default=None)
     op.alter_column("org", "agent_settings", server_default=None)
     op.alter_column("org", "conversation_settings", server_default=None)
     op.alter_column("org_member", "has_custom_llm_api_key", server_default=None)
@@ -154,6 +158,7 @@ def upgrade() -> None:
     op.drop_column("org_member", "max_iterations")
     op.drop_column("org_member", "llm_model")
     op.drop_column("org_member", "llm_base_url")
+    op.drop_column("org_member", "mcp_config")
     op.drop_column("org", "agent")
     op.drop_column("org", "default_max_iterations")
     op.drop_column("org", "security_analyzer")
@@ -197,6 +202,7 @@ def downgrade() -> None:
     op.add_column(
         "org_member", sa.Column("max_iterations", sa.Integer(), nullable=True)
     )
+    op.add_column("org_member", sa.Column("mcp_config", sa.JSON(), nullable=True))
     op.add_column("org", sa.Column("agent", sa.String(), nullable=True))
     op.add_column(
         "org", sa.Column("default_max_iterations", sa.Integer(), nullable=True)
@@ -248,9 +254,11 @@ def downgrade() -> None:
             """
             UPDATE org_member
             SET
-                llm_model = agent_settings ->> 'llm.model',
-                llm_base_url = agent_settings ->> 'llm.base_url',
-                max_iterations = NULLIF(agent_settings ->> 'max_iterations', '')::integer
+                llm_model = agent_settings_diff ->> 'llm.model',
+                llm_base_url = agent_settings_diff ->> 'llm.base_url',
+                max_iterations =
+                    NULLIF(agent_settings_diff ->> 'max_iterations', '')::integer,
+                mcp_config = agent_settings_diff -> 'mcp_config'
             """
         )
     )
@@ -285,8 +293,8 @@ def downgrade() -> None:
     op.drop_column("org", "agent_settings")
     op.drop_column("org", "conversation_settings")
     op.drop_column("org", "_llm_api_key")
-    op.drop_column("org_member", "agent_settings")
-    op.drop_column("org_member", "conversation_settings")
+    op.drop_column("org_member", "agent_settings_diff")
+    op.drop_column("org_member", "conversation_settings_diff")
     op.drop_column("org_member", "has_custom_llm_api_key")
     op.drop_column("user_settings", "agent_settings")
     op.drop_column("user_settings", "conversation_settings")

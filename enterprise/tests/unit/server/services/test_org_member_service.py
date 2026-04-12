@@ -2224,13 +2224,13 @@ class TestOrgMemberServiceGetMe:
         member.user_id = current_user_id
         member.role_id = 1
         member.llm_api_key = SecretStr('sk-test-key-12345')
-        member.agent_settings = {
+        member.agent_settings_diff = {
             'llm': {
                 'model': 'gpt-4',
                 'base_url': 'https://api.example.com',
             },
         }
-        member.conversation_settings = {
+        member.conversation_settings_diff = {
             'max_iterations': 50,
         }
         member.status = 'active'

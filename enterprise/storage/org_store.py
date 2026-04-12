@@ -256,10 +256,8 @@ class OrgStore:
             for field in _ORG_SETTINGS_FIELDS
             if hasattr(settings, field)
         }
-        kwargs["agent_settings"] = settings.agent_settings.model_dump(mode="json")
-        kwargs["conversation_settings"] = settings.conversation_settings.model_dump(
-            mode="json"
-        )
+        kwargs["agent_settings"] = settings.agent_settings
+        kwargs["conversation_settings"] = settings.conversation_settings
         return kwargs
 
     @staticmethod
@@ -271,10 +269,8 @@ class OrgStore:
         }
         kwargs["org_version"] = user_settings.user_version
         full_settings = user_settings.to_settings()
-        kwargs["agent_settings"] = full_settings.agent_settings.model_dump(mode="json")
-        kwargs["conversation_settings"] = (
-            full_settings.conversation_settings.model_dump(mode="json")
-        )
+        kwargs["agent_settings"] = full_settings.agent_settings
+        kwargs["conversation_settings"] = full_settings.conversation_settings
         return kwargs
 
     @staticmethod

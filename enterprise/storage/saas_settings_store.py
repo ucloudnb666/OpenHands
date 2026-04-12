@@ -78,9 +78,7 @@ class SaasSettingsStore(SettingsStore):
 
     @staticmethod
     def _get_persisted_agent_settings(item: Settings) -> dict[str, Any]:
-        settings = item.agent_settings.model_dump(mode="json")
-        settings.pop("mcp_config", None)
-        return settings
+        return item.agent_settings.model_dump(mode="json")
 
     async def load(self) -> Settings | None:
         user = await UserStore.get_user_by_id(self.user_id)
@@ -103,9 +101,7 @@ class SaasSettingsStore(SettingsStore):
             )
             return None
         org_agent_settings = OrgStore.get_agent_settings_from_org(org)
-        member_agent_settings_diff = (
-            OrgMemberStore.get_agent_settings_diff_from_org_member(org_member)
-        )
+        member_agent_settings_diff = dict(org_member.agent_settings_diff)
 
         kwargs = {
             **{
@@ -142,9 +138,7 @@ class SaasSettingsStore(SettingsStore):
             )
         kwargs["agent_settings"] = merged_agent_settings
         org_conversation = OrgStore.get_conversation_settings_from_org(org)
-        member_conversation_diff = (
-            OrgMemberStore.get_conversation_settings_diff_from_org_member(org_member)
-        )
+        member_conversation_diff = dict(org_member.conversation_settings_diff)
         kwargs["conversation_settings"] = deep_merge(
             org_conversation.model_dump(mode='json'),
             member_conversation_diff,
@@ -155,11 +149,7 @@ class SaasSettingsStore(SettingsStore):
         if kwargs.get('sandbox_grouping_strategy') is None:
             kwargs.pop('sandbox_grouping_strategy', None)
 
-        settings = Settings(**kwargs)
-        if org_member.mcp_config is not None:
-            from openhands.core.config.mcp_config import MCPConfig
-            settings.agent_settings.mcp_config = MCPConfig(**org_member.mcp_config)
-        return settings
+        return Settings(**kwargs)
 
     async def store(self, item: Settings):
         async with a_session_maker() as session:
@@ -249,19 +239,11 @@ class SaasSettingsStore(SettingsStore):
             kwargs.pop("agent_settings", None)
             kwargs.pop("conversation_settings", None)
 
-            sdk_mcp = item.agent_settings.mcp_config
-            if sdk_mcp and sdk_mcp.mcpServers:
-                kwargs["mcp_config"] = sdk_mcp.model_dump(mode="python")
-            else:
-                kwargs["mcp_config"] = None
             for key, value in kwargs.items():
                 if hasattr(user, key):
                     setattr(user, key, value)
-                if key == "mcp_config" and hasattr(org_member, key):
-                    setattr(org_member, key, value)
                 if (
-                    key != "mcp_config"
-                    and hasattr(org, key)
+                    hasattr(org, key)
                     and key
                     not in {
                         "llm_api_key",

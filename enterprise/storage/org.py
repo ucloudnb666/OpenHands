@@ -62,6 +62,13 @@ class Org(Base):  # type: ignore
     git_claims = relationship('OrgGitClaim', back_populates='org')
 
     def __init__(self, **kwargs):
+        # Serialize Pydantic model objects to dicts for JSON columns.
+        from pydantic import BaseModel
+
+        for key in ('agent_settings', 'conversation_settings'):
+            if key in kwargs and isinstance(kwargs[key], BaseModel):
+                kwargs[key] = kwargs[key].model_dump(mode='json')
+
         # Handle known SQLAlchemy columns directly
         for key in list(kwargs):
             if hasattr(self.__class__, key):

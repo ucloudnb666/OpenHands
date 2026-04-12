@@ -20,10 +20,9 @@ class OrgMember(Base):  # type: ignore
     _llm_api_key = Column(String, nullable=False)
     _llm_api_key_for_byor = Column(String, nullable=True)
     has_custom_llm_api_key = Column(Boolean, nullable=False, default=False)
-    agent_settings = Column(JSON, nullable=False, default=dict)
-    conversation_settings = Column(JSON, nullable=False, default=dict)
+    agent_settings_diff = Column(JSON, nullable=False, default=dict)
+    conversation_settings_diff = Column(JSON, nullable=False, default=dict)
     status = Column(String, nullable=True)
-    mcp_config = Column(JSON, nullable=True)
 
     # Relationships
     org = relationship('Org', back_populates='org_members')
