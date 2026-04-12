@@ -24,8 +24,12 @@ def test_valid_remote_config():
     """Test a valid remote server configuration."""
     config = MCPConfig(
         mcpServers={
-            'server1': MCPRemoteServerConfig(url='http://server1:8080', transport='sse'),
-            'server2': MCPRemoteServerConfig(url='http://server2:8080', transport='http'),
+            'server1': MCPRemoteServerConfig(
+                url='http://server1:8080', transport='sse'
+            ),
+            'server2': MCPRemoteServerConfig(
+                url='http://server2:8080', transport='http'
+            ),
         }
     )
     assert len(config.mcpServers) == 2

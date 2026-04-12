@@ -13,9 +13,10 @@ from server.constants import (
 from server.routes.org_models import OrgAppSettingsUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from openhands.utils.jsonpatch_compat import deep_merge
 from storage.org import Org
 from storage.user import User
+
+from openhands.utils.jsonpatch_compat import deep_merge
 
 
 @dataclass
@@ -69,9 +70,9 @@ class OrgAppSettingsStore:
             org.agent_settings = deep_merge(
                 org.agent_settings,
                 {
-                    "llm": {
-                        "model": get_default_litellm_model(),
-                        "base_url": LITE_LLM_API_URL,
+                    'llm': {
+                        'model': get_default_litellm_model(),
+                        'base_url': LITE_LLM_API_URL,
                     },
                 },
             )

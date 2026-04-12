@@ -9,9 +9,10 @@ from uuid import UUID
 from server.routes.org_models import OrgLLMSettingsUpdate
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from openhands.utils.jsonpatch_compat import deep_merge
 from storage.org import Org
 from storage.user import User
+
+from openhands.utils.jsonpatch_compat import deep_merge
 
 
 @dataclass

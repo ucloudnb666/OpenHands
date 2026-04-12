@@ -37,14 +37,19 @@ async def test_mcp_settings_merge_config_only():
     mock_config_settings = _settings_with_mcp(
         MCPConfig(
             mcpServers={
-                'config': MCPRemoteServerConfig(url='http://config-server.com', transport='sse')
+                'config': MCPRemoteServerConfig(
+                    url='http://config-server.com', transport='sse'
+                )
             }
         )
     )
 
     frontend_settings = Settings(agent_settings={'llm': {'model': 'gpt-4'}})
 
-    with patch('openhands.storage.data_models.settings.Settings.from_config', return_value=mock_config_settings):
+    with patch(
+        'openhands.storage.data_models.settings.Settings.from_config',
+        return_value=mock_config_settings,
+    ):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     merged_mcp_config = _mcp_config(merged_settings)
@@ -62,13 +67,18 @@ async def test_mcp_settings_merge_frontend_only():
     frontend_settings = _settings_with_mcp(
         MCPConfig(
             mcpServers={
-                'frontend': MCPRemoteServerConfig(url='http://frontend-server.com', transport='sse')
+                'frontend': MCPRemoteServerConfig(
+                    url='http://frontend-server.com', transport='sse'
+                )
             }
         ),
         agent_settings={'llm': {'model': 'gpt-4'}},
     )
 
-    with patch('openhands.storage.data_models.settings.Settings.from_config', return_value=mock_config_settings):
+    with patch(
+        'openhands.storage.data_models.settings.Settings.from_config',
+        return_value=mock_config_settings,
+    ):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     merged_mcp_config = _mcp_config(merged_settings)
@@ -84,8 +94,12 @@ async def test_mcp_settings_merge_both_present():
     mock_config_settings = _settings_with_mcp(
         MCPConfig(
             mcpServers={
-                'config-sse': MCPRemoteServerConfig(url='http://config-server.com', transport='sse'),
-                'config-stdio': MCPStdioServerConfig(command='config-cmd', args=['arg1']),
+                'config-sse': MCPRemoteServerConfig(
+                    url='http://config-server.com', transport='sse'
+                ),
+                'config-stdio': MCPStdioServerConfig(
+                    command='config-cmd', args=['arg1']
+                ),
             }
         )
     )
@@ -93,14 +107,21 @@ async def test_mcp_settings_merge_both_present():
     frontend_settings = _settings_with_mcp(
         MCPConfig(
             mcpServers={
-                'frontend-sse': MCPRemoteServerConfig(url='http://frontend-server.com', transport='sse'),
-                'frontend-stdio': MCPStdioServerConfig(command='frontend-cmd', args=['arg2']),
+                'frontend-sse': MCPRemoteServerConfig(
+                    url='http://frontend-server.com', transport='sse'
+                ),
+                'frontend-stdio': MCPStdioServerConfig(
+                    command='frontend-cmd', args=['arg2']
+                ),
             }
         ),
         agent_settings={'llm': {'model': 'gpt-4'}},
     )
 
-    with patch('openhands.storage.data_models.settings.Settings.from_config', return_value=mock_config_settings):
+    with patch(
+        'openhands.storage.data_models.settings.Settings.from_config',
+        return_value=mock_config_settings,
+    ):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     merged_mcp_config = _mcp_config(merged_settings)
@@ -121,13 +142,18 @@ async def test_mcp_settings_merge_no_config():
     frontend_settings = _settings_with_mcp(
         MCPConfig(
             mcpServers={
-                'frontend': MCPRemoteServerConfig(url='http://frontend-server.com', transport='sse')
+                'frontend': MCPRemoteServerConfig(
+                    url='http://frontend-server.com', transport='sse'
+                )
             }
         ),
         agent_settings={'llm': {'model': 'gpt-4'}},
     )
 
-    with patch('openhands.storage.data_models.settings.Settings.from_config', return_value=mock_config_settings):
+    with patch(
+        'openhands.storage.data_models.settings.Settings.from_config',
+        return_value=mock_config_settings,
+    ):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     merged_mcp_config = _mcp_config(merged_settings)
@@ -143,7 +169,10 @@ async def test_mcp_settings_merge_neither_present():
 
     frontend_settings = Settings(agent_settings={'llm': {'model': 'gpt-4'}})
 
-    with patch('openhands.storage.data_models.settings.Settings.from_config', return_value=mock_config_settings):
+    with patch(
+        'openhands.storage.data_models.settings.Settings.from_config',
+        return_value=mock_config_settings,
+    ):
         merged_settings = frontend_settings.merge_with_config_settings()
 
     assert _mcp_config(merged_settings) is None

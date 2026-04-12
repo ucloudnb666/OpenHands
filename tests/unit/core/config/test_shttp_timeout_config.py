@@ -58,9 +58,7 @@ class TestMCPRemoteServerConfig:
 
     def test_transport_types(self):
         """Test that transport field accepts sse and http."""
-        sse = MCPRemoteServerConfig(
-            url='https://api.example.com/sse', transport='sse'
-        )
+        sse = MCPRemoteServerConfig(url='https://api.example.com/sse', transport='sse')
         assert sse.transport == 'sse'
 
         http = MCPRemoteServerConfig(

@@ -67,9 +67,7 @@ async def store_llm_settings(
                 if api_base:
                     llm.base_url = api_base
                 else:
-                    logger.debug(
-                        f'No api_base found in litellm for model: {llm.model}'
-                    )
+                    logger.debug(f'No api_base found in litellm for model: {llm.model}')
             except Exception as e:
                 logger.error(
                     f'Failed to get api_base from litellm for model {llm.model}: {e}'
@@ -86,7 +84,7 @@ async def store_llm_settings(
 def convert_to_settings(settings_with_token_data: Settings) -> Settings:
     """Convert settings with token data to Settings model."""
     settings_data = settings_with_token_data.model_dump(
-        mode="json", context={"expose_secrets": True}
+        mode='json', context={'expose_secrets': True}
     )
 
     # Filter out additional fields from `SettingsWithTokenData`

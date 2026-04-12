@@ -27,7 +27,9 @@ async def test_user_auth_mcp_merging_integration():
     config_settings = Settings(
         mcp_config=MCPConfig(
             mcpServers={
-                'config': MCPRemoteServerConfig(url='http://config-server.com', transport='sse')
+                'config': MCPRemoteServerConfig(
+                    url='http://config-server.com', transport='sse'
+                )
             }
         )
     )
@@ -36,7 +38,9 @@ async def test_user_auth_mcp_merging_integration():
         llm_model='gpt-4',
         mcp_config=MCPConfig(
             mcpServers={
-                'frontend': MCPRemoteServerConfig(url='http://frontend-server.com', transport='sse')
+                'frontend': MCPRemoteServerConfig(
+                    url='http://frontend-server.com', transport='sse'
+                )
             }
         ),
     )
@@ -67,7 +71,9 @@ async def test_user_auth_caching_behavior():
     config_settings = Settings(
         mcp_config=MCPConfig(
             mcpServers={
-                'config': MCPRemoteServerConfig(url='http://config-server.com', transport='sse')
+                'config': MCPRemoteServerConfig(
+                    url='http://config-server.com', transport='sse'
+                )
             }
         )
     )
@@ -76,7 +82,9 @@ async def test_user_auth_caching_behavior():
         llm_model='gpt-4',
         mcp_config=MCPConfig(
             mcpServers={
-                'frontend': MCPRemoteServerConfig(url='http://frontend-server.com', transport='sse')
+                'frontend': MCPRemoteServerConfig(
+                    url='http://frontend-server.com', transport='sse'
+                )
             }
         ),
     )

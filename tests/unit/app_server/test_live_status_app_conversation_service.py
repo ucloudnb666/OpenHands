@@ -63,7 +63,7 @@ def _build_test_user_agent_settings(user: SimpleNamespace) -> AgentSettings:
 
     agent_vals: dict = {'llm': llm_vals}
 
-    mcp_config = getattr(user, "_mcp_config", None)
+    mcp_config = getattr(user, '_mcp_config', None)
     if mcp_config:
         agent_vals['mcp_config'] = mcp_config.model_dump(mode='python')
 
@@ -80,7 +80,7 @@ class _TestUserInfo(SimpleNamespace):
 
     @agent_settings.setter
     def agent_settings(self, value):
-        object.__setattr__(self, "_agent_settings_override", value)
+        object.__setattr__(self, '_agent_settings_override', value)
 
     @property
     def conversation_settings(self) -> ConversationSettings:
@@ -1759,9 +1759,7 @@ class TestLiveStatusAppConversationService:
                 'custom-sse': MCPRemoteServerConfig(
                     url='https://custom.com/sse', transport='sse'
                 ),
-                'custom-stdio': MCPStdioServerConfig(
-                    command='node', args=['app.js']
-                ),
+                'custom-stdio': MCPStdioServerConfig(command='node', args=['app.js']),
             }
         )
         self.mock_user_context.get_mcp_api_key.return_value = 'mcp_api_key'
@@ -1888,9 +1886,7 @@ class TestLiveStatusAppConversationService:
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'simple-server': MCPStdioServerConfig(
-                    command='node', args=['app.js']
-                )
+                'simple-server': MCPStdioServerConfig(command='node', args=['app.js'])
             }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None

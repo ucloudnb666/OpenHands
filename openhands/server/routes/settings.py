@@ -39,12 +39,12 @@ def _extract_agent_settings(settings: Settings) -> dict[str, Any]:
     Model names with ``litellm_proxy/`` prefix are normalised to ``openhands/``
     for display purposes. Secrets are masked by Pydantic's default serialiser.
     """
-    data = settings.agent_settings.model_dump(mode="json")
-    llm = data.get("llm")
+    data = settings.agent_settings.model_dump(mode='json')
+    llm = data.get('llm')
     if isinstance(llm, dict):
-        model = llm.get("model")
-        if isinstance(model, str) and model.startswith("litellm_proxy/"):
-            llm["model"] = f"openhands/{model.removeprefix('litellm_proxy/')}"
+        model = llm.get('model')
+        if isinstance(model, str) and model.startswith('litellm_proxy/'):
+            llm['model'] = f'openhands/{model.removeprefix("litellm_proxy/")}'
     return data
 
 
@@ -123,7 +123,7 @@ async def load_settings(
 
         agent_vals = _extract_agent_settings(settings)
         settings_payload = settings.model_dump(
-            mode="json", exclude={"agent_settings", "conversation_settings"}
+            mode='json', exclude={'agent_settings', 'conversation_settings'}
         )
         settings_payload.update(
             {

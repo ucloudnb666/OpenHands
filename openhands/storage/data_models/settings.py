@@ -41,9 +41,6 @@ def _coerce_dict_secrets(d: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-
-
-
 def _merge_sdk_mcp_configs(
     base_config: SDKMCPConfig | None, extra_config: SDKMCPConfig | None
 ) -> SDKMCPConfig | None:
@@ -81,12 +78,16 @@ class SandboxGroupingStrategy(str, Enum):
 
     NO_GROUPING = 'NO_GROUPING'  # Default - each conversation gets its own sandbox
     GROUP_BY_NEWEST = 'GROUP_BY_NEWEST'  # Add to the most recently created sandbox
-    LEAST_RECENTLY_USED = 'LEAST_RECENTLY_USED'  # Add to the least recently used sandbox
-    FEWEST_CONVERSATIONS = 'FEWEST_CONVERSATIONS'  # Add to sandbox with fewest conversations
+    LEAST_RECENTLY_USED = (
+        'LEAST_RECENTLY_USED'  # Add to the least recently used sandbox
+    )
+    FEWEST_CONVERSATIONS = (
+        'FEWEST_CONVERSATIONS'  # Add to sandbox with fewest conversations
+    )
     ADD_TO_ANY = 'ADD_TO_ANY'  # Add to any available sandbox (first found)
 
 
-_SETTINGS_FROZEN_FIELDS = frozenset(["secrets_store"])
+_SETTINGS_FROZEN_FIELDS = frozenset(['secrets_store'])
 
 
 class Settings(BaseModel):
@@ -148,8 +149,8 @@ class Settings(BaseModel):
         ``conversation_settings`` values likewise.
         Top-level keys are set directly on the model.
         """
-        if "agent_settings" in payload:
-            agent_update = payload["agent_settings"]
+        if 'agent_settings' in payload:
+            agent_update = payload['agent_settings']
             if isinstance(agent_update, dict):
                 coerced: dict[str, Any] = {}
                 for key, value in agent_update.items():
@@ -158,31 +159,31 @@ class Settings(BaseModel):
                     )
                 merged = deep_merge(
                     self.agent_settings.model_dump(
-                        mode="json", context={"expose_secrets": True}
+                        mode='json', context={'expose_secrets': True}
                     ),
                     coerced,
                 )
                 # Use object.__setattr__ to avoid validate_assignment
                 # side-effects on other fields.
                 object.__setattr__(
-                    self, "agent_settings", AgentSettings.model_validate(merged)
+                    self, 'agent_settings', AgentSettings.model_validate(merged)
                 )
 
-        if "conversation_settings" in payload:
-            conv_update = payload["conversation_settings"]
+        if 'conversation_settings' in payload:
+            conv_update = payload['conversation_settings']
             if isinstance(conv_update, dict):
                 merged = deep_merge(
-                    self.conversation_settings.model_dump(mode="json"),
+                    self.conversation_settings.model_dump(mode='json'),
                     conv_update,
                 )
                 object.__setattr__(
                     self,
-                    "conversation_settings",
+                    'conversation_settings',
                     ConversationSettings.model_validate(merged),
                 )
 
         for key, value in payload.items():
-            if key in ("agent_settings", "conversation_settings"):
+            if key in ('agent_settings', 'conversation_settings'):
                 continue
             if key in Settings.model_fields and key not in _SETTINGS_FROZEN_FIELDS:
                 field_info = Settings.model_fields[key]
@@ -210,18 +211,18 @@ class Settings(BaseModel):
             return secret_value
         return str(api_key)
 
-    @field_serializer("agent_settings")
+    @field_serializer('agent_settings')
     def agent_settings_serializer(
         self, agent_settings: AgentSettings, info: SerializationInfo
     ) -> dict[str, Any]:
         context = info.context or {}
-        if context.get("expose_secrets", False):
+        if context.get('expose_secrets', False):
             return agent_settings.model_dump(
-                mode="json", context={"expose_secrets": True}
+                mode='json', context={'expose_secrets': True}
             )
-        return agent_settings.model_dump(mode="json")
+        return agent_settings.model_dump(mode='json')
 
-    @model_validator(mode="before")
+    @model_validator(mode='before')
     @classmethod
     def _normalize_inputs(cls, data: dict | object) -> dict | object:
         """Normalize agent_settings and secrets_store inputs."""
@@ -229,19 +230,19 @@ class Settings(BaseModel):
             return data
 
         # --- Agent settings: coerce SecretStr leaves to plain strings ---
-        agent_settings = data.get("agent_settings")
+        agent_settings = data.get('agent_settings')
         if isinstance(agent_settings, dict):
-            data["agent_settings"] = _coerce_dict_secrets(agent_settings)
+            data['agent_settings'] = _coerce_dict_secrets(agent_settings)
         elif isinstance(agent_settings, AgentSettings):
-            data["agent_settings"] = agent_settings.model_dump(
-                mode="json", context={"expose_secrets": True}
+            data['agent_settings'] = agent_settings.model_dump(
+                mode='json', context={'expose_secrets': True}
             )
 
         # --- Conversation settings: normalize ---
-        conversation_settings = data.get("conversation_settings")
+        conversation_settings = data.get('conversation_settings')
         if isinstance(conversation_settings, ConversationSettings):
-            data["conversation_settings"] = conversation_settings.model_dump(
-                mode="json"
+            data['conversation_settings'] = conversation_settings.model_dump(
+                mode='json'
             )
 
         # --- Secrets store ---
@@ -278,22 +279,22 @@ class Settings(BaseModel):
             return None
 
         agent_settings_dict: dict[str, Any] = {
-            "agent": app_config.default_agent,
-            "llm": {
-                "model": llm_config.model,
-                "api_key": (
+            'agent': app_config.default_agent,
+            'llm': {
+                'model': llm_config.model,
+                'api_key': (
                     llm_config.api_key.get_secret_value()
                     if isinstance(llm_config.api_key, SecretStr)
                     else llm_config.api_key
                 ),
-                "base_url": llm_config.base_url,
+                'base_url': llm_config.base_url,
             },
         }
-        if hasattr(app_config, "mcp") and app_config.mcp:
-            agent_settings_dict["mcp_config"] = _coerce_value(app_config.mcp)
+        if hasattr(app_config, 'mcp') and app_config.mcp:
+            agent_settings_dict['mcp_config'] = _coerce_value(app_config.mcp)
 
         return Settings(
-            language="en",
+            language='en',
             remote_runtime_resource_factor=app_config.sandbox.remote_runtime_resource_factor,
             search_api_key=app_config.search_api_key,
             max_budget_per_task=app_config.max_budget_per_task,
@@ -305,7 +306,7 @@ class Settings(BaseModel):
             ),
         )
 
-    def merge_with_config_settings(self) -> "Settings":
+    def merge_with_config_settings(self) -> 'Settings':
         """Merge config.toml MCP settings with stored SDK agent_settings."""
         config_settings = Settings.from_config()
         if not config_settings:

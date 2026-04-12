@@ -29,7 +29,6 @@ from openhands.app_server.sandbox.sandbox_models import SandboxInfo
 from openhands.app_server.user.user_context import UserContext
 from openhands.sdk import Agent
 from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.skills import Skill
 from openhands.sdk.security.analyzer import SecurityAnalyzerBase
 from openhands.sdk.security.confirmation_policy import (
     AlwaysConfirm,
@@ -38,6 +37,7 @@ from openhands.sdk.security.confirmation_policy import (
     NeverConfirm,
 )
 from openhands.sdk.security.llm_analyzer import LLMSecurityAnalyzer
+from openhands.sdk.skills import Skill
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 from openhands.utils.git import ensure_valid_git_branch_name
 

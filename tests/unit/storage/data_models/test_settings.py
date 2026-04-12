@@ -5,7 +5,6 @@ from pydantic import SecretStr
 
 from openhands.app_server.settings.settings_router import convert_to_settings
 from openhands.core.config.llm_config import LLMConfig
-from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
 from openhands.core.config.security_config import SecurityConfig
@@ -38,13 +37,13 @@ def test_settings_from_config():
 
         assert settings is not None
         assert settings.language == 'en'
-        assert settings.agent_settings.agent == "test-agent"
+        assert settings.agent_settings.agent == 'test-agent'
         assert settings.conversation_settings.max_iterations == 100
         assert settings.conversation_settings.security_analyzer == 'llm'
         assert settings.conversation_settings.confirmation_mode is True
-        assert settings.agent_settings.llm.model == "test-model"
-        assert settings.agent_settings.llm.api_key.get_secret_value() == "test-key"
-        assert settings.agent_settings.llm.base_url == "https://test.example.com"
+        assert settings.agent_settings.llm.model == 'test-model'
+        assert settings.agent_settings.llm.api_key.get_secret_value() == 'test-key'
+        assert settings.agent_settings.llm.base_url == 'https://test.example.com'
         assert settings.remote_runtime_resource_factor == 2
         assert not settings.secrets_store.provider_tokens
 
@@ -125,17 +124,17 @@ def test_settings_preserve_agent_settings():
         },
     )
 
-    assert settings.agent_settings.llm.api_key.get_secret_value() == "test-key"
+    assert settings.agent_settings.llm.api_key.get_secret_value() == 'test-key'
     dump = settings.agent_settings.model_dump(
-        mode="json", context={"expose_secrets": True}
+        mode='json', context={'expose_secrets': True}
     )
 
-    assert dump["schema_version"] == 1
-    assert dump["llm"]["model"] == "test-model"
-    assert dump["llm"]["api_key"] == "test-key"
-    assert dump["verification"]["critic_enabled"] is True
-    assert dump["verification"]["critic_mode"] == "all_actions"
-    assert dump["llm"]["litellm_extra_body"] == {"metadata": {"tier": "pro"}}
+    assert dump['schema_version'] == 1
+    assert dump['llm']['model'] == 'test-model'
+    assert dump['llm']['api_key'] == 'test-key'
+    assert dump['verification']['critic_enabled'] is True
+    assert dump['verification']['critic_mode'] == 'all_actions'
+    assert dump['llm']['litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
 
 
 def test_settings_to_agent_settings_uses_agent_vals():
@@ -184,7 +183,7 @@ def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
     assert servers['sse_server'].transport == 'sse'
     assert servers['sse_server'].url == 'https://example.com/sse'
 
-    api_values = settings.agent_settings.model_dump(mode="json")
+    api_values = settings.agent_settings.model_dump(mode='json')
     assert 'sse_server' in api_values['mcp_config']['mcpServers']
 
 
@@ -217,20 +216,20 @@ def test_settings_update_batch():
     settings = Settings()
     settings.update(
         {
-            "language": "fr",
-            "agent_settings": {
-                "agent": "TestAgent",
-                "llm": {"model": "new-model", "api_key": "new-key"},
+            'language': 'fr',
+            'agent_settings': {
+                'agent': 'TestAgent',
+                'llm': {'model': 'new-model', 'api_key': 'new-key'},
             },
-            "conversation_settings": {
-                "max_iterations": 200,
+            'conversation_settings': {
+                'max_iterations': 200,
             },
         }
     )
-    assert settings.language == "fr"
-    assert settings.agent_settings.agent == "TestAgent"
-    assert settings.agent_settings.llm.model == "new-model"
-    assert settings.agent_settings.llm.api_key.get_secret_value() == "new-key"
+    assert settings.language == 'fr'
+    assert settings.agent_settings.agent == 'TestAgent'
+    assert settings.agent_settings.llm.model == 'new-model'
+    assert settings.agent_settings.llm.api_key.get_secret_value() == 'new-key'
     assert settings.conversation_settings.max_iterations == 200
 
 

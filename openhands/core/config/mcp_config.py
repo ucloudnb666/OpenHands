@@ -23,13 +23,13 @@ from openhands.utils.import_utils import get_impl
 
 # Re-export the SDK types under the names the codebase uses
 __all__ = [
-    "MCPConfig",
-    "MCPRemoteServerConfig",
-    "MCPStdioServerConfig",
-    "OpenHandsMCPConfig",
-    "OpenHandsMCPConfigImpl",
-    "merge_mcp_configs",
-    "mcp_config_from_toml",
+    'MCPConfig',
+    'MCPRemoteServerConfig',
+    'MCPStdioServerConfig',
+    'OpenHandsMCPConfig',
+    'OpenHandsMCPConfigImpl',
+    'merge_mcp_configs',
+    'mcp_config_from_toml',
 ]
 
 
@@ -58,15 +58,15 @@ def _parse_stdio_env(v: Any) -> dict[str, str]:
     """Parse stdio env from a comma-separated string or return dict as-is."""
     if isinstance(v, str):
         env: dict[str, str] = {}
-        for pair in v.split(","):
+        for pair in v.split(','):
             pair = pair.strip()
             if not pair:
                 continue
-            if "=" not in pair:
+            if '=' not in pair:
                 raise ValueError(
                     f"Environment variable '{pair}' must be in KEY=VALUE format"
                 )
-            key, value = pair.split("=", 1)
+            key, value = pair.split('=', 1)
             env[key.strip()] = value
         return env
     return dict(v or {})
@@ -80,38 +80,38 @@ def mcp_config_from_toml(data: dict[str, Any]) -> dict[str, MCPConfig]:
     """
     servers: dict[str, MCPRemoteServerConfig | MCPStdioServerConfig] = {}
 
-    for entry in data.get("sse_servers", []):
+    for entry in data.get('sse_servers', []):
         if isinstance(entry, str):
-            entry = {"url": entry}
-        name = f"sse_{len([k for k in servers if k.startswith('sse_')])}"
+            entry = {'url': entry}
+        name = f'sse_{len([k for k in servers if k.startswith("sse_")])}'
         servers[name] = MCPRemoteServerConfig(
-            url=entry["url"],
-            transport="sse",
-            auth=entry.get("api_key"),
+            url=entry['url'],
+            transport='sse',
+            auth=entry.get('api_key'),
         )
 
-    for entry in data.get("shttp_servers", []):
+    for entry in data.get('shttp_servers', []):
         if isinstance(entry, str):
-            entry = {"url": entry}
-        name = f"shttp_{len([k for k in servers if k.startswith('shttp_')])}"
+            entry = {'url': entry}
+        name = f'shttp_{len([k for k in servers if k.startswith("shttp_")])}'
         servers[name] = MCPRemoteServerConfig(
-            url=entry["url"],
-            transport="http",
-            auth=entry.get("api_key"),
-            timeout=entry.get("timeout", 60),
+            url=entry['url'],
+            transport='http',
+            auth=entry.get('api_key'),
+            timeout=entry.get('timeout', 60),
         )
 
-    for entry in data.get("stdio_servers", []):
+    for entry in data.get('stdio_servers', []):
         name = entry.get(
-            "name", f"stdio_{len([k for k in servers if k.startswith('stdio_')])}"
+            'name', f'stdio_{len([k for k in servers if k.startswith("stdio_")])}'
         )
         servers[name] = MCPStdioServerConfig(
-            command=entry["command"],
-            args=_parse_stdio_args(entry.get("args", [])),
-            env=_parse_stdio_env(entry.get("env", {})),
+            command=entry['command'],
+            args=_parse_stdio_args(entry.get('args', [])),
+            env=_parse_stdio_env(entry.get('env', {})),
         )
 
-    return {"mcp": MCPConfig(mcpServers=servers)}
+    return {'mcp': MCPConfig(mcpServers=servers)}
 
 
 # ---------------------------------------------------------------------------
@@ -124,29 +124,29 @@ class OpenHandsMCPConfig:
 
     @staticmethod
     def add_search_engine(
-        app_config: "OpenHandsConfig",
+        app_config: 'OpenHandsConfig',
     ) -> dict[str, MCPStdioServerConfig] | None:
         """Return a tavily stdio server entry if a Tavily API key is configured."""
         if (
             app_config.search_api_key
             and app_config.search_api_key.get_secret_value().startswith('tvly-')
         ):
-            logger.info("Adding search engine to MCP config")
+            logger.info('Adding search engine to MCP config')
             return {
-                "tavily": MCPStdioServerConfig(
-                    command="npx",
-                    args=["-y", "tavily-mcp@0.2.1"],
+                'tavily': MCPStdioServerConfig(
+                    command='npx',
+                    args=['-y', 'tavily-mcp@0.2.1'],
                     env={
-                        "TAVILY_API_KEY": app_config.search_api_key.get_secret_value()
+                        'TAVILY_API_KEY': app_config.search_api_key.get_secret_value()
                     },
                 )
             }
-        logger.warning("No search engine API key found, skipping search engine")
+        logger.warning('No search engine API key found, skipping search engine')
         return None
 
     @staticmethod
     async def create_default_mcp_server_config(
-        host: str, config: "OpenHandsConfig", user_id: str | None = None
+        host: str, config: 'OpenHandsConfig', user_id: str | None = None
     ) -> dict[str, MCPRemoteServerConfig | MCPStdioServerConfig]:
         """Return a dict of default MCP server entries to merge into config.mcp.
 
@@ -159,9 +159,9 @@ class OpenHandsMCPConfig:
         if search:
             servers.update(search)
 
-        servers["openhands"] = MCPRemoteServerConfig(
-            url=f"http://{host}/mcp/mcp",
-            transport="http",
+        servers['openhands'] = MCPRemoteServerConfig(
+            url=f'http://{host}/mcp/mcp',
+            transport='http',
             timeout=60,
         )
 
@@ -169,8 +169,8 @@ class OpenHandsMCPConfig:
 
 
 openhands_mcp_config_cls = os.environ.get(
-    "OPENHANDS_MCP_CONFIG_CLS",
-    "openhands.core.config.mcp_config.OpenHandsMCPConfig",
+    'OPENHANDS_MCP_CONFIG_CLS',
+    'openhands.core.config.mcp_config.OpenHandsMCPConfig',
 )
 
 OpenHandsMCPConfigImpl = get_impl(OpenHandsMCPConfig, openhands_mcp_config_cls)

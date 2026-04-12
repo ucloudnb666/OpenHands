@@ -5,7 +5,11 @@ import pytest
 
 # Import the module, not the functions directly to avoid circular imports
 import openhands.mcp.utils
-from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig, MCPStdioServerConfig
+from openhands.core.config.mcp_config import (
+    MCPConfig,
+    MCPRemoteServerConfig,
+    MCPStdioServerConfig,
+)
 from openhands.events.action.mcp import MCPAction
 from openhands.events.observation.mcp import MCPObservation
 
@@ -26,7 +30,9 @@ async def test_create_mcp_clients_success(mock_mcp_client):
     mock_client_instance.connect_http = AsyncMock()
 
     s1 = MCPRemoteServerConfig(url='http://server1:8080', transport='sse')
-    s2 = MCPRemoteServerConfig(url='http://server2:8080', transport='sse', auth='test-key')
+    s2 = MCPRemoteServerConfig(
+        url='http://server2:8080', transport='sse', auth='test-key'
+    )
     mcp_config = MCPConfig(mcpServers={'s1': s1, 's2': s2})
 
     clients = await openhands.mcp.utils.create_mcp_clients(mcp_config)
@@ -215,9 +221,7 @@ async def test_fetch_mcp_tools_from_config_with_stdio(mock_create_clients):
     mock_create_clients.return_value = [mock_client]
 
     mcp_config = MCPConfig(
-        mcpServers={
-            'test-server': MCPStdioServerConfig(command='python')
-        }
+        mcpServers={'test-server': MCPStdioServerConfig(command='python')}
     )
 
     tools = await openhands.mcp.utils.fetch_mcp_tools_from_config(

@@ -217,12 +217,12 @@ class LiteLlmManager:
 
         oss_settings.update(
             {
-                "agent_settings": {
-                    "agent": "CodeActAgent",
-                    "llm": {
-                        "model": get_default_litellm_model(),
-                        "api_key": key,
-                        "base_url": LITE_LLM_API_URL,
+                'agent_settings': {
+                    'agent': 'CodeActAgent',
+                    'llm': {
+                        'model': get_default_litellm_model(),
+                        'api_key': key,
+                        'base_url': LITE_LLM_API_URL,
                     },
                 }
             }

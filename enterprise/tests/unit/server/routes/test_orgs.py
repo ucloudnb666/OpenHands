@@ -928,7 +928,10 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         conversation_expiration=3600,
         agent_settings={
             'agent': 'CodeActAgent',
-            'llm': {'model': 'claude-opus-4-5-20251101', 'base_url': 'https://api.example.com'},
+            'llm': {
+                'model': 'claude-opus-4-5-20251101',
+                'base_url': 'https://api.example.com',
+            },
             'condenser': {'enabled': True},
         },
         conversation_settings={
@@ -977,7 +980,9 @@ async def test_list_user_orgs_all_fields_present(mock_app_list):
         assert org_data['agent_settings']['security_analyzer'] == 'enabled'
         assert org_data['agent_settings']['confirmation_mode'] is True
         assert org_data['agent_settings']['llm']['model'] == 'claude-opus-4-5-20251101'
-        assert org_data['agent_settings']['llm']['base_url'] == 'https://api.example.com'
+        assert (
+            org_data['agent_settings']['llm']['base_url'] == 'https://api.example.com'
+        )
         assert org_data['remote_runtime_resource_factor'] == 2
         assert org_data['billing_margin'] == 0.15
         assert org_data['enable_proactive_conversation_starters'] is True
@@ -1886,7 +1891,9 @@ async def test_update_org_permission_denied_llm_settings(
     """
     # Arrange
     org_id = uuid.uuid4()
-    update_data = {'agent_settings_diff': {'llm': {'model': 'claude-opus-4-5-20251101'}}}
+    update_data = {
+        'agent_settings_diff': {'llm': {'model': 'claude-opus-4-5-20251101'}}
+    }
 
     with (
         patch(

@@ -204,9 +204,7 @@ async def test_filesystem_mcp_via_sse(
     runtime = None
     try:
         override_mcp_config = MCPConfig(
-            mcpServers={
-                'fs': MCPRemoteServerConfig(url=sse_url, transport='sse')
-            }
+            mcpServers={'fs': MCPRemoteServerConfig(url=sse_url, transport='sse')}
         )
         runtime, config = _load_runtime(
             temp_dir,
@@ -241,9 +239,7 @@ async def test_both_stdio_and_sse_mcp(
         override_mcp_config = MCPConfig(
             mcpServers={
                 'fs': MCPRemoteServerConfig(url=sse_url, transport='sse'),
-                'fetch': MCPStdioServerConfig(
-                    command='uvx', args=['mcp-server-fetch']
-                ),
+                'fetch': MCPStdioServerConfig(command='uvx', args=['mcp-server-fetch']),
             }
         )
         runtime, config = _load_runtime(

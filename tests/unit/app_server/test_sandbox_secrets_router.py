@@ -533,11 +533,13 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm': {
-                    'model': 'anthropic/claude-sonnet-4-20250514',
-                    'api_key': 'sk-real-secret',
-                    'base_url': 'https://litellm.example.com',
-                }},
+                agent_settings={
+                    'llm': {
+                        'model': 'anthropic/claude-sonnet-4-20250514',
+                        'api_key': 'sk-real-secret',
+                        'base_url': 'https://litellm.example.com',
+                    }
+                },
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -574,10 +576,12 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm': {
-                    'model': 'gpt-4o',
-                    'api_key': 'sk-should-be-masked',
-                }},
+                agent_settings={
+                    'llm': {
+                        'model': 'gpt-4o',
+                        'api_key': 'sk-should-be-masked',
+                    }
+                },
             )
         )
 

@@ -25,7 +25,10 @@ from zipfile import ZipFile
 import httpx
 
 from openhands.core.config import OpenHandsConfig, SandboxConfig
-from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig  # noqa: F401 (MCPStdioServerConfig re-exported)
+from openhands.core.config.mcp_config import (  # noqa: F401 (MCPStdioServerConfig re-exported)
+    MCPConfig,
+    MCPStdioServerConfig,
+)
 from openhands.core.exceptions import (
     AgentRuntimeDisconnectedError,
 )

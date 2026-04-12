@@ -93,7 +93,9 @@ async def test_store_and_load_data(file_settings_store):
         loaded_data.agent_settings.llm.api_key.get_secret_value()
         == init_data.agent_settings.llm.api_key.get_secret_value()
     )
-    assert loaded_data.agent_settings.llm.base_url == init_data.agent_settings.llm.base_url
+    assert (
+        loaded_data.agent_settings.llm.base_url == init_data.agent_settings.llm.base_url
+    )
 
 
 @pytest.mark.asyncio

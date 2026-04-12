@@ -109,9 +109,7 @@ def load_from_env(
                         cast_value = literal_eval(value)
                         # If it's a list of Pydantic models
                         if get_origin(field_type) is list:
-                            inner_type = get_args(field_type)[
-                                0
-                            ]
+                            inner_type = get_args(field_type)[0]
                             if isinstance(inner_type, type) and issubclass(
                                 inner_type, BaseModel
                             ):
