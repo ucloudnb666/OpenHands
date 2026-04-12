@@ -384,16 +384,6 @@ async def keycloak_callback(
             f'{KEYCLOAK_SERVER_URL_EXT}/realms/{KEYCLOAK_REALM_NAME}/protocol/openid-connect/auth'
             f'?{param_str}'
         )
-        response = RedirectResponse(redirect_url, status_code=302)
-        set_response_cookie(
-            request=request,
-            response=response,
-            keycloak_access_token=keycloak_access_token,
-            keycloak_refresh_token=keycloak_refresh_token,
-            secure=True if redirect_url.startswith('https') else False,
-            accepted_tos=False,
-        )
-        return response
 
     has_accepted_tos = user.accepted_tos is not None
 
@@ -495,7 +485,7 @@ async def keycloak_callback(
         response=response,
         keycloak_access_token=keycloak_access_token,
         keycloak_refresh_token=keycloak_refresh_token,
-        secure=True if redirect_url.startswith('https') else False,
+        secure=True if web_url.startswith('https') else False,
         accepted_tos=has_accepted_tos,
     )
 
@@ -536,10 +526,23 @@ async def keycloak_offline_callback(code: str, state: str, request: Request):
         user_id=user_info.sub, offline_token=keycloak_refresh_token
     )
 
+    user = await UserStore.get_user_by_id(user_info.sub)
+    has_accepted_tos = user is not None and user.accepted_tos is not None
+
     redirect_url, _, _ = _extract_oauth_state(state)
     default_url = redirect_url if redirect_url else web_url
-    final_url = await _get_post_auth_redirect(user_info.sub, default_url, web_url)
-    return RedirectResponse(final_url, status_code=302)
+    final_url = await _get_post_auth_redirect(user_info.sub, default_url, web_url, user)
+
+    response = RedirectResponse(final_url, status_code=302)
+    set_response_cookie(
+        request=request,
+        response=response,
+        keycloak_access_token=keycloak_access_token,
+        keycloak_refresh_token=keycloak_refresh_token,
+        secure=True if web_url.startswith('https') else False,
+        accepted_tos=has_accepted_tos,
+    )
+    return response
 
 
 @oauth_router.get('/github/callback')
@@ -605,7 +608,9 @@ async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     return False
 
 
-async def _get_post_auth_redirect(user_id: str, default_url: str, web_url: str) -> str:
+async def _get_post_auth_redirect(
+    user_id: str, default_url: str, web_url: str, user: User | None = None
+) -> str:
     """Determine where to redirect user after authentication completes.
 
     Called after offline token is stored to determine final redirect destination.
@@ -615,11 +620,13 @@ async def _get_post_auth_redirect(user_id: str, default_url: str, web_url: str) 
         user_id: The user's ID.
         default_url: The default URL to redirect to if no special flow is needed.
         web_url: The base web URL for constructing absolute paths.
+        user: Optional user object to avoid refetching.
 
     Returns:
         The URL to redirect the user to.
     """
-    user = await UserStore.get_user_by_id(user_id)
+    if not user:
+        user = await UserStore.get_user_by_id(user_id)
     if user and await _should_redirect_to_onboarding(user_id, user):
         logger.info(
             'Redirecting user to onboarding',
@@ -684,7 +691,7 @@ async def accept_tos(request: Request):
         response=response,
         keycloak_access_token=access_token.get_secret_value(),
         keycloak_refresh_token=refresh_token.get_secret_value(),
-        secure=not IS_LOCAL_ENV,
+        secure=True if web_url.startswith('https') else False,
         accepted_tos=True,
     )
     return response
