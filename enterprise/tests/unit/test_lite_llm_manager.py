@@ -20,6 +20,7 @@ from storage.lite_llm_manager import (
 )
 from storage.user_settings import UserSettings
 
+from openhands.sdk.settings import AgentSettings, LLMSettings
 from openhands.server.settings import Settings
 
 
@@ -130,11 +131,16 @@ class TestLiteLlmManager:
     @pytest.fixture
     def mock_settings(self):
         """Create a mock Settings object."""
-        settings = Settings()
-        settings.set_agent_setting('agent', 'TestAgent')
-        settings.set_agent_setting('llm.model', 'test-model')
-        settings.set_agent_setting('llm.api_key', SecretStr('test-key'))
-        settings.set_agent_setting('llm.base_url', 'http://test.com')
+        settings = Settings(
+            agent_settings=AgentSettings(
+                agent='TestAgent',
+                llm=LLMSettings(
+                    model='test-model',
+                    api_key=SecretStr('test-key'),
+                    base_url='http://test.com',
+                ),
+            ),
+        )
         return settings
 
     @pytest.fixture
