@@ -9,7 +9,7 @@ from server.auth.token_manager import TokenManager
 from server.constants import LITE_LLM_API_URL
 from server.logger import logger
 from server.routes.org_models import OrgMemberLLMSettings
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from openhands.utils.jsonpatch_compat import deep_merge
 from storage.database import a_session_maker
@@ -66,33 +66,6 @@ class SaasSettingsStore(SettingsStore):
                     )
                 )
                 return result.scalars().first()
-
-    async def _persist_agent_settings_async(
-        self, org_id: uuid.UUID, agent_settings: dict[str, Any]
-    ) -> None:
-        async with a_session_maker() as session:
-            stmt = (
-                update(OrgMember)
-                .where(
-                    OrgMember.org_id == org_id,
-                    OrgMember.user_id == uuid.UUID(self.user_id),
-                )
-                .values(agent_settings=agent_settings)
-            )
-            await session.execute(stmt)
-            await session.commit()
-
-    async def _persist_org_agent_settings_async(
-        self, org_id: uuid.UUID, agent_settings: dict[str, Any]
-    ) -> None:
-        async with a_session_maker() as session:
-            stmt = (
-                update(Org)
-                .where(Org.id == org_id)
-                .values(agent_settings=agent_settings)
-            )
-            await session.execute(stmt)
-            await session.commit()
 
     @staticmethod
     def _get_effective_llm_api_key(
@@ -161,6 +134,11 @@ class SaasSettingsStore(SettingsStore):
                 effective_llm_api_key.get_secret_value()
                 if isinstance(effective_llm_api_key, SecretStr)
                 else effective_llm_api_key
+            )
+        else:
+            logger.warning(
+                f'No effective LLM API key found for user {self.user_id} '
+                f'in org {org_id} (org key and member key are both unset)'
             )
         kwargs["agent_settings"] = merged_agent_settings
         org_conversation = OrgStore.get_conversation_settings_from_org(org)
@@ -321,11 +299,15 @@ class SaasSettingsStore(SettingsStore):
             )
 
             if uses_managed_llm_key and current_member_llm_api_key is not None:
+                # Managed/proxy key — store on this member but mark as org-managed
                 org_member.llm_api_key = current_member_llm_api_key
                 org_member.has_custom_llm_api_key = False
             elif current_member_llm_api_key_raw is not None:
-                org_member.has_custom_llm_api_key = False
+                # BYOR: member supplied their own (non-managed) API key
+                org_member.llm_api_key = current_member_llm_api_key
+                org_member.has_custom_llm_api_key = True
             elif org_default_llm_api_key_raw is not None:
+                # No member key, falling back to org default
                 org_member.has_custom_llm_api_key = False
 
             await session.commit()
