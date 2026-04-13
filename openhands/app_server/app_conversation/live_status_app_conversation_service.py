@@ -90,8 +90,7 @@ from openhands.sdk import Agent, AgentContext, LocalWorkspace
 from openhands.sdk.hooks import HookConfig
 from openhands.sdk.llm import LLM
 from openhands.sdk.plugin import PluginSource
-from openhands.sdk.secret import LookupSecret, SecretValue, StaticSecret
-from openhands.sdk.settings import AgentSettings
+from openhands.sdk.secret import LookupSecret, StaticSecret
 from openhands.sdk.utils.paging import page_iterator
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 from openhands.server.types import AppMode
@@ -1053,56 +1052,6 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         return llm, mcp_config
 
-    def _configure_agent_settings(
-        self,
-        agent_settings: AgentSettings,
-        *,
-        llm: LLM,
-        agent_type: AgentType,
-        system_message_suffix: str | None,
-        mcp_config: dict,
-        secrets: dict[str, SecretValue] | None = None,
-        git_provider: ProviderType | None = None,
-        working_dir: str | None = None,
-    ) -> AgentSettings:
-        """Return a copy of *agent_settings* populated with server-resolved values.
-
-        The returned object is ready for ``create_agent()`` — the caller
-        should **not** need to touch LLM, tools, MCP, or context afterwards.
-        """
-        from fastmcp.mcp_config import MCPConfig
-
-        # --- system_message_suffix ------------------------------------------
-        effective_suffix = system_message_suffix
-        if agent_type == AgentType.PLAN:
-            if system_message_suffix:
-                effective_suffix = (
-                    f'{PLANNING_AGENT_INSTRUCTION}\n\n{system_message_suffix}'
-                )
-            else:
-                effective_suffix = PLANNING_AGENT_INSTRUCTION
-
-        # --- tools ----------------------------------------------------------
-        if agent_type == AgentType.PLAN:
-            plan_path = None
-            if working_dir:
-                plan_path = self._compute_plan_path(working_dir, git_provider)
-            tools = get_planning_tools(plan_path=plan_path)
-        else:
-            tools = get_default_tools(enable_browser=True)
-
-        return agent_settings.model_copy(
-            update={
-                'llm': llm,
-                'tools': tools,
-                'mcp_config': MCPConfig(**mcp_config) if mcp_config else None,
-                'agent_context': AgentContext(
-                    system_message_suffix=effective_suffix,
-                    secrets=secrets,
-                ),
-            }
-        )
-
     @staticmethod
     def _apply_server_agent_overrides(
         agent: Agent,
@@ -1289,13 +1238,11 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
     ) -> StartConversationRequest:
         """Build a complete StartConversationRequest for a user.
 
-        The server's job is to populate ``AgentSettings`` with resolved
-        values (LLM, MCP, tools, context) and then let the SDK build the
-        ``Agent`` and ``StartConversationRequest`` via
-        ``ConversationSettings.create_request()``.
-
+        Resolves LLM, MCP, tools, secrets and agent context, then
+        builds the ``Agent`` via ``AgentSettings.create_agent()``.
         Server-only overrides (system prompts, LLM tracing metadata,
         skills, hooks) are applied to the agent after creation.
+        Finally delegates to ``ConversationSettings.create_request()``.
         """
         user = await self.user_context.get_user_info()
 
@@ -1310,19 +1257,39 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             user, llm_model, conversation_id
         )
 
-        # --- configure AgentSettings ----------------------------------------
-        configured_agent_settings = self._configure_agent_settings(
-            user.agent_settings,
-            llm=llm,
-            agent_type=agent_type,
-            system_message_suffix=system_message_suffix,
-            mcp_config=mcp_config,
-            secrets=secrets,
-            git_provider=git_provider,
-            working_dir=project_dir,
-        )
+        # --- system_message_suffix (planning-agent prefix) ------------------
+        effective_suffix = system_message_suffix
+        if agent_type == AgentType.PLAN:
+            if system_message_suffix:
+                effective_suffix = (
+                    f'{PLANNING_AGENT_INSTRUCTION}\n\n{system_message_suffix}'
+                )
+            else:
+                effective_suffix = PLANNING_AGENT_INSTRUCTION
 
-        # --- build agent via SDK, then apply server-only overrides ----------
+        # --- tools ----------------------------------------------------------
+        if agent_type == AgentType.PLAN:
+            plan_path = None
+            if project_dir:
+                plan_path = self._compute_plan_path(project_dir, git_provider)
+            tools = get_planning_tools(plan_path=plan_path)
+        else:
+            tools = get_default_tools(enable_browser=True)
+
+        # --- build AgentSettings and create agent ---------------------------
+        from fastmcp.mcp_config import MCPConfig
+
+        configured_agent_settings = user.agent_settings.model_copy(
+            update={
+                'llm': llm,
+                'tools': tools,
+                'mcp_config': MCPConfig(**mcp_config) if mcp_config else None,
+                'agent_context': AgentContext(
+                    system_message_suffix=effective_suffix,
+                    secrets=secrets,
+                ),
+            }
+        )
         agent = configured_agent_settings.create_agent()
         agent = self._apply_server_agent_overrides(
             agent, agent_type, mcp_config, conversation_id, user.id
