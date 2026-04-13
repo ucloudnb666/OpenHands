@@ -1,31 +1,14 @@
-import os
 from datetime import datetime
-from typing import Literal
 
 from pydantic import BaseModel, model_validator
 
 from openhands.agent_server.env_parser import DiscriminatedUnionMixin
+from openhands.app_server.web_client.web_client_deployment_mode import (
+    DeploymentMode,
+    get_deployment_mode,
+)
 from openhands.integrations.service_types import ProviderType
 from openhands.server.types import AppMode
-
-DeploymentMode = Literal['cloud', 'self_hosted']
-
-
-# This can be removed / replaced when a DeploymentMode (or similar) env var is created.
-def _get_deployment_mode() -> DeploymentMode | None:
-    """Get deployment mode based on OH_WEB_HOST environment variable."""
-    web_host = os.getenv('OH_WEB_HOST', os.getenv('WEB_HOST', '')).strip()
-    if not web_host:
-        return None
-    if (
-        web_host == 'app.all-hands.dev'
-        or web_host == 'app.openhands.ai'
-        or web_host.endswith('.all-hands.dev')
-        or web_host.endswith('.openhands.ai')
-        or web_host == 'localhost'
-    ):
-        return 'cloud'
-    return 'self_hosted'
 
 
 class WebClientFeatureFlags(BaseModel):
@@ -39,10 +22,11 @@ class WebClientFeatureFlags(BaseModel):
     hide_integrations_page: bool = False
     deployment_mode: DeploymentMode | None = None
 
+    # This can be removed / replaced when a DeploymentMode (or similar) env var is created.
     @model_validator(mode='after')
     def set_deployment_mode(self) -> 'WebClientFeatureFlags':
         if self.deployment_mode is None:
-            self.deployment_mode = _get_deployment_mode()
+            self.deployment_mode = get_deployment_mode()
         return self
 
 

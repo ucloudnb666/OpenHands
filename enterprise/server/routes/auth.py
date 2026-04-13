@@ -30,7 +30,6 @@ from server.config import sign_token
 from server.constants import (
     DEPLOYMENT_MODE,
     IS_FEATURE_ENV,
-    IS_LOCAL_ENV,
 )
 from server.routes.event_webhook import _get_session_api_key, _get_user_id
 from server.services.org_invitation_service import (
@@ -585,14 +584,24 @@ async def _should_redirect_to_onboarding(user_id: str, user: User) -> bool:
     checks the ENABLE_ONBOARDING feature flag (localStorage) and redirects
     to / if the flag is disabled. This avoids needing helm chart changes.
 
+
     Returns True if:
-    - User has not completed onboarding
+    - User has onboarding_completed explicitly set to False (new users)
     - Either:
       - Deployment mode is 'cloud' (all users)
       - Deployment mode is 'self_hosted' AND user is the super admin
         (first owner in their current org to accept TOS)
+
+    Returns False if:
+    - User has onboarding_completed=True (already completed)
+    - User has onboarding_completed=None (existing users before this feature)
     """
-    if user.onboarding_completed:
+    # Already completed onboarding
+    if user.onboarding_completed is True:
+        return False
+
+    # Existing user before this feature (NULL in database)
+    if user.onboarding_completed is None:
         return False
 
     # Cloud SaaS: all users go to onboarding
