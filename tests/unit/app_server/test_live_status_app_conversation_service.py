@@ -926,47 +926,58 @@ class TestLiveStatusAppConversationService:
         'openhands.app_server.app_conversation.live_status_app_conversation_service.get_planning_tools',
         return_value=[],
     )
-    def test_create_agent_with_context_planning_agent(self, _mock_get_tools):
-        """Planning agent gets planning tools, prompt overrides, and instruction."""
+    def test_configure_agent_settings_planning(self, _mock_get_tools):
+        """Planning settings get planning tools and instruction suffix."""
         llm = LLM(model='test-model', api_key=SecretStr('k'))
-        mcp_config = {'default': {'url': 'test'}}
 
-        agent = self.service._create_agent_with_context(
-            llm,
-            AgentType.PLAN,
-            'Test suffix',
-            mcp_config,
+        configured = self.service._configure_agent_settings(
+            self.mock_user.agent_settings,
+            llm=llm,
+            agent_type=AgentType.PLAN,
+            system_message_suffix='Test suffix',
+            mcp_config={},
             working_dir='/workspace/project',
             git_provider=ProviderType.GITHUB,
         )
 
-        assert agent.system_prompt_filename == 'system_prompt_planning.j2'
-        assert 'plan_structure' in agent.system_prompt_kwargs
-        assert agent.mcp_config == mcp_config
-        assert agent.agent_context is not None
-        assert agent.agent_context.system_message_suffix.startswith(
+        assert configured.llm == llm
+        assert configured.agent_context.system_message_suffix.startswith(
             PLANNING_AGENT_INSTRUCTION
         )
-        assert 'Test suffix' in agent.agent_context.system_message_suffix
+        assert 'Test suffix' in configured.agent_context.system_message_suffix
+
+        # create_agent + server overrides produce the final agent
+        agent = configured.create_agent()
+        agent = self.service._apply_server_agent_overrides(
+            agent, AgentType.PLAN, {}, uuid4(), None
+        )
+        assert agent.system_prompt_filename == 'system_prompt_planning.j2'
+        assert 'plan_structure' in agent.system_prompt_kwargs
 
     @patch(
         'openhands.app_server.app_conversation.live_status_app_conversation_service.get_default_tools',
         return_value=[],
     )
-    def test_create_agent_with_context_default_agent(self, _mock_get_tools):
-        """Default agent gets default tools and cli_mode=False."""
+    def test_configure_agent_settings_default(self, _mock_get_tools):
+        """Default settings get default tools and no instruction prefix."""
         llm = LLM(model='test-model', api_key=SecretStr('k'))
 
-        agent = self.service._create_agent_with_context(
-            llm,
-            AgentType.DEFAULT,
-            None,
-            {},
+        configured = self.service._configure_agent_settings(
+            self.mock_user.agent_settings,
+            llm=llm,
+            agent_type=AgentType.DEFAULT,
+            system_message_suffix=None,
+            mcp_config={},
         )
 
+        assert configured.llm == llm
+        assert configured.agent_context.system_message_suffix is None
+
+        agent = configured.create_agent()
+        agent = self.service._apply_server_agent_overrides(
+            agent, AgentType.DEFAULT, {}, uuid4(), None
+        )
         assert agent.system_prompt_kwargs['cli_mode'] is False
-        assert agent.agent_context is not None
-        assert agent.agent_context.system_message_suffix is None
 
     @pytest.mark.asyncio
     async def test_build_request_with_skills(self):
@@ -982,7 +993,9 @@ class TestLiveStatusAppConversationService:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
         self.service._load_skills_and_update_agent = AsyncMock(return_value=mock_agent)
 
         remote_workspace = Mock(spec=AsyncRemoteWorkspace)
@@ -1017,7 +1030,9 @@ class TestLiveStatusAppConversationService:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         conversation_id = uuid4()
 
@@ -1048,7 +1063,9 @@ class TestLiveStatusAppConversationService:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
         self.service._load_skills_and_update_agent = AsyncMock(
             side_effect=Exception('Skills loading failed')
         )
@@ -1073,7 +1090,7 @@ class TestLiveStatusAppConversationService:
             assert isinstance(result, StartConversationRequest)
             mock_logger.warning.assert_called_once()
 
-    def test_update_agent_with_llm_metadata_sets_condenser_usage_id(self):
+    def test_apply_server_overrides_sets_condenser_usage_id(self):
         """Condenser LLM must get usage_id='condenser' even when it inherits 'agent'."""
         from openhands.sdk.context.condenser import LLMSummarizingCondenser
 
@@ -1081,12 +1098,14 @@ class TestLiveStatusAppConversationService:
         condenser = LLMSummarizingCondenser(llm=llm)
         agent = Agent(llm=llm, tools=[], condenser=condenser)
 
-        updated = self.service._update_agent_with_llm_metadata(agent, uuid4(), 'user-1')
+        updated = self.service._apply_server_agent_overrides(
+            agent, AgentType.DEFAULT, {}, uuid4(), 'user-1'
+        )
 
         assert updated.llm.usage_id == 'agent'
         assert updated.condenser.llm.usage_id == 'condenser'
 
-    def test_update_agent_with_llm_metadata_condenser_non_openhands_model(self):
+    def test_apply_server_overrides_condenser_non_openhands_model(self):
         """Condenser usage_id is set even for non-openhands models (no metadata)."""
         from openhands.sdk.context.condenser import LLMSummarizingCondenser
 
@@ -1094,7 +1113,9 @@ class TestLiveStatusAppConversationService:
         condenser = LLMSummarizingCondenser(llm=llm)
         agent = Agent(llm=llm, tools=[], condenser=condenser)
 
-        updated = self.service._update_agent_with_llm_metadata(agent, uuid4(), 'user-1')
+        updated = self.service._apply_server_agent_overrides(
+            agent, AgentType.DEFAULT, {}, uuid4(), 'user-1'
+        )
 
         # Non-openhands model: main LLM unchanged, but condenser still gets usage_id
         assert updated.condenser.llm.usage_id == 'condenser'
@@ -1102,15 +1123,11 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_build_start_conversation_request_for_user_integration(self):
         """Test the main _build_start_conversation_request_for_user method integration."""
-        # Arrange
         self.mock_user_context.get_user_info.return_value = self.mock_user
 
-        # Mock all the helper methods
         mock_secrets = {'GITHUB_TOKEN': Mock()}
         mock_llm = Mock(spec=LLM)
         mock_mcp_config = {'default': {'url': 'test'}}
-        mock_agent = Mock(spec=Agent)
-        Mock(spec=StartConversationRequest)
         test_conversation_id = uuid4()
 
         self.service._setup_secrets_for_git_providers = AsyncMock(
@@ -1119,9 +1136,10 @@ class TestLiveStatusAppConversationService:
         self.service._configure_llm_and_mcp = AsyncMock(
             return_value=(mock_llm, mock_mcp_config)
         )
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
-        # Act
         result = await self.service._build_start_conversation_request_for_user(
             sandbox=self.mock_sandbox,
             conversation_id=test_conversation_id,
@@ -1135,8 +1153,6 @@ class TestLiveStatusAppConversationService:
             selected_repository='test/repo',
         )
 
-        # Assert — the result is a real StartConversationRequest built by
-        # ConversationSettings.create_request()
         assert isinstance(result, StartConversationRequest)
         assert result.conversation_id == test_conversation_id
 
@@ -1146,15 +1162,12 @@ class TestLiveStatusAppConversationService:
         self.service._configure_llm_and_mcp.assert_called_once_with(
             self.mock_user, 'gpt-4', test_conversation_id
         )
-        # When selected_repository='test/repo', project_dir is resolved
-        # to '/test/dir/repo' via get_project_dir. All downstream calls
-        # (agent context, workspace, skills) must use this path.
-        self.service._create_agent_with_context.assert_called_once_with(
-            mock_llm,
-            AgentType.DEFAULT,
-            'Test suffix',
-            mock_mcp_config,
+        self.service._configure_agent_settings.assert_called_once_with(
             self.mock_user.agent_settings,
+            llm=mock_llm,
+            agent_type=AgentType.DEFAULT,
+            system_message_suffix='Test suffix',
+            mcp_config=mock_mcp_config,
             secrets=mock_secrets,
             git_provider=ProviderType.GITHUB,
             working_dir='/test/dir/repo',
@@ -1983,13 +1996,15 @@ class TestLiveStatusAppConversationService:
 
         mock_secrets = {'GITHUB_TOKEN': Mock()}
         mock_llm = Mock(spec=LLM)
-        mock_agent = Mock(spec=Agent)
+        Mock(spec=Agent)
 
         self.service._setup_secrets_for_git_providers = AsyncMock(
             return_value=mock_secrets
         )
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         result = await self.service._build_start_conversation_request_for_user(
             sandbox=self.mock_sandbox,
@@ -2014,7 +2029,9 @@ class TestLiveStatusAppConversationService:
         self.service._configure_llm_and_mcp = AsyncMock(
             return_value=(Mock(spec=LLM), {})
         )
-        self.service._create_agent_with_context = Mock(return_value=Mock(spec=Agent))
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         result = await self.service._build_start_conversation_request_for_user(
             sandbox=self.mock_sandbox,
@@ -2392,7 +2409,9 @@ class TestPluginHandling:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         plugins = [
             PluginSpec(
@@ -2438,7 +2457,9 @@ class TestPluginHandling:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         result = await self.service._build_start_conversation_request_for_user(
             sandbox=self.mock_sandbox,
@@ -2470,7 +2491,9 @@ class TestPluginHandling:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         plugins = [
             PluginSpec(
@@ -2514,7 +2537,9 @@ class TestPluginHandling:
 
         self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
-        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+        self.service._configure_agent_settings = Mock(
+            return_value=self.mock_user.agent_settings
+        )
 
         plugins = [
             PluginSpec(source='github:owner/security-plugin', ref='v2.0.0'),

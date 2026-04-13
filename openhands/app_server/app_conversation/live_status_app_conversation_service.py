@@ -1053,100 +1053,79 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         return llm, mcp_config
 
-    def _create_agent_with_context(
+    def _configure_agent_settings(
         self,
+        agent_settings: AgentSettings,
+        *,
         llm: LLM,
         agent_type: AgentType,
         system_message_suffix: str | None,
         mcp_config: dict,
-        agent_settings: AgentSettings,
         secrets: dict[str, SecretValue] | None = None,
         git_provider: ProviderType | None = None,
         working_dir: str | None = None,
-    ) -> Agent:
-        """Create an agent with appropriate tools and context based on agent type.
+    ) -> AgentSettings:
+        """Return a copy of *agent_settings* populated with server-resolved values.
 
-        Args:
-            llm: Configured LLM instance
-            agent_type: Type of agent to create (PLAN or DEFAULT)
-            system_message_suffix: Optional suffix for system messages
-            mcp_config: MCP configuration dictionary
-            agent_settings: SDK AgentSettings (used to build condenser)
-            secrets: Optional dictionary of secrets for authentication
-            git_provider: Optional git provider type for computing plan path
-            working_dir: Optional working directory for computing plan path
-
-        Returns:
-            Configured Agent instance with context
+        The returned object is ready for ``create_agent()`` — the caller
+        should **not** need to touch LLM, tools, MCP, or context afterwards.
         """
-        # Build condenser from SDK AgentSettings
-        condenser = agent_settings.build_condenser(llm)
+        from fastmcp.mcp_config import MCPConfig
 
-        # Create agent based on type
+        # --- system_message_suffix ------------------------------------------
+        effective_suffix = system_message_suffix
         if agent_type == AgentType.PLAN:
-            # Compute plan path if working_dir is provided
-            plan_path = None
-            if working_dir:
-                plan_path = self._compute_plan_path(working_dir, git_provider)
-
-            agent = Agent(
-                llm=llm,
-                tools=get_planning_tools(plan_path=plan_path),
-                system_prompt_filename='system_prompt_planning.j2',
-                system_prompt_kwargs={'plan_structure': format_plan_structure()},
-                condenser=condenser,
-                mcp_config=mcp_config,
-            )
-        else:
-            agent = Agent(
-                llm=llm,
-                tools=get_default_tools(enable_browser=True),
-                system_prompt_kwargs={'cli_mode': False},
-                condenser=condenser,
-                mcp_config=mcp_config,
-            )
-
-        # Prepare system message suffix based on agent type
-        effective_system_message_suffix = system_message_suffix
-        if agent_type == AgentType.PLAN:
-            # Prepend planning-specific instruction to prevent "Ready to proceed?" behavior
             if system_message_suffix:
-                effective_system_message_suffix = (
+                effective_suffix = (
                     f'{PLANNING_AGENT_INSTRUCTION}\n\n{system_message_suffix}'
                 )
             else:
-                effective_system_message_suffix = PLANNING_AGENT_INSTRUCTION
+                effective_suffix = PLANNING_AGENT_INSTRUCTION
 
-        # Add agent context
-        agent_context = AgentContext(
-            system_message_suffix=effective_system_message_suffix, secrets=secrets
+        # --- tools ----------------------------------------------------------
+        if agent_type == AgentType.PLAN:
+            plan_path = None
+            if working_dir:
+                plan_path = self._compute_plan_path(working_dir, git_provider)
+            tools = get_planning_tools(plan_path=plan_path)
+        else:
+            tools = get_default_tools(enable_browser=True)
+
+        return agent_settings.model_copy(
+            update={
+                'llm': llm,
+                'tools': tools,
+                'mcp_config': MCPConfig(**mcp_config) if mcp_config else None,
+                'agent_context': AgentContext(
+                    system_message_suffix=effective_suffix,
+                    secrets=secrets,
+                ),
+            }
         )
-        agent = agent.model_copy(update={'agent_context': agent_context})
 
-        return agent
-
-    def _update_agent_with_llm_metadata(
-        self,
+    @staticmethod
+    def _apply_server_agent_overrides(
         agent: Agent,
+        agent_type: AgentType,
+        mcp_config: dict,
         conversation_id: UUID,
         user_id: str | None,
     ) -> Agent:
-        """Update agent's LLM and condenser LLM with litellm_extra_body metadata.
+        """Apply server-only fields that have no place in ``AgentSettings``.
 
-        This adds tracing metadata (conversation_id, user_id, etc.) to the LLM
-        for analytics and debugging purposes. Only applies to openhands/ models.
-
-        Args:
-            agent: The agent to update
-            conversation_id: The conversation ID
-            user_id: The user ID (can be None)
-
-        Returns:
-            Updated agent with LLM metadata
+        * System-prompt filename / kwargs (planning vs default agent).
+        * LLM tracing metadata for SaaS analytics.
         """
-        updates: dict[str, Any] = {}
+        overrides: dict[str, Any] = {}
+        if agent_type == AgentType.PLAN:
+            overrides['system_prompt_filename'] = 'system_prompt_planning.j2'
+            overrides['system_prompt_kwargs'] = {
+                'plan_structure': format_plan_structure()
+            }
+        else:
+            overrides['system_prompt_kwargs'] = {'cli_mode': False}
 
-        # Update main LLM if it's an openhands model
+        # LLM tracing metadata for openhands/ models
         if should_set_litellm_extra_body(agent.llm.model):
             llm_metadata = get_llm_metadata(
                 model_name=agent.llm.model,
@@ -1154,15 +1133,16 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 conversation_id=conversation_id,
                 user_id=user_id,
             )
-            updated_llm = agent.llm.model_copy(
+            overrides['llm'] = agent.llm.model_copy(
                 update={'litellm_extra_body': {'metadata': llm_metadata}}
             )
-            updates['llm'] = updated_llm
 
-        # Update condenser LLM if it exists and is an openhands model
-        if agent.condenser and hasattr(agent.condenser, 'llm'):
+        # Condenser LLM tracing
+        if agent.condenser is not None and hasattr(agent.condenser, 'llm'):
             condenser_llm = agent.condenser.llm
-            condenser_updates: dict[str, Any] = {'usage_id': 'condenser'}
+            condenser_updates: dict[str, Any] = {}
+            if not condenser_llm.usage_id or condenser_llm.usage_id == 'agent':
+                condenser_updates['usage_id'] = 'condenser'
             if should_set_litellm_extra_body(condenser_llm.model):
                 condenser_metadata = get_llm_metadata(
                     model_name=condenser_llm.model,
@@ -1173,16 +1153,13 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 condenser_updates['litellm_extra_body'] = {
                     'metadata': condenser_metadata
                 }
-            updated_condenser_llm = condenser_llm.model_copy(update=condenser_updates)
-            updated_condenser = agent.condenser.model_copy(
-                update={'llm': updated_condenser_llm}
-            )
-            updates['condenser'] = updated_condenser
+            if condenser_updates:
+                updated_condenser = agent.condenser.model_copy(
+                    update={'llm': condenser_llm.model_copy(update=condenser_updates)}
+                )
+                overrides['condenser'] = updated_condenser
 
-        # Return updated agent if there are changes
-        if updates:
-            return agent.model_copy(update=updates)
-        return agent
+        return agent.model_copy(update=overrides)
 
     def _construct_initial_message_with_plugin_params(
         self,
@@ -1312,15 +1289,16 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
     ) -> StartConversationRequest:
         """Build a complete StartConversationRequest for a user.
 
-        Orchestrates every server-side concern (secrets, LLM, MCP, agent,
-        skills, hooks, plugins) and then delegates policy / analyzer /
-        max-iterations construction to the SDK's
+        The server's job is to populate ``AgentSettings`` with resolved
+        values (LLM, MCP, tools, context) and then let the SDK build the
+        ``Agent`` and ``StartConversationRequest`` via
         ``ConversationSettings.create_request()``.
+
+        Server-only overrides (system prompts, LLM tracing metadata,
+        skills, hooks) are applied to the agent after creation.
         """
         user = await self.user_context.get_user_info()
 
-        # Compute the project root — this is the repo directory when a repo is
-        # selected, or the sandbox working_dir otherwise.
         project_dir = get_project_dir(working_dir, selected_repository)
         workspace = LocalWorkspace(working_dir=project_dir)
 
@@ -1332,20 +1310,23 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             user, llm_model, conversation_id
         )
 
-        # --- agent ----------------------------------------------------------
-        agent = self._create_agent_with_context(
-            llm,
-            agent_type,
-            system_message_suffix,
-            mcp_config,
+        # --- configure AgentSettings ----------------------------------------
+        configured_agent_settings = self._configure_agent_settings(
             user.agent_settings,
+            llm=llm,
+            agent_type=agent_type,
+            system_message_suffix=system_message_suffix,
+            mcp_config=mcp_config,
             secrets=secrets,
             git_provider=git_provider,
             working_dir=project_dir,
         )
 
-        # --- LLM tracing metadata ------------------------------------------
-        agent = self._update_agent_with_llm_metadata(agent, conversation_id, user.id)
+        # --- build agent via SDK, then apply server-only overrides ----------
+        agent = configured_agent_settings.create_agent()
+        agent = self._apply_server_agent_overrides(
+            agent, agent_type, mcp_config, conversation_id, user.id
+        )
 
         # --- skills + hooks (require remote workspace) ----------------------
         hook_config: HookConfig | None = None
@@ -1395,13 +1376,16 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             ]
 
         # --- build request via SDK ------------------------------------------
+        # agent + secrets are passed explicitly because the server applies
+        # post-creation overrides (LLM metadata, skills). The SDK auto-fills
+        # confirmation_policy, security_analyzer, and max_iterations from
+        # ConversationSettings.
         return user.conversation_settings.create_request(
             StartConversationRequest,
             conversation_id=conversation_id,
             agent=agent,
             workspace=workspace,
             initial_message=final_initial_message,
-            secrets=secrets,
             plugins=sdk_plugins,
             hook_config=hook_config,
         )
