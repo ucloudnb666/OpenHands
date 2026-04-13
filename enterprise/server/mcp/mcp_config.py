@@ -4,9 +4,9 @@ if TYPE_CHECKING:
     from openhands.core.config.openhands_config import OpenHandsConfig
 
 from openhands.core.config.mcp_config import (
-    MCPRemoteServerConfig,
-    MCPStdioServerConfig,
     OpenHandsMCPConfig,
+    RemoteMCPServer,
+    StdioMCPServer,
 )
 from openhands.core.logger import openhands_logger as logger
 
@@ -24,7 +24,7 @@ class SaaSOpenHandsMCPConfig(OpenHandsMCPConfig):
     @staticmethod
     async def create_default_mcp_server_config(
         host: str, config: 'OpenHandsConfig', user_id: str | None = None
-    ) -> dict[str, MCPRemoteServerConfig | MCPStdioServerConfig]:
+    ) -> dict[str, RemoteMCPServer | StdioMCPServer]:
         """Return a dict of default MCP server entries for SaaS mode."""
         from storage.api_key_store import ApiKeyStore
 
@@ -42,7 +42,7 @@ class SaaSOpenHandsMCPConfig(OpenHandsMCPConfig):
                 return {}
 
             return {
-                'openhands': MCPRemoteServerConfig(
+                'openhands': RemoteMCPServer(
                     url=f'https://{host}/mcp/mcp',
                     transport='http',
                     auth=api_key,

@@ -27,7 +27,7 @@ from storage.stored_conversation_metadata_saas import StoredConversationMetadata
 
 from openhands.controller.agent import Agent
 from openhands.core.config import LLMConfig, OpenHandsConfig
-from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import MessageAction
 from openhands.events.event_store import EventStore
@@ -499,7 +499,7 @@ class SaasNestedConversationManager(ConversationManager):
         web_host = os.environ.get('WEB_HOST', 'app.all-hands.dev')
         return MCPConfig(
             mcpServers={
-                'openhands': MCPRemoteServerConfig(
+                'openhands': RemoteMCPServer(
                     url=f'https://{web_host}/mcp/mcp',
                     transport='http',
                     auth=mcp_api_key,
