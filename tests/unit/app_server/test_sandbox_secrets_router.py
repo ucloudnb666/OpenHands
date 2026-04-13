@@ -574,11 +574,10 @@ class TestExposeSecretsIntegration:
             )
 
         assert response.status_code == 200
-        body = response.json()
-        sdk_vals = body['agent_settings']
-        assert sdk_vals['llm']['api_key'] == 'sk-real-secret'
-        assert sdk_vals['llm']['model'] == 'anthropic/claude-sonnet-4-20250514'
-        assert sdk_vals['llm']['base_url'] == 'https://litellm.example.com'
+        user = UserInfo.model_validate_json(response.text)
+        assert user.agent_settings.llm.api_key.get_secret_value() == 'sk-real-secret'
+        assert user.agent_settings.llm.model == 'anthropic/claude-sonnet-4-20250514'
+        assert user.agent_settings.llm.base_url == 'https://litellm.example.com'
 
     def test_default_masks_secrets_via_http(self):
         """Without expose_secrets, secrets are in agent_settings."""
@@ -601,8 +600,9 @@ class TestExposeSecretsIntegration:
         response = client.get('/api/v1/users/me')
 
         assert response.status_code == 200
-        body = response.json()
-        assert body['agent_settings']['llm']['api_key'] == '**********'
+        user = UserInfo.model_validate_json(response.text)
+        # Masked secrets are stripped to None on deserialization
+        assert user.agent_settings.llm.api_key is None
 
 
 class TestSandboxSecretsIntegration:
