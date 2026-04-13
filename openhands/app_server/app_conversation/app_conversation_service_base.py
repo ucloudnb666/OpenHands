@@ -6,10 +6,9 @@ from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, AsyncGenerator
-from uuid import UUID
 
 if TYPE_CHECKING:
-    import httpx
+    pass
 
 import base62
 
@@ -29,7 +28,6 @@ from openhands.app_server.sandbox.sandbox_models import SandboxInfo
 from openhands.app_server.user.user_context import UserContext
 from openhands.sdk import Agent
 from openhands.sdk.context.agent_context import AgentContext
-from openhands.sdk.settings import ConversationSettings
 from openhands.sdk.skills import Skill
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 from openhands.utils.git import ensure_valid_git_branch_name
@@ -446,50 +444,3 @@ class AppConversationServiceBase(AppConversationService, ABC):
             return
 
         _logger.info('Git pre-commit hook installed successfully')
-
-    async def _set_security_analyzer_from_settings(
-        self,
-        agent_server_url: str,
-        session_api_key: str | None,
-        conversation_id: UUID,
-        conversation_settings: ConversationSettings,
-        httpx_client: 'httpx.AsyncClient',
-    ) -> None:
-        """Set security analyzer on a running conversation via the agent-server API.
-
-        Delegates analyzer construction to the SDK's
-        ``ConversationSettings._build_security_analyzer()``.
-
-        Args:
-            agent_server_url: URL of the agent server
-            session_api_key: Session API key for authentication
-            conversation_id: ID of the conversation to update
-            conversation_settings: SDK ConversationSettings (owns the analyzer logic)
-            httpx_client: HTTP client for making API requests
-        """
-        if session_api_key is None:
-            return
-
-        # Let the SDK decide what analyzer to build from its own settings.
-        security_analyzer = conversation_settings._build_security_analyzer()
-
-        if security_analyzer is None:
-            return
-
-        try:
-            payload = {'security_analyzer': security_analyzer.model_dump()}
-            response = await httpx_client.post(
-                f'{agent_server_url}/api/conversations/{conversation_id}/security_analyzer',
-                json=payload,
-                headers={'X-Session-API-Key': session_api_key},
-                timeout=30.0,
-            )
-            response.raise_for_status()
-            _logger.info(
-                f'Successfully set security analyzer for conversation {conversation_id}'
-            )
-        except Exception as e:
-            _logger.warning(
-                f'Failed to set security analyzer for conversation {conversation_id}: {e}',
-                exc_info=True,
-            )

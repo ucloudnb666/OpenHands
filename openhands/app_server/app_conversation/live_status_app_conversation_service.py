@@ -379,16 +379,6 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                     )
                 )
 
-            # Set security analyzer from settings
-            user = await self.user_context.get_user_info()
-            await self._set_security_analyzer_from_settings(
-                agent_server_url,
-                sandbox.session_api_key,
-                info.id,
-                user.conversation_settings,
-                self.httpx_client,
-            )
-
             # Update the start task
             task.status = AppConversationStartTaskStatus.READY
             task.app_conversation_id = info.id

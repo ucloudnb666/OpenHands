@@ -8,7 +8,6 @@ import subprocess
 from pathlib import Path
 from types import MethodType
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from uuid import uuid4
 
 import pytest
 
@@ -290,129 +289,6 @@ async def test_clone_or_init_git_repo_custom_timeout(service):
             text=True,
             timeout=600,  # Verify custom timeout is used
         )
-
-
-# =============================================================================
-# Tests for _set_security_analyzer_from_settings
-# (confirmation_policy / security_analyzer construction is owned by the SDK's
-#  ConversationSettings — only the server-side API call is tested here.)
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_set_security_analyzer_skips_when_no_session_key():
-    """_set_security_analyzer_from_settings exits early without session_api_key."""
-    from openhands.sdk.settings import ConversationSettings
-
-    conversation_settings = ConversationSettings(security_analyzer='llm')
-    httpx_client = AsyncMock()
-    service, _ = _create_service_with_mock_user_context(
-        MockUserInfo(),
-        bind_methods=('_set_security_analyzer_from_settings',),
-    )
-
-    await service._set_security_analyzer_from_settings(
-        agent_server_url='https://agent.example.com',
-        session_api_key=None,
-        conversation_id=uuid4(),
-        conversation_settings=conversation_settings,
-        httpx_client=httpx_client,
-    )
-
-    httpx_client.post.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_set_security_analyzer_skips_when_analyzer_none():
-    """_set_security_analyzer_from_settings skips API call when analyzer is None."""
-    from openhands.sdk.settings import ConversationSettings
-
-    conversation_settings = ConversationSettings(security_analyzer='none')
-    httpx_client = AsyncMock()
-    service, _ = _create_service_with_mock_user_context(
-        MockUserInfo(),
-        bind_methods=('_set_security_analyzer_from_settings',),
-    )
-
-    await service._set_security_analyzer_from_settings(
-        agent_server_url='https://agent.example.com',
-        session_api_key='session-key',
-        conversation_id=uuid4(),
-        conversation_settings=conversation_settings,
-        httpx_client=httpx_client,
-    )
-
-    httpx_client.post.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_set_security_analyzer_successfully_calls_agent_server():
-    """_set_security_analyzer_from_settings posts analyzer payload when available."""
-    from openhands.sdk.settings import ConversationSettings
-
-    conversation_settings = ConversationSettings(security_analyzer='llm')
-    conversation_id = uuid4()
-    session_api_key = 'session-key'
-    agent_server_url = 'https://agent.example.com'
-
-    httpx_client = AsyncMock()
-    http_response = MagicMock()
-    http_response.raise_for_status = MagicMock()
-    httpx_client.post.return_value = http_response
-
-    service, _ = _create_service_with_mock_user_context(
-        MockUserInfo(),
-        bind_methods=('_set_security_analyzer_from_settings',),
-    )
-
-    with patch(
-        'openhands.app_server.app_conversation.app_conversation_service_base._logger'
-    ) as mock_logger:
-        await service._set_security_analyzer_from_settings(
-            agent_server_url=agent_server_url,
-            session_api_key=session_api_key,
-            conversation_id=conversation_id,
-            conversation_settings=conversation_settings,
-            httpx_client=httpx_client,
-        )
-
-    httpx_client.post.assert_awaited_once()
-    call_kwargs = httpx_client.post.call_args
-    assert (
-        f'/api/conversations/{conversation_id}/security_analyzer' in call_kwargs.args[0]
-    )
-    assert call_kwargs.kwargs['headers'] == {'X-Session-API-Key': session_api_key}
-    http_response.raise_for_status.assert_called_once()
-    mock_logger.info.assert_called()
-
-
-@pytest.mark.asyncio
-async def test_set_security_analyzer_logs_warning_on_failure():
-    """_set_security_analyzer_from_settings warns but does not raise on errors."""
-    from openhands.sdk.settings import ConversationSettings
-
-    conversation_settings = ConversationSettings(security_analyzer='llm')
-    httpx_client = AsyncMock()
-    httpx_client.post.side_effect = RuntimeError('network down')
-
-    service, _ = _create_service_with_mock_user_context(
-        MockUserInfo(),
-        bind_methods=('_set_security_analyzer_from_settings',),
-    )
-
-    with patch(
-        'openhands.app_server.app_conversation.app_conversation_service_base._logger'
-    ) as mock_logger:
-        await service._set_security_analyzer_from_settings(
-            agent_server_url='https://agent.example.com',
-            session_api_key='session-key',
-            conversation_id=uuid4(),
-            conversation_settings=conversation_settings,
-            httpx_client=httpx_client,
-        )
-
-    httpx_client.post.assert_awaited_once()
-    mock_logger.warning.assert_called()
 
 
 # =============================================================================
