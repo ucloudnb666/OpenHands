@@ -103,6 +103,11 @@ ENABLE_V1_GITLAB_RESOLVER = (
     os.getenv('ENABLE_V1_GITLAB_RESOLVER', 'false').lower() == 'true'
 )
 
+# Toggle for V1 Jira resolver feature
+ENABLE_V1_JIRA_RESOLVER = (
+    os.getenv('ENABLE_V1_JIRA_RESOLVER', 'false').lower() == 'true'
+)
+
 OPENHANDS_RESOLVER_TEMPLATES_DIR = (
     os.getenv('OPENHANDS_RESOLVER_TEMPLATES_DIR')
     or 'openhands/integrations/templates/resolver/'
