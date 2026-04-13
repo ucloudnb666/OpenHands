@@ -3642,7 +3642,7 @@ wheels = [
 [[package]]
 name = "openhands-agent-server"
 version = "1.16.1"
-source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-agent-server&rev=4bdeb272c0a474a9fbbe403f3b47dd41bd6a69f0#4bdeb272c0a474a9fbbe403f3b47dd41bd6a69f0" }
+source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-agent-server&rev=5aef1b230917b4cf360f2105036769edb0372163#5aef1b230917b4cf360f2105036769edb0372163" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "alembic" },
@@ -3822,8 +3822,8 @@ requires-dist = [
     { name = "numpy" },
     { name = "openai", specifier = "==2.8" },
     { name = "openhands-aci", specifier = "==0.3.3" },
-    { name = "openhands-agent-server", git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-agent-server&rev=4bdeb272c0a474a9fbbe403f3b47dd41bd6a69f0" },
-    { name = "openhands-sdk", git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-sdk&rev=4bdeb272c0a474a9fbbe403f3b47dd41bd6a69f0" },
+    { name = "openhands-agent-server", git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-agent-server&rev=5aef1b230917b4cf360f2105036769edb0372163" },
+    { name = "openhands-sdk", git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-sdk&rev=5aef1b230917b4cf360f2105036769edb0372163" },
     { name = "openhands-tools", specifier = "==1.16.1" },
     { name = "opentelemetry-api", specifier = ">=1.33.1" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.33.1" },
@@ -3904,7 +3904,7 @@ test = [
 [[package]]
 name = "openhands-sdk"
 version = "1.16.1"
-source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-sdk&rev=4bdeb272c0a474a9fbbe403f3b47dd41bd6a69f0#4bdeb272c0a474a9fbbe403f3b47dd41bd6a69f0" }
+source = { git = "https://github.com/OpenHands/software-agent-sdk.git?subdirectory=openhands-sdk&rev=5aef1b230917b4cf360f2105036769edb0372163#5aef1b230917b4cf360f2105036769edb0372163" }
 dependencies = [
     { name = "agent-client-protocol" },
     { name = "deprecation" },
