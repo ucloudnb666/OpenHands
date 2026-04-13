@@ -6,7 +6,7 @@ import OptionService from "#/api/option-service/option-service.api";
 import { queryClient } from "#/query-client-config";
 import { SettingsLayout } from "#/components/features/settings";
 import { WebClientConfig } from "#/api/option-service/option.types";
-import { QUERY_KEYS } from "#/hooks/query/query-keys";
+import { QUERY_KEYS, CONFIG_CACHE_OPTIONS } from "#/hooks/query/query-keys";
 import { Organization } from "#/types/org";
 import { Typography } from "#/ui/typography";
 import { useSettingsNavItems } from "#/hooks/use-settings-nav-items";
@@ -32,9 +32,6 @@ const SAAS_ONLY_PATHS = [
   "/settings/org",
 ];
 
-const CONFIG_STALE_TIME = 1000 * 60 * 5; // 5 minutes
-const CONFIG_GC_TIME = 1000 * 60 * 15; // 15 minutes
-
 export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -47,8 +44,7 @@ export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
     config = await queryClient.fetchQuery<WebClientConfig>({
       queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
       queryFn: OptionService.getConfig,
-      staleTime: CONFIG_STALE_TIME,
-      gcTime: CONFIG_GC_TIME,
+      ...CONFIG_CACHE_OPTIONS,
     });
   }
 

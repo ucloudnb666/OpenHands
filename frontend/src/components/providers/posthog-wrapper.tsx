@@ -2,13 +2,10 @@ import React from "react";
 import { PostHogProvider } from "posthog-js/react";
 import { queryClient } from "#/query-client-config";
 import OptionService from "#/api/option-service/option-service.api";
-import { QUERY_KEYS } from "#/hooks/query/query-keys";
+import { QUERY_KEYS, CONFIG_CACHE_OPTIONS } from "#/hooks/query/query-keys";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 
 const POSTHOG_BOOTSTRAP_KEY = "posthog_bootstrap";
-
-const CONFIG_STALE_TIME = 1000 * 60 * 5; // 5 minutes
-const CONFIG_GC_TIME = 1000 * 60 * 15; // 15 minutes
 
 function getBootstrapIds() {
   // Try to extract from URL hash (e.g. #distinct_id=abc&session_id=xyz)
@@ -56,8 +53,7 @@ export function PostHogWrapper({ children }: { children: React.ReactNode }) {
         const config = await queryClient.fetchQuery({
           queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
           queryFn: OptionService.getConfig,
-          staleTime: CONFIG_STALE_TIME,
-          gcTime: CONFIG_GC_TIME,
+          ...CONFIG_CACHE_OPTIONS,
         });
         setPosthogClientKey(config.posthog_client_key);
       } catch {

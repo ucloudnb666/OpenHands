@@ -16,11 +16,8 @@ import { isBillingHidden } from "#/utils/org/billing-visibility";
 import { queryClient } from "#/query-client-config";
 import OptionService from "#/api/option-service/option-service.api";
 import { WebClientConfig } from "#/api/option-service/option.types";
-import { QUERY_KEYS } from "#/hooks/query/query-keys";
+import { QUERY_KEYS, CONFIG_CACHE_OPTIONS } from "#/hooks/query/query-keys";
 import { getFirstAvailablePath } from "#/utils/settings-utils";
-
-const CONFIG_STALE_TIME = 1000 * 60 * 5; // 5 minutes
-const CONFIG_GC_TIME = 1000 * 60 * 15; // 15 minutes
 
 export const clientLoader = async () => {
   let config = queryClient.getQueryData<WebClientConfig>(
@@ -30,8 +27,7 @@ export const clientLoader = async () => {
     config = await queryClient.fetchQuery<WebClientConfig>({
       queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
       queryFn: OptionService.getConfig,
-      staleTime: CONFIG_STALE_TIME,
-      gcTime: CONFIG_GC_TIME,
+      ...CONFIG_CACHE_OPTIONS,
     });
   }
 

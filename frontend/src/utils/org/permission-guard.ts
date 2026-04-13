@@ -2,13 +2,10 @@ import { redirect } from "react-router";
 import { queryClient } from "#/query-client-config";
 import OptionService from "#/api/option-service/option-service.api";
 import { WebClientConfig } from "#/api/option-service/option.types";
-import { QUERY_KEYS } from "#/hooks/query/query-keys";
+import { QUERY_KEYS, CONFIG_CACHE_OPTIONS } from "#/hooks/query/query-keys";
 import { getFirstAvailablePath } from "#/utils/settings-utils";
 import { getActiveOrganizationUser } from "./permission-checks";
 import { PermissionKey, rolePermissions } from "./permissions";
-
-const CONFIG_STALE_TIME = 1000 * 60 * 5; // 5 minutes
-const CONFIG_GC_TIME = 1000 * 60 * 15; // 15 minutes
 
 /**
  * Helper to get config, using fetchQuery for automatic caching and deduplication.
@@ -18,8 +15,7 @@ async function getConfig(): Promise<WebClientConfig | undefined> {
   return queryClient.fetchQuery({
     queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
     queryFn: OptionService.getConfig,
-    staleTime: CONFIG_STALE_TIME,
-    gcTime: CONFIG_GC_TIME,
+    ...CONFIG_CACHE_OPTIONS,
   });
 }
 
