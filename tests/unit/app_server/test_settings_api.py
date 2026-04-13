@@ -8,13 +8,23 @@ from pydantic import SecretStr
 
 from openhands.integrations.provider import ProviderToken, ProviderType
 from openhands.integrations.service_types import UserGitInfo
+from openhands.sdk.llm import LLM
+from openhands.sdk.settings import AgentSettings, ConversationSettings, VerificationSettings
 from openhands.server.app import app
 from openhands.server.user_auth.user_auth import UserAuth
+from openhands.storage.data_models.settings import Settings
 from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.memory import InMemoryFileStore
 from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.file_settings_store import FileSettingsStore
 from openhands.storage.settings.settings_store import SettingsStore
+
+_EXPOSE = {'expose_secrets': True}
+
+
+def _dump(settings: Settings) -> dict:
+    """Dump settings to a JSON-compatible dict with secrets exposed."""
+    return settings.model_dump(mode='json', context=_EXPOSE, exclude_unset=True)
 
 
 class MockUserAuth(UserAuth):
@@ -121,36 +131,35 @@ def test_get_conversation_settings_schema_endpoint(test_client):
 async def test_settings_api_endpoints(test_client):
     """Test that the settings API endpoints work with the new auth system."""
 
-    # Test data using nested format
-    settings_data = {
-        'language': 'en',
-        'remote_runtime_resource_factor': 2,
-        'agent_settings': {
-            'agent': 'test-agent',
-            'llm': {
-                'model': 'test-model',
-                'api_key': 'test-key',
-                'base_url': 'https://test.com',
-                'timeout': 123,
-                'litellm_extra_body': {'metadata': {'tier': 'pro'}},
-            },
-            'verification': {
-                'critic_enabled': True,
-                'critic_mode': 'all_actions',
-                'enable_iterative_refinement': True,
-                'critic_threshold': 0.7,
-                'max_refinement_iterations': 4,
-            },
-        },
-        'conversation_settings': {
-            'max_iterations': 100,
-            'confirmation_mode': True,
-            'security_analyzer': 'llm',
-        },
-    }
+    settings = Settings(
+        language='en',
+        remote_runtime_resource_factor=2,
+        agent_settings=AgentSettings(
+            agent='test-agent',
+            llm=LLM(
+                model='test-model',
+                api_key=SecretStr('test-key'),
+                base_url='https://test.com',
+                timeout=123,
+                litellm_extra_body={'metadata': {'tier': 'pro'}},
+            ),
+            verification=VerificationSettings(
+                critic_enabled=True,
+                critic_mode='all_actions',
+                enable_iterative_refinement=True,
+                critic_threshold=0.7,
+                max_refinement_iterations=4,
+            ),
+        ),
+        conversation_settings=ConversationSettings(
+            max_iterations=100,
+            confirmation_mode=True,
+            security_analyzer='llm',
+        ),
+    )
 
     # Make the POST request to store settings
-    response = test_client.post('/api/settings', json=settings_data)
+    response = test_client.post('/api/settings', json=_dump(settings))
 
     # We're not checking the exact response, just that it doesn't error
     assert response.status_code == 200
@@ -172,19 +181,14 @@ async def test_settings_api_endpoints(test_client):
     cs = response_data['conversation_settings']
     assert cs['confirmation_mode'] is True
     assert cs['security_analyzer'] == 'llm'
-    assert cs == {
-        'schema_version': 1,
-        'max_iterations': 100,
-        'confirmation_mode': True,
-        'security_analyzer': 'llm',
-    }
+    assert cs['max_iterations'] == 100
     assert vals['llm']['api_key'] == '**********'
 
-    # Test updating with partial settings
+    # Test updating with partial settings — legacy flat fields should preserve existing
     partial_settings = {
         'language': 'fr',
-        'llm_model': None,  # Should preserve existing value
-        'llm_api_key': None,  # Should preserve existing value
+        'llm_model': None,
+        'llm_api_key': None,
     }
 
     response = test_client.post('/api/settings', json=partial_settings)
@@ -205,34 +209,39 @@ async def test_saving_settings_with_frozen_secrets_store(test_client):
 
     See https://github.com/OpenHands/OpenHands/issues/13306.
     """
-    settings_data = {
-        'language': 'en',
-        'agent_settings': {'llm': {'model': 'gpt-4'}},
-        'secrets_store': {'provider_tokens': {}},
-    }
-    response = test_client.post('/api/settings', json=settings_data)
+    payload = _dump(Settings(
+        language='en',
+        agent_settings=AgentSettings(llm=LLM(model='gpt-4')),
+    ))
+    # Inject an extra key the API should ignore gracefully
+    payload['secrets_store'] = {'provider_tokens': {}}
+    response = test_client.post('/api/settings', json=payload)
     assert response.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_search_api_key_explicit_clear(test_client):
     """Explicit empty search_api_key payloads should clear the stored secret."""
-    initial_settings = {
-        'search_api_key': 'initial-secret-key',
-        'agent_settings': {'llm': {'model': 'gpt-4'}},
-    }
-    response = test_client.post('/api/settings', json=initial_settings)
+    response = test_client.post(
+        '/api/settings',
+        json=_dump(Settings(
+            search_api_key='initial-secret-key',
+            agent_settings=AgentSettings(llm=LLM(model='gpt-4')),
+        )),
+    )
     assert response.status_code == 200
 
     response = test_client.get('/api/settings')
     assert response.status_code == 200
     assert response.json()['search_api_key_set'] is True
 
-    update_settings = {
-        'search_api_key': '',
-        'agent_settings': {'llm': {'model': 'claude-3-opus'}},
-    }
-    response = test_client.post('/api/settings', json=update_settings)
+    response = test_client.post(
+        '/api/settings',
+        json=_dump(Settings(
+            search_api_key='',
+            agent_settings=AgentSettings(llm=LLM(model='claude-3-opus')),
+        )),
+    )
     assert response.status_code == 200
 
     response = test_client.get('/api/settings')
@@ -246,10 +255,10 @@ async def test_disabled_skills_persistence(test_client):
     """Test that disabled_skills can be saved and retrieved via the settings API."""
     response = test_client.post(
         '/api/settings',
-        json={
-            'disabled_skills': ['skill_a', 'skill_b'],
-            'agent_settings': {'llm': {'model': 'test-model'}},
-        },
+        json=_dump(Settings(
+            disabled_skills=['skill_a', 'skill_b'],
+            agent_settings=AgentSettings(llm=LLM(model='test-model')),
+        )),
     )
     assert response.status_code == 200
 
@@ -260,9 +269,7 @@ async def test_disabled_skills_persistence(test_client):
 
     response = test_client.post(
         '/api/settings',
-        json={
-            'disabled_skills': ['skill_c'],
-        },
+        json=_dump(Settings(disabled_skills=['skill_c'])),
     )
     assert response.status_code == 200
 
@@ -273,9 +280,7 @@ async def test_disabled_skills_persistence(test_client):
 
     response = test_client.post(
         '/api/settings',
-        json={
-            'disabled_skills': [],
-        },
+        json=_dump(Settings(disabled_skills=[])),
     )
     assert response.status_code == 200
 

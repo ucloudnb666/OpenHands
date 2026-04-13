@@ -34,7 +34,9 @@ from openhands.app_server.user.user_models import UserInfo
 from openhands.app_server.user.user_router import get_current_user
 from openhands.integrations.provider import ProviderHandler, ProviderToken
 from openhands.integrations.service_types import ProviderType
+from openhands.sdk.llm import LLM
 from openhands.sdk.secret import StaticSecret
+from openhands.sdk.settings import AgentSettings
 
 SANDBOX_ID = 'sb-test-123'
 USER_ID = 'test-user-id'
@@ -156,13 +158,13 @@ class TestGetCurrentUserExposeSecrets:
         """With valid session key, expose_secrets=true returns unmasked llm_api_key."""
         user_info = UserInfo(
             id=USER_ID,
-            agent_settings={
-                'llm': {
-                    'model': 'anthropic/claude-sonnet-4-20250514',
-                    'api_key': 'sk-test-key-123',
-                    'base_url': 'https://litellm.example.com',
-                },
-            },
+            agent_settings=AgentSettings(
+                llm=LLM(
+                    model='anthropic/claude-sonnet-4-20250514',
+                    api_key=SecretStr('sk-test-key-123'),
+                    base_url='https://litellm.example.com',
+                ),
+            ),
         )
         mock_context = AsyncMock()
         mock_context.get_user_info = AsyncMock(return_value=user_info)
@@ -236,7 +238,9 @@ class TestGetCurrentUserExposeSecrets:
         """Without expose_secrets, llm_api_key is masked (no session key needed)."""
         user_info = UserInfo(
             id=USER_ID,
-            agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-test-key-123'}},
+            agent_settings=AgentSettings(
+                llm=LLM(model='gpt-4o', api_key=SecretStr('sk-test-key-123')),
+            ),
         )
         mock_context = AsyncMock()
         mock_context.get_user_info = AsyncMock(return_value=user_info)
@@ -450,7 +454,9 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-secret-123'}},
+                agent_settings=AgentSettings(
+                    llm=LLM(model='gpt-4o', api_key=SecretStr('sk-secret-123')),
+                ),
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -469,7 +475,9 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-secret-123'}},
+                agent_settings=AgentSettings(
+                    llm=LLM(model='gpt-4o', api_key=SecretStr('sk-secret-123')),
+                ),
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -499,7 +507,9 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id='user-A',
-                agent_settings={'llm': {'model': 'gpt-4o', 'api_key': 'sk-secret-123'}},
+                agent_settings=AgentSettings(
+                    llm=LLM(model='gpt-4o', api_key=SecretStr('sk-secret-123')),
+                ),
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value='user-A')
@@ -533,13 +543,13 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={
-                    'llm': {
-                        'model': 'anthropic/claude-sonnet-4-20250514',
-                        'api_key': 'sk-real-secret',
-                        'base_url': 'https://litellm.example.com',
-                    }
-                },
+                agent_settings=AgentSettings(
+                    llm=LLM(
+                        model='anthropic/claude-sonnet-4-20250514',
+                        api_key=SecretStr('sk-real-secret'),
+                        base_url='https://litellm.example.com',
+                    ),
+                ),
             )
         )
         mock_user_ctx.get_user_id = AsyncMock(return_value=USER_ID)
@@ -576,12 +586,12 @@ class TestExposeSecretsIntegration:
         mock_user_ctx.get_user_info = AsyncMock(
             return_value=UserInfo(
                 id=USER_ID,
-                agent_settings={
-                    'llm': {
-                        'model': 'gpt-4o',
-                        'api_key': 'sk-should-be-masked',
-                    }
-                },
+                agent_settings=AgentSettings(
+                    llm=LLM(
+                        model='gpt-4o',
+                        api_key=SecretStr('sk-should-be-masked'),
+                    ),
+                ),
             )
         )
 

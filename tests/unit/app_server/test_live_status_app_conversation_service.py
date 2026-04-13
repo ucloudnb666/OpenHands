@@ -165,7 +165,6 @@ class TestLiveStatusAppConversationService:
             security_analyzer='llm',
             search_api_key=None,
             mcp_config=None,
-            agent_settings={},
             disabled_skills=[],
         )
 
@@ -1580,14 +1579,14 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_with_custom_remote_servers(self):
         """Test _configure_llm_and_mcp merges custom remote servers."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'linear': MCPRemoteServerConfig(
+                'linear': RemoteMCPServer(
                     url='https://linear.app/sse', transport='sse', auth='linear_key'
                 ),
-                'notion': MCPRemoteServerConfig(
+                'notion': RemoteMCPServer(
                     url='https://notion.com/sse', transport='sse'
                 ),
             }
@@ -1609,11 +1608,11 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_with_custom_http_servers(self):
         """Test _configure_llm_and_mcp merges custom HTTP servers with timeout."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'custom-http': MCPRemoteServerConfig(
+                'custom-http': RemoteMCPServer(
                     url='https://example.com/mcp',
                     transport='http',
                     auth='test_key',
@@ -1634,11 +1633,11 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_with_custom_stdio_servers(self):
         """Test _configure_llm_and_mcp merges custom STDIO servers with explicit names."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, StdioMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'my-custom-server': MCPStdioServerConfig(
+                'my-custom-server': StdioMCPServer(
                     command='npx',
                     args=['-y', 'my-package'],
                     env={'API_KEY': 'secret'},
@@ -1665,17 +1664,17 @@ class TestLiveStatusAppConversationService:
         """Test _configure_llm_and_mcp merges both system and custom MCP servers."""
         from openhands.core.config.mcp_config import (
             MCPConfig,
-            MCPRemoteServerConfig,
-            MCPStdioServerConfig,
+            RemoteMCPServer,
+            StdioMCPServer,
         )
 
         self.mock_user.search_api_key = SecretStr('tavily_key')
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'custom-sse': MCPRemoteServerConfig(
+                'custom-sse': RemoteMCPServer(
                     url='https://custom.com/sse', transport='sse'
                 ),
-                'custom-stdio': MCPStdioServerConfig(command='node', args=['app.js']),
+                'custom-stdio': StdioMCPServer(command='node', args=['app.js']),
             }
         )
         self.mock_user_context.get_mcp_api_key.return_value = 'mcp_api_key'
@@ -1756,11 +1755,11 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_remote_server_without_auth(self):
         """Test _configure_llm_and_mcp handles remote servers without auth."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'public': MCPRemoteServerConfig(
+                'public': RemoteMCPServer(
                     url='https://public.com/sse', transport='sse'
                 )
             }
@@ -1777,11 +1776,11 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_http_server_default_timeout(self):
         """Test _configure_llm_and_mcp handles HTTP servers with default timeout."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'http-server': MCPRemoteServerConfig(
+                'http-server': RemoteMCPServer(
                     url='https://example.com/mcp', transport='http'
                 )
             }
@@ -1798,11 +1797,11 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_stdio_server_without_env(self):
         """Test _configure_llm_and_mcp handles STDIO servers without environment variables."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, StdioMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'simple-server': MCPStdioServerConfig(command='node', args=['app.js'])
+                'simple-server': StdioMCPServer(command='node', args=['app.js'])
             }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None
@@ -1820,17 +1819,17 @@ class TestLiveStatusAppConversationService:
     @pytest.mark.asyncio
     async def test_configure_llm_and_mcp_multiple_servers_same_type(self):
         """Test _configure_llm_and_mcp handles multiple custom servers of the same type."""
-        from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+        from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'server1': MCPRemoteServerConfig(
+                'server1': RemoteMCPServer(
                     url='https://server1.com/sse', transport='sse'
                 ),
-                'server2': MCPRemoteServerConfig(
+                'server2': RemoteMCPServer(
                     url='https://server2.com/sse', transport='sse'
                 ),
-                'server3': MCPRemoteServerConfig(
+                'server3': RemoteMCPServer(
                     url='https://server3.com/sse', transport='sse'
                 ),
             }
@@ -1852,23 +1851,23 @@ class TestLiveStatusAppConversationService:
         """Test _configure_llm_and_mcp handles all server types together."""
         from openhands.core.config.mcp_config import (
             MCPConfig,
-            MCPRemoteServerConfig,
-            MCPStdioServerConfig,
+            RemoteMCPServer,
+            StdioMCPServer,
         )
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'sse-server': MCPRemoteServerConfig(
+                'sse-server': RemoteMCPServer(
                     url='https://sse.example.com/sse',
                     transport='sse',
                     auth='sse_key',
                 ),
-                'http-server': MCPRemoteServerConfig(
+                'http-server': RemoteMCPServer(
                     url='https://shttp.example.com/mcp',
                     transport='http',
                     timeout=90,
                 ),
-                'stdio-server': MCPStdioServerConfig(
+                'stdio-server': StdioMCPServer(
                     command='npx',
                     args=['mcp-server'],
                     env={'TOKEN': 'value'},
@@ -2142,7 +2141,6 @@ class TestPluginHandling:
             search_api_key=None,
             mcp_config=None,
             security_analyzer=None,
-            agent_settings={},
         )
 
         # Mock sandbox

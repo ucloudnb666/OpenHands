@@ -5,7 +5,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
+from openhands.sdk.llm import LLM
+from openhands.sdk.settings import AgentSettings
 from openhands.server.user_auth.default_user_auth import DefaultUserAuth
 from openhands.storage.data_models.settings import Settings
 from openhands.storage.settings.file_settings_store import FileSettingsStore
@@ -25,28 +27,29 @@ def _sdk_mcp_config(settings: Settings) -> MCPConfig | None:
 async def test_user_auth_mcp_merging_integration():
     """Test that MCP merging works in the user auth flow."""
     config_settings = Settings(
-        agent_settings={
-            'mcp_config': MCPConfig(
+        agent_settings=AgentSettings(
+            llm=LLM(model='config-model'),
+            mcp_config=MCPConfig(
                 mcpServers={
-                    'config': MCPRemoteServerConfig(
+                    'config': RemoteMCPServer(
                         url='http://config-server.com', transport='sse'
                     )
                 }
-            )
-        }
+            ),
+        ),
     )
 
     stored_settings = Settings(
-        agent_settings={
-            'llm': {'model': 'gpt-4'},
-            'mcp_config': MCPConfig(
+        agent_settings=AgentSettings(
+            llm=LLM(model='gpt-4'),
+            mcp_config=MCPConfig(
                 mcpServers={
-                    'frontend': MCPRemoteServerConfig(
+                    'frontend': RemoteMCPServer(
                         url='http://frontend-server.com', transport='sse'
                     )
                 }
             ),
-        }
+        ),
     )
 
     user_auth = DefaultUserAuth()
@@ -73,28 +76,29 @@ async def test_user_auth_mcp_merging_integration():
 async def test_user_auth_caching_behavior():
     """Test that user auth caches the merged settings correctly."""
     config_settings = Settings(
-        agent_settings={
-            'mcp_config': MCPConfig(
+        agent_settings=AgentSettings(
+            llm=LLM(model='config-model'),
+            mcp_config=MCPConfig(
                 mcpServers={
-                    'config': MCPRemoteServerConfig(
+                    'config': RemoteMCPServer(
                         url='http://config-server.com', transport='sse'
                     )
                 }
-            )
-        }
+            ),
+        ),
     )
 
     stored_settings = Settings(
-        agent_settings={
-            'llm': {'model': 'gpt-4'},
-            'mcp_config': MCPConfig(
+        agent_settings=AgentSettings(
+            llm=LLM(model='gpt-4'),
+            mcp_config=MCPConfig(
                 mcpServers={
-                    'frontend': MCPRemoteServerConfig(
+                    'frontend': RemoteMCPServer(
                         url='http://frontend-server.com', transport='sse'
                     )
                 }
             ),
-        }
+        ),
     )
 
     user_auth = DefaultUserAuth()
