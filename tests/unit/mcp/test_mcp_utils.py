@@ -176,9 +176,7 @@ async def test_create_mcp_clients_stdio_success(mock_mcp_client):
         }
     )
 
-    clients = await openhands.mcp.utils.create_mcp_clients(
-        mcp_config, include_stdio=True
-    )
+    clients = await openhands.mcp.utils.create_mcp_clients(mcp_config)
 
     assert len(clients) == 2
     assert mock_mcp_client.call_count == 2
@@ -203,9 +201,7 @@ async def test_create_mcp_clients_stdio_connection_failure(mock_mcp_client):
         }
     )
 
-    clients = await openhands.mcp.utils.create_mcp_clients(
-        mcp_config, include_stdio=True
-    )
+    clients = await openhands.mcp.utils.create_mcp_clients(mcp_config)
 
     assert len(clients) == 1
 
@@ -213,7 +209,7 @@ async def test_create_mcp_clients_stdio_connection_failure(mock_mcp_client):
 @pytest.mark.asyncio
 @patch('openhands.mcp.utils.create_mcp_clients')
 async def test_fetch_mcp_tools_from_config_with_stdio(mock_create_clients):
-    """Test fetching MCP tools with stdio servers enabled."""
+    """Test fetching MCP tools with stdio servers."""
     mock_client = MagicMock()
     mock_tool = MagicMock()
     mock_tool.to_param.return_value = {'function': {'name': 'stdio_tool'}}
@@ -225,15 +221,13 @@ async def test_fetch_mcp_tools_from_config_with_stdio(mock_create_clients):
     )
 
     tools = await openhands.mcp.utils.fetch_mcp_tools_from_config(
-        mcp_config, conversation_id='test-conv', use_stdio=True
+        mcp_config, conversation_id='test-conv'
     )
 
     assert len(tools) == 1
     assert tools[0] == {'function': {'name': 'stdio_tool'}}
 
-    mock_create_clients.assert_called_once_with(
-        mcp_config, 'test-conv', include_stdio=True
-    )
+    mock_create_clients.assert_called_once_with(mcp_config, 'test-conv')
 
 
 @pytest.mark.asyncio
