@@ -1,7 +1,19 @@
 import axios, { AxiosError, AxiosResponse } from "axios";
+import { getSelectedOrganizationIdFromStore } from "#/stores/selected-organization-store";
 
 export const openHands = axios.create({
   baseURL: `${window.location.protocol}//${import.meta.env.VITE_BACKEND_BASE_URL || window?.location.host}`,
+});
+
+// Attach the selected organization ID to every request so the backend
+// can resolve org context per-request instead of relying on a shared
+// server-side current_org_id.
+openHands.interceptors.request.use((config) => {
+  const orgId = getSelectedOrganizationIdFromStore();
+  if (orgId) {
+    config.headers.set("X-Org-Id", orgId);
+  }
+  return config;
 });
 
 // Helper function to check if a response contains an email verification error
