@@ -139,9 +139,9 @@ class JiraPayloadParser:
         labels = set()
         for item in items:
             if item.get('field') == 'labels':
-                labels = item.get('toString')
-                if isinstance(labels, str):
-                    labels.update(labels.split(' '))
+                labels_str = item.get('toString')
+                if isinstance(labels_str, str):
+                    labels.update(labels_str.split(' '))
 
         if self.oh_label not in labels:
             return JiraPayloadSkipped(
