@@ -6454,13 +6454,15 @@ llama = ["llama-index (>=0.12.29,<0.13.0)", "llama-index-core (>=0.12.29,<0.13.0
 
 [[package]]
 name = "openhands-agent-server"
-version = "1.16.1"
+version = "1.17.0"
 description = "OpenHands Agent Server - REST/WebSocket interface for OpenHands AI Agent"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "openhands_agent_server-1.17.0-py3-none-any.whl", hash = "sha256:44336cad001c31caeb516481a5a7aea6dd9b5ab4798461f147b5231668d8fb74"},
+    {file = "openhands_agent_server-1.17.0.tar.gz", hash = "sha256:3a88449a3b9ded653dcd2a8c518810c75602873cf9f7d4e8f9b90fd8fd225652"},
+]
 
 [package.dependencies]
 aiosqlite = ">=0.19"
@@ -6473,13 +6475,6 @@ sqlalchemy = ">=2"
 uvicorn = ">=0.31.1"
 websockets = ">=12"
 wsproto = ">=1.2.0"
-
-[package.source]
-type = "git"
-url = "https://github.com/OpenHands/software-agent-sdk.git"
-reference = "5aef1b230917b4cf360f2105036769edb0372163"
-resolved_reference = "5aef1b230917b4cf360f2105036769edb0372163"
-subdirectory = "openhands-agent-server"
 
 [[package]]
 name = "openhands-ai"
@@ -6528,9 +6523,9 @@ memory-profiler = ">=0.61"
 numpy = "*"
 openai = "2.8"
 openhands-aci = "0.3.3"
-openhands-agent-server = {git = "https://github.com/OpenHands/software-agent-sdk.git", rev = "5aef1b230917b4cf360f2105036769edb0372163", subdirectory = "openhands-agent-server"}
-openhands-sdk = {git = "https://github.com/OpenHands/software-agent-sdk.git", rev = "5aef1b230917b4cf360f2105036769edb0372163", subdirectory = "openhands-sdk"}
-openhands-tools = "1.16.1"
+openhands-agent-server = "1.17.0"
+openhands-sdk = "1.17.0"
+openhands-tools = "1.17.0"
 opentelemetry-api = ">=1.33.1"
 opentelemetry-exporter-otlp-proto-grpc = ">=1.33.1"
 orjson = ">=3.11.6"
@@ -6585,13 +6580,15 @@ url = ".."
 
 [[package]]
 name = "openhands-sdk"
-version = "1.16.1"
+version = "1.17.0"
 description = "OpenHands SDK - Core functionality for building AI agents"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "openhands_sdk-1.17.0-py3-none-any.whl", hash = "sha256:3b771e72209453871c3036a562cf33e9ad9642a54bd48edb44f89915ac54709d"},
+    {file = "openhands_sdk-1.17.0.tar.gz", hash = "sha256:3c69df6590f023a514137272d413658848e0d5bc9aecf941b946c8662862779a"},
+]
 
 [package.dependencies]
 agent-client-protocol = ">=0.8.1"
@@ -6611,23 +6608,16 @@ websockets = ">=12"
 [package.extras]
 boto3 = ["boto3 (>=1.35.0)"]
 
-[package.source]
-type = "git"
-url = "https://github.com/OpenHands/software-agent-sdk.git"
-reference = "5aef1b230917b4cf360f2105036769edb0372163"
-resolved_reference = "5aef1b230917b4cf360f2105036769edb0372163"
-subdirectory = "openhands-sdk"
-
 [[package]]
 name = "openhands-tools"
-version = "1.16.1"
+version = "1.17.0"
 description = "OpenHands Tools - Runtime tools for AI agents"
 optional = false
 python-versions = ">=3.12"
 groups = ["main"]
 files = [
-    {file = "openhands_tools-1.16.1-py3-none-any.whl", hash = "sha256:f7fd1eb205571d02ee480ad71e96cac0c34c57c0938c4074fe135a579a7538d7"},
-    {file = "openhands_tools-1.16.1.tar.gz", hash = "sha256:64488f2d7705ff90f4bfb7dfd1a2f1fbb4f379059d96e0073677c168d97135e7"},
+    {file = "openhands_tools-1.17.0-py3-none-any.whl", hash = "sha256:76cd30fcc153627444f18638bcd926c9190989f80a3492381e84a181c021d815"},
+    {file = "openhands_tools-1.17.0.tar.gz", hash = "sha256:4a9d6c1aec00d366d0feb1ac2e9ee9988ad9806a0ef89f7dbe4655644e639d4a"},
 ]
 
 [package.dependencies]

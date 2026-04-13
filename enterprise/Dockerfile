@@ -24,15 +24,14 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install poetry and export before importing current code.
-# Pin to the same version that generated poetry.lock for reproducibility.
-RUN /app/.venv/bin/pip install 'poetry==2.3.2' poetry-plugin-export
+RUN /app/.venv/bin/pip install poetry poetry-plugin-export
 
 # Install Python dependencies from poetry.lock for reproducible builds
 # Copy lock files first for better Docker layer caching
 COPY --chown=openhands:openhands enterprise/pyproject.toml enterprise/poetry.lock /tmp/enterprise/
 RUN cd /tmp/enterprise && \
-    # Export main dependencies (without hashes to support VCS-pinned packages)
-    /app/.venv/bin/poetry export --only main --without-hashes -o requirements.txt && \
+    # Export only main dependencies with hashes for supply chain security
+    /app/.venv/bin/poetry export --only main -o requirements.txt && \
     # Remove the local path dependency (openhands-ai is already in base image)
     sed -i '/^-e /d; /openhands-ai/d' requirements.txt && \
     # Install pinned dependencies from lock file
