@@ -436,7 +436,7 @@ def infer_repo_from_message(user_msg: str) -> list[str]:
         r'(?=\s|$|}}|[\]\)\'",.:`])'  # right boundary
     )
 
-    matches: list[str] = []
+    matches = set()
 
     # Git URLs first (highest priority)
     for owner, repo in re.findall(git_url_pattern, normalized_msg):
@@ -457,9 +457,9 @@ def infer_repo_from_message(user_msg: str) -> list[str]:
             continue
 
         if full_match not in matches:
-            matches.append(full_match)
+            matches.add(full_match)
 
-    return matches
+    return list(matches)
 
 
 def filter_potential_repos_by_user_msg(
