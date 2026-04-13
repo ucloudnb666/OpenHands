@@ -187,6 +187,11 @@ async def test_keycloak_callback_success_with_valid_offline_token(
         patch('server.routes.auth.set_response_cookie') as mock_set_cookie,
         patch('server.routes.auth.UserStore') as mock_user_store,
         patch('server.routes.auth.posthog') as mock_posthog,
+        patch(
+            'server.routes.auth._should_redirect_to_onboarding',
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
     ):
         # Mock user with accepted_tos
         mock_user = MagicMock()
@@ -439,6 +444,11 @@ async def test_keycloak_callback_success_without_offline_token(
         patch('server.routes.auth.KEYCLOAK_CLIENT_ID', 'test-client'),
         patch('server.routes.auth.UserStore') as mock_user_store,
         patch('server.routes.auth.posthog') as mock_posthog,
+        patch(
+            'server.routes.auth._should_redirect_to_onboarding',
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
     ):
         # Mock user with accepted_tos
         mock_user = MagicMock()
@@ -484,15 +494,15 @@ async def test_keycloak_callback_success_without_offline_token(
         mock_token_manager.store_idp_tokens.assert_called_once_with(
             ProviderType.GITHUB, 'test_user_id', 'test_access_token'
         )
-        # When redirecting to Keycloak for offline token, redirect_url becomes https://keycloak...
-        # so secure=True is expected, and accepted_tos=False since we're in the offline flow
+        # secure is based on web_url (http://localhost:8000/), not redirect_url
+        # So secure=False because web_url starts with 'http://'
         mock_set_cookie.assert_called_once_with(
             request=mock_request,
             response=result,
             keycloak_access_token='test_access_token',
             keycloak_refresh_token='test_refresh_token',
-            secure=True,
-            accepted_tos=False,
+            secure=False,
+            accepted_tos=True,
         )
         mock_posthog.set.assert_called_once()
 
@@ -517,6 +527,11 @@ async def test_keycloak_callback_early_return_when_offline_token_invalid(
         patch('server.routes.auth.UserStore') as mock_user_store,
         patch('server.routes.auth.posthog'),
         patch('server.routes.auth.OrgInvitationService') as mock_invitation_service,
+        patch(
+            'server.routes.auth._should_redirect_to_onboarding',
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
     ):
         # Mock user with accepted_tos
         mock_user = MagicMock()
@@ -566,9 +581,9 @@ async def test_keycloak_callback_early_return_when_offline_token_invalid(
         assert 'keycloak.example.com' in result.headers['location']
         assert 'offline_access' in result.headers['location']
 
-        # Cookie should be set with accepted_tos=False
+        # Cookie should be set with accepted_tos=True (user has accepted TOS)
         mock_set_cookie.assert_called_once()
-        assert mock_set_cookie.call_args[1]['accepted_tos'] is False
+        assert mock_set_cookie.call_args[1]['accepted_tos'] is True
 
         # Invitation service should NOT be called (early return before invitation processing)
         mock_invitation_service.accept_invitation.assert_not_called()
@@ -654,12 +669,19 @@ async def test_keycloak_offline_callback_success(
     """Test successful keycloak_offline_callback."""
     with (
         patch('server.routes.auth.token_manager') as mock_token_manager,
+        patch('server.routes.auth.UserStore') as mock_user_store,
+        patch('server.routes.auth.set_response_cookie'),
         patch(
             'server.routes.auth._get_post_auth_redirect',
             new_callable=AsyncMock,
             return_value='test_state',
         ),
     ):
+        # Mock user with accepted_tos
+        mock_user = MagicMock()
+        mock_user.accepted_tos = '2025-01-01'
+        mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
+
         mock_token_manager.get_keycloak_tokens = AsyncMock(
             return_value=('test_access_token', 'test_refresh_token')
         )
@@ -689,12 +711,19 @@ async def test_keycloak_offline_callback_redirects_to_onboarding(
     """Test keycloak_offline_callback redirects to onboarding when needed."""
     with (
         patch('server.routes.auth.token_manager') as mock_token_manager,
+        patch('server.routes.auth.UserStore') as mock_user_store,
+        patch('server.routes.auth.set_response_cookie'),
         patch(
             'server.routes.auth._get_post_auth_redirect',
             new_callable=AsyncMock,
             return_value='http://localhost:8000/onboarding',
         ),
     ):
+        # Mock user with accepted_tos
+        mock_user = MagicMock()
+        mock_user.accepted_tos = '2025-01-01'
+        mock_user_store.get_user_by_id = AsyncMock(return_value=mock_user)
+
         mock_token_manager.get_keycloak_tokens = AsyncMock(
             return_value=('test_access_token', 'test_refresh_token')
         )

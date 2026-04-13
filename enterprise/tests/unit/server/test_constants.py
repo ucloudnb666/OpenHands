@@ -17,12 +17,12 @@ class TestDeploymentMode:
             ('feature-123.staging.all-hands.dev', 'cloud'),
             ('pr-456.staging.all-hands.dev', 'cloud'),
             ('app.openhands.ai', 'cloud'),
-            ('localhost', 'cloud'),
             # Customer domains should return 'self_hosted'
             ('openhands.acme.com', 'self_hosted'),
             ('internal.company.io', 'self_hosted'),
             ('dev.mycompany.net', 'self_hosted'),
             ('openhands.example.org', 'self_hosted'),
+            ('localhost', 'self_hosted'),  # localhost is not a managed domain
             # Edge cases
             ('all-hands.dev', 'self_hosted'),  # Not a subdomain, so not managed
             ('fake-all-hands.dev', 'self_hosted'),
@@ -48,7 +48,7 @@ class TestDeploymentMode:
             ('staging.all-hands.dev', True),
             ('feature.staging.all-hands.dev', True),
             ('app.openhands.ai', True),
-            ('localhost', True),
+            ('localhost', False),  # localhost is not a managed domain
             ('customer.example.com', False),
             ('all-hands.dev', False),
         ],
