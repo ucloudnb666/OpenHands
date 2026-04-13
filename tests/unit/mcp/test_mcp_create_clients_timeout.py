@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 from openhands.mcp.client import MCPClient
 from openhands.mcp.utils import create_mcp_clients
 
@@ -12,7 +12,7 @@ async def test_create_mcp_clients_timeout_with_invalid_url():
     """Test that create_mcp_clients properly times out when given an invalid URL."""
     mcp_config = MCPConfig(
         mcpServers={
-            'invalid': MCPRemoteServerConfig(
+            'invalid': RemoteMCPServer(
                 url='http://non-existent-domain-that-will-timeout.invalid',
                 transport='sse',
             )
@@ -44,7 +44,7 @@ async def test_create_mcp_clients_with_unreachable_host():
     """Test that create_mcp_clients handles unreachable hosts properly."""
     mcp_config = MCPConfig(
         mcpServers={
-            'unreachable': MCPRemoteServerConfig(
+            'unreachable': RemoteMCPServer(
                 url='http://192.0.2.1:8080',
                 transport='sse',
             )

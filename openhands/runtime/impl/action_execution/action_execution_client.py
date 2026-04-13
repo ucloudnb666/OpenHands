@@ -20,8 +20,8 @@ from openhands.app_server.status.system_stats import update_last_execution_time
 from openhands.core.config import OpenHandsConfig
 from openhands.core.config.mcp_config import (
     MCPConfig,
-    MCPRemoteServerConfig,
-    MCPStdioServerConfig,
+    RemoteMCPServer,
+    StdioMCPServer,
 )
 from openhands.core.exceptions import (
     AgentRuntimeTimeoutError,
@@ -90,7 +90,7 @@ class ActionExecutionClient(Runtime):
         self.action_semaphore = threading.Semaphore(1)  # Ensure one action at a time
         self._runtime_closed: bool = False
         self._vscode_token: str | None = None  # initial dummy value
-        self._last_updated_mcp_stdio_servers: dict[str, MCPStdioServerConfig] = {}
+        self._last_updated_mcp_stdio_servers: dict[str, StdioMCPServer] = {}
         super().__init__(
             config,
             event_stream,
@@ -370,7 +370,7 @@ class ActionExecutionClient(Runtime):
         return self.send_action_for_execution(action)
 
     def get_mcp_config(
-        self, extra_stdio_servers: dict[str, MCPStdioServerConfig] | None = None
+        self, extra_stdio_servers: dict[str, StdioMCPServer] | None = None
     ) -> MCPConfig:
         import sys
 
@@ -381,10 +381,10 @@ class ActionExecutionClient(Runtime):
         updated_mcp_config = self.config.mcp.model_copy()
 
         # Collect current stdio servers from config + extras
-        current_stdio: dict[str, MCPStdioServerConfig] = {
+        current_stdio: dict[str, StdioMCPServer] = {
             name: server
             for name, server in updated_mcp_config.mcpServers.items()
-            if isinstance(server, MCPStdioServerConfig)
+            if isinstance(server, StdioMCPServer)
         }
         if extra_stdio_servers:
             current_stdio.update(extra_stdio_servers)
@@ -443,7 +443,7 @@ class ActionExecutionClient(Runtime):
 
         # Expose the runtime's MCP SSE proxy when stdio servers exist
         if self._last_updated_mcp_stdio_servers:
-            updated_mcp_config.mcpServers['_runtime_proxy'] = MCPRemoteServerConfig(
+            updated_mcp_config.mcpServers['_runtime_proxy'] = RemoteMCPServer(
                 url=self.action_execution_server_url.rstrip('/') + '/mcp/sse',
                 transport='sse',
                 auth=self.session_api_key,

@@ -1,14 +1,14 @@
 """Test MCP remote server timeout configuration."""
 
-from openhands.core.config.mcp_config import MCPRemoteServerConfig
+from openhands.core.config.mcp_config import RemoteMCPServer
 
 
-class TestMCPRemoteServerConfig:
+class TestRemoteMCPServer:
     """Test remote server configuration with timeout field."""
 
     def test_remote_config_with_timeout(self):
         """Test remote config accepts timeout parameter."""
-        config = MCPRemoteServerConfig(
+        config = RemoteMCPServer(
             url='https://api.example.com/mcp', transport='http', timeout=90
         )
         assert config.timeout == 90
@@ -16,7 +16,7 @@ class TestMCPRemoteServerConfig:
 
     def test_remote_config_with_auth_and_timeout(self):
         """Test remote config with both auth and timeout."""
-        config = MCPRemoteServerConfig(
+        config = RemoteMCPServer(
             url='https://api.example.com/mcp',
             transport='http',
             auth='test-key-123',
@@ -27,9 +27,7 @@ class TestMCPRemoteServerConfig:
 
     def test_remote_config_default_timeout(self):
         """Test remote config default timeout (None)."""
-        config = MCPRemoteServerConfig(
-            url='https://api.example.com/mcp', transport='http'
-        )
+        config = RemoteMCPServer(url='https://api.example.com/mcp', transport='http')
         assert config.timeout is None
 
     def test_remote_config_positive_timeout(self):
@@ -37,14 +35,14 @@ class TestMCPRemoteServerConfig:
         valid_timeouts = [1, 5, 30, 60, 120, 300, 600, 1800, 3600]
 
         for timeout in valid_timeouts:
-            config = MCPRemoteServerConfig(
+            config = RemoteMCPServer(
                 url='https://api.example.com/mcp', transport='http', timeout=timeout
             )
             assert config.timeout == timeout
 
     def test_model_dump_includes_timeout(self):
         """Test that model serialization includes timeout field."""
-        config = MCPRemoteServerConfig(
+        config = RemoteMCPServer(
             url='https://api.example.com/mcp',
             transport='http',
             auth='test-key',
@@ -58,10 +56,8 @@ class TestMCPRemoteServerConfig:
 
     def test_transport_types(self):
         """Test that transport field accepts sse and http."""
-        sse = MCPRemoteServerConfig(url='https://api.example.com/sse', transport='sse')
+        sse = RemoteMCPServer(url='https://api.example.com/sse', transport='sse')
         assert sse.transport == 'sse'
 
-        http = MCPRemoteServerConfig(
-            url='https://api.example.com/mcp', transport='http'
-        )
+        http = RemoteMCPServer(url='https://api.example.com/mcp', transport='http')
         assert http.transport == 'http'

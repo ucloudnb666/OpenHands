@@ -11,7 +11,7 @@ from mcp import McpError
 from mcp.types import CallToolResult
 from pydantic import BaseModel, ConfigDict, Field
 
-from openhands.core.config.mcp_config import MCPRemoteServerConfig, MCPStdioServerConfig
+from openhands.core.config.mcp_config import RemoteMCPServer, StdioMCPServer
 from openhands.core.logger import openhands_logger as logger
 from openhands.mcp.error_collector import mcp_error_collector
 from openhands.mcp.tool import MCPClientTool
@@ -53,7 +53,7 @@ class MCPClient(BaseModel):
 
     async def connect_http(
         self,
-        server: MCPRemoteServerConfig,
+        server: RemoteMCPServer,
         conversation_id: str | None = None,
         timeout: float = 30.0,
     ):
@@ -122,7 +122,7 @@ class MCPClient(BaseModel):
 
     async def connect_stdio(
         self,
-        server: MCPStdioServerConfig,
+        server: StdioMCPServer,
         name: str | None = None,
         timeout: float = 30.0,
     ):

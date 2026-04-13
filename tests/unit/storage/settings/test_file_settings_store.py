@@ -2,8 +2,11 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from openhands.core.config.openhands_config import OpenHandsConfig
+from openhands.sdk.llm import LLM
+from openhands.sdk.settings import AgentSettings, ConversationSettings
 from openhands.storage.data_models.settings import Settings
 from openhands.storage.files import FileStore
 from openhands.storage.settings.file_settings_store import FileSettingsStore
@@ -40,19 +43,19 @@ async def test_store_and_load_data(file_settings_store):
     # Test data
     init_data = Settings(
         language='python',
-        agent_settings={
-            'agent': 'test-agent',
-            'llm': {
-                'model': 'test-model',
-                'api_key': 'test-key',
-                'base_url': 'https://test.com',
-            },
-        },
-        conversation_settings={
-            'max_iterations': 100,
-            'security_analyzer': 'llm',
-            'confirmation_mode': True,
-        },
+        agent_settings=AgentSettings(
+            agent='test-agent',
+            llm=LLM(
+                model='test-model',
+                api_key=SecretStr('test-key'),
+                base_url='https://test.com',
+            ),
+        ),
+        conversation_settings=ConversationSettings(
+            max_iterations=100,
+            security_analyzer='llm',
+            confirmation_mode=True,
+        ),
     )
 
     # Store data

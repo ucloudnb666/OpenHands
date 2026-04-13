@@ -30,7 +30,7 @@ from openhands_aci.utils.diff import get_diff
 from pydantic import SecretStr
 
 from openhands.core.config import OpenHandsConfig
-from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
+from openhands.core.config.mcp_config import MCPConfig, StdioMCPServer
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.action import (
@@ -921,7 +921,7 @@ class CLIRuntime(Runtime):
         )
 
     def get_mcp_config(
-        self, extra_stdio_servers: dict[str, MCPStdioServerConfig] | None = None
+        self, extra_stdio_servers: dict[str, StdioMCPServer] | None = None
     ) -> MCPConfig:
         """Get MCP configuration for CLI runtime."""
         if sys.platform == 'win32':

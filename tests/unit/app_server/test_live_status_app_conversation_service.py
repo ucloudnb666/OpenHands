@@ -1759,9 +1759,7 @@ class TestLiveStatusAppConversationService:
 
         self.mock_user.mcp_config = MCPConfig(
             mcpServers={
-                'public': RemoteMCPServer(
-                    url='https://public.com/sse', transport='sse'
-                )
+                'public': RemoteMCPServer(url='https://public.com/sse', transport='sse')
             }
         )
         self.mock_user_context.get_mcp_api_key.return_value = None

@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from openhands.core.config.mcp_config import MCPConfig, MCPRemoteServerConfig
+from openhands.core.config.mcp_config import MCPConfig, RemoteMCPServer
 from openhands.mcp import MCPClient, create_mcp_clients, fetch_mcp_tools_from_config
 
 
@@ -22,8 +22,8 @@ async def test_sse_connection_timeout():
     with mock.patch('openhands.mcp.utils.MCPClient', return_value=mock_client):
         mcp_config = MCPConfig(
             mcpServers={
-                's1': MCPRemoteServerConfig(url='http://server1:8080', transport='sse'),
-                's2': MCPRemoteServerConfig(url='http://server2:8080', transport='sse'),
+                's1': RemoteMCPServer(url='http://server1:8080', transport='sse'),
+                's2': RemoteMCPServer(url='http://server2:8080', transport='sse'),
             }
         )
 
@@ -38,7 +38,7 @@ async def test_fetch_mcp_tools_with_timeout():
     """Test that fetch_mcp_tools_from_config handles timeouts gracefully."""
     mock_config = MCPConfig(
         mcpServers={
-            's1': MCPRemoteServerConfig(url='http://server1:8080', transport='sse'),
+            's1': RemoteMCPServer(url='http://server1:8080', transport='sse'),
         }
     )
 
@@ -52,8 +52,8 @@ async def test_mixed_connection_results():
     """Test that fetch_mcp_tools_from_config returns tools even when some connections fail."""
     mock_config = MCPConfig(
         mcpServers={
-            's1': MCPRemoteServerConfig(url='http://server1:8080', transport='sse'),
-            's2': MCPRemoteServerConfig(url='http://server2:8080', transport='sse'),
+            's1': RemoteMCPServer(url='http://server1:8080', transport='sse'),
+            's2': RemoteMCPServer(url='http://server2:8080', transport='sse'),
         }
     )
 

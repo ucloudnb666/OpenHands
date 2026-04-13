@@ -1,12 +1,16 @@
 import warnings
 from unittest.mock import patch
 
+from fastmcp.mcp_config import MCPConfig
 from pydantic import SecretStr
 
 from openhands.core.config.llm_config import LLMConfig
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
 from openhands.core.config.security_config import SecurityConfig
+from openhands.sdk.llm import LLM
+from openhands.sdk.settings import AgentSettings, ConversationSettings
+from openhands.sdk.settings.model import CondenserSettings, VerificationSettings
 from openhands.storage.data_models.settings import Settings
 
 
@@ -74,19 +78,19 @@ def test_settings_from_config_no_api_key():
 def test_settings_handles_sensitive_data():
     settings = Settings(
         language='en',
-        agent_settings={
-            'agent': 'test-agent',
-            'llm': {
-                'model': 'test-model',
-                'api_key': 'test-key',
-                'base_url': 'https://test.example.com',
-            },
-        },
-        conversation_settings={
-            'max_iterations': 100,
-            'security_analyzer': 'llm',
-            'confirmation_mode': True,
-        },
+        agent_settings=AgentSettings(
+            agent='test-agent',
+            llm=LLM(
+                model='test-model',
+                api_key=SecretStr('test-key'),
+                base_url='https://test.example.com',
+            ),
+        ),
+        conversation_settings=ConversationSettings(
+            max_iterations=100,
+            security_analyzer='llm',
+            confirmation_mode=True,
+        ),
         remote_runtime_resource_factor=2,
     )
 
@@ -98,10 +102,10 @@ def test_settings_handles_sensitive_data():
 def test_settings_update_deep_merges_agent_settings():
     """Updating agent_settings with a partial dict must not overwrite sibling sub-fields."""
     settings = Settings(
-        agent_settings={
-            'llm': {'model': 'existing-model', 'api_key': 'existing-key'},
-            'condenser': {'enabled': True, 'max_size': 200},
-        },
+        agent_settings=AgentSettings(
+            llm=LLM(model='existing-model', api_key=SecretStr('existing-key')),
+            condenser=CondenserSettings(enabled=True, max_size=200),
+        ),
     )
 
     settings.update({'agent_settings': {'condenser': {'max_size': 300}}})
@@ -114,17 +118,17 @@ def test_settings_update_deep_merges_agent_settings():
 
 def test_settings_preserve_agent_settings():
     settings = Settings(
-        agent_settings={
-            'llm': {
-                'model': 'test-model',
-                'api_key': 'test-key',
-                'litellm_extra_body': {'metadata': {'tier': 'pro'}},
-            },
-            'verification': {
-                'critic_enabled': True,
-                'critic_mode': 'all_actions',
-            },
-        },
+        agent_settings=AgentSettings(
+            llm=LLM(
+                model='test-model',
+                api_key=SecretStr('test-key'),
+                litellm_extra_body={'metadata': {'tier': 'pro'}},
+            ),
+            verification=VerificationSettings(
+                critic_enabled=True,
+                critic_mode='all_actions',
+            ),
+        ),
     )
 
     assert settings.agent_settings.llm.api_key.get_secret_value() == 'test-key'
@@ -142,15 +146,17 @@ def test_settings_preserve_agent_settings():
 
 def test_settings_to_agent_settings_uses_agent_vals():
     settings = Settings(
-        agent_settings={
-            'llm': {
-                'model': 'sdk-model',
-                'base_url': 'https://sdk.example.com',
-                'litellm_extra_body': {'metadata': {'tier': 'enterprise'}},
-            },
-            'condenser': {'enabled': False, 'max_size': 88},
-            'verification': {'critic_enabled': True, 'critic_mode': 'all_actions'},
-        },
+        agent_settings=AgentSettings(
+            llm=LLM(
+                model='sdk-model',
+                base_url='https://sdk.example.com',
+                litellm_extra_body={'metadata': {'tier': 'enterprise'}},
+            ),
+            condenser=CondenserSettings(enabled=False, max_size=88),
+            verification=VerificationSettings(
+                critic_enabled=True, critic_mode='all_actions'
+            ),
+        ),
     )
 
     agent_settings = settings.to_agent_settings()
@@ -166,17 +172,17 @@ def test_settings_to_agent_settings_uses_agent_vals():
 
 def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
     settings = Settings(
-        agent_settings={
-            'llm': {'model': 'sdk-model'},
-            'mcp_config': {
-                'mcpServers': {
+        agent_settings=AgentSettings(
+            llm=LLM(model='sdk-model'),
+            mcp_config=MCPConfig(
+                mcpServers={
                     'sse_server': {
                         'url': 'https://example.com/sse',
                         'transport': 'sse',
                     }
                 },
-            },
-        },
+            ),
+        ),
     )
 
     mcp_config = settings.agent_settings.mcp_config
@@ -191,7 +197,7 @@ def test_settings_agent_settings_keeps_sdk_mcp_shape_canonical():
 
 
 def test_settings_update_mcp_config():
-    settings = Settings(agent_settings={'llm': {'model': 'sdk-model'}})
+    settings = Settings(agent_settings=AgentSettings(llm=LLM(model='sdk-model')))
 
     settings.update(
         {

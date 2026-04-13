@@ -20,7 +20,7 @@ from fastmcp import FastMCP
 from fastmcp.server.auth import StaticTokenVerifier
 from fastmcp.utilities.logging import get_logger as fastmcp_get_logger
 
-from openhands.core.config.mcp_config import MCPStdioServerConfig
+from openhands.core.config.mcp_config import StdioMCPServer
 
 logger = logging.getLogger(__name__)
 fastmcp_logger = fastmcp_get_logger('fastmcp')
@@ -137,7 +137,7 @@ class MCPProxyManager:
     async def update_and_remount(
         self,
         app: FastAPI,
-        stdio_servers: list[MCPStdioServerConfig],
+        stdio_servers: list[StdioMCPServer],
         allow_origins: Optional[list[str]] = None,
     ) -> None:
         """Update the tools configuration and remount the proxy to the app.

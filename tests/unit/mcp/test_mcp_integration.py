@@ -1,6 +1,5 @@
 """Integration test for MCP settings merging in the full flow."""
 
-import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,12 +10,6 @@ from openhands.sdk.settings import AgentSettings
 from openhands.server.user_auth.default_user_auth import DefaultUserAuth
 from openhands.storage.data_models.settings import Settings
 from openhands.storage.settings.file_settings_store import FileSettingsStore
-
-
-@pytest.fixture(autouse=True)
-def allow_short_context_windows():
-    with patch.dict(os.environ, {'ALLOW_SHORT_CONTEXT_WINDOWS': 'true'}, clear=False):
-        yield
 
 
 def _sdk_mcp_config(settings: Settings) -> MCPConfig | None:
@@ -41,7 +34,7 @@ async def test_user_auth_mcp_merging_integration():
 
     stored_settings = Settings(
         agent_settings=AgentSettings(
-            llm=LLM(model='gpt-4'),
+            llm=LLM(model='anthropic/claude-sonnet-4-5-20250929'),
             mcp_config=MCPConfig(
                 mcpServers={
                     'frontend': RemoteMCPServer(
@@ -65,7 +58,10 @@ async def test_user_auth_mcp_merging_integration():
 
     assert merged_settings is not None
     merged_mcp = _sdk_mcp_config(merged_settings)
-    assert merged_settings.agent_settings.llm.model == 'gpt-4'
+    assert (
+        merged_settings.agent_settings.llm.model
+        == 'anthropic/claude-sonnet-4-5-20250929'
+    )
     assert merged_mcp is not None
     assert len(merged_mcp.mcpServers) == 2
     assert 'config' in merged_mcp.mcpServers
@@ -90,7 +86,7 @@ async def test_user_auth_caching_behavior():
 
     stored_settings = Settings(
         agent_settings=AgentSettings(
-            llm=LLM(model='gpt-4'),
+            llm=LLM(model='anthropic/claude-sonnet-4-5-20250929'),
             mcp_config=MCPConfig(
                 mcpServers={
                     'frontend': RemoteMCPServer(

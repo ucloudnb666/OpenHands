@@ -8,8 +8,8 @@ from openhands.controller.agent import Agent
 from openhands.core.config import OpenHandsConfig, load_from_env
 from openhands.core.config.mcp_config import (
     MCPConfig,
-    MCPRemoteServerConfig,
-    MCPStdioServerConfig,
+    RemoteMCPServer,
+    StdioMCPServer,
     mcp_config_from_toml,
     merge_mcp_configs,
 )
@@ -24,12 +24,8 @@ def test_valid_remote_config():
     """Test a valid remote server configuration."""
     config = MCPConfig(
         mcpServers={
-            'server1': MCPRemoteServerConfig(
-                url='http://server1:8080', transport='sse'
-            ),
-            'server2': MCPRemoteServerConfig(
-                url='http://server2:8080', transport='http'
-            ),
+            'server1': RemoteMCPServer(url='http://server1:8080', transport='sse'),
+            'server2': RemoteMCPServer(url='http://server2:8080', transport='http'),
         }
     )
     assert len(config.mcpServers) == 2
@@ -42,8 +38,8 @@ def test_empty_config():
 
 
 def test_remote_server_config_with_auth():
-    """Test MCPRemoteServerConfig with auth token."""
-    config = MCPRemoteServerConfig(
+    """Test RemoteMCPServer with auth token."""
+    config = RemoteMCPServer(
         url='http://server1:8080', transport='sse', auth='test-api-key'
     )
     assert config.url == 'http://server1:8080'
@@ -51,23 +47,23 @@ def test_remote_server_config_with_auth():
 
 
 def test_remote_server_config_without_auth():
-    """Test MCPRemoteServerConfig without auth token."""
-    config = MCPRemoteServerConfig(url='http://server1:8080', transport='sse')
+    """Test RemoteMCPServer without auth token."""
+    config = RemoteMCPServer(url='http://server1:8080', transport='sse')
     assert config.url == 'http://server1:8080'
     assert config.auth is None
 
 
 def test_mcp_stdio_server_config_basic():
-    """Test basic MCPStdioServerConfig."""
-    config = MCPStdioServerConfig(command='python')
+    """Test basic StdioMCPServer."""
+    config = StdioMCPServer(command='python')
     assert config.command == 'python'
     assert config.args == []
     assert config.env == {}
 
 
 def test_mcp_stdio_server_config_with_args_and_env():
-    """Test MCPStdioServerConfig with args and env."""
-    config = MCPStdioServerConfig(
+    """Test StdioMCPServer with args and env."""
+    config = StdioMCPServer(
         command='python',
         args=['-m', 'server'],
         env={'DEBUG': 'true', 'PORT': '8080'},
@@ -81,7 +77,7 @@ def test_mcp_config_with_stdio_servers():
     """Test MCPConfig with stdio servers."""
     config = MCPConfig(
         mcpServers={
-            'test-server': MCPStdioServerConfig(
+            'test-server': StdioMCPServer(
                 command='python',
                 args=['-m', 'server'],
                 env={'DEBUG': 'true'},
@@ -90,7 +86,7 @@ def test_mcp_config_with_stdio_servers():
     )
     assert len(config.mcpServers) == 1
     server = config.mcpServers['test-server']
-    assert isinstance(server, MCPStdioServerConfig)
+    assert isinstance(server, StdioMCPServer)
     assert server.command == 'python'
     assert server.args == ['-m', 'server']
     assert server.env == {'DEBUG': 'true'}
@@ -106,7 +102,7 @@ def test_from_toml_section_valid():
     mcp = result['mcp']
     assert len(mcp.mcpServers) == 1
     server = list(mcp.mcpServers.values())[0]
-    assert isinstance(server, MCPRemoteServerConfig)
+    assert isinstance(server, RemoteMCPServer)
     assert server.url == 'http://server1:8080'
 
 
@@ -129,7 +125,7 @@ def test_from_toml_section_with_stdio_servers():
     assert len(mcp.mcpServers) == 2
     assert 'test-server' in mcp.mcpServers
     stdio = mcp.mcpServers['test-server']
-    assert isinstance(stdio, MCPStdioServerConfig)
+    assert isinstance(stdio, StdioMCPServer)
     assert stdio.command == 'python'
     assert stdio.args == ['-m', 'server']
     assert stdio.env == {'DEBUG': 'true'}
@@ -139,10 +135,10 @@ def test_mcp_config_with_both_server_types():
     """Test MCPConfig with both remote and stdio servers."""
     config = MCPConfig(
         mcpServers={
-            'remote': MCPRemoteServerConfig(
+            'remote': RemoteMCPServer(
                 url='http://server1:8080', transport='sse', auth='test-api-key'
             ),
-            'local': MCPStdioServerConfig(
+            'local': StdioMCPServer(
                 command='python',
                 args=['-m', 'server'],
                 env={'DEBUG': 'true'},
@@ -151,11 +147,11 @@ def test_mcp_config_with_both_server_types():
     )
     assert len(config.mcpServers) == 2
     remote = config.mcpServers['remote']
-    assert isinstance(remote, MCPRemoteServerConfig)
+    assert isinstance(remote, RemoteMCPServer)
     assert remote.url == 'http://server1:8080'
     assert remote.auth == 'test-api-key'
     local = config.mcpServers['local']
-    assert isinstance(local, MCPStdioServerConfig)
+    assert isinstance(local, StdioMCPServer)
     assert local.command == 'python'
 
 
@@ -163,23 +159,23 @@ def test_mcp_config_model_validation_error():
     """Test MCPConfig validation error with invalid data."""
     with pytest.raises(ValidationError):
         # Missing required 'url' field
-        MCPRemoteServerConfig()
+        RemoteMCPServer()
 
     with pytest.raises(ValidationError):
         # Missing required 'command' field
-        MCPStdioServerConfig()
+        StdioMCPServer()
 
 
 def test_merge_mcp_configs():
     """Test merging two MCPConfig instances."""
     c1 = MCPConfig(
         mcpServers={
-            'a': MCPRemoteServerConfig(url='http://a.com', transport='sse'),
+            'a': RemoteMCPServer(url='http://a.com', transport='sse'),
         }
     )
     c2 = MCPConfig(
         mcpServers={
-            'b': MCPStdioServerConfig(command='echo'),
+            'b': StdioMCPServer(command='echo'),
         }
     )
     merged = merge_mcp_configs(c1, c2)
@@ -192,12 +188,12 @@ def test_merge_mcp_configs_override():
     """Test that merge_mcp_configs uses the 'other' value for duplicate keys."""
     c1 = MCPConfig(
         mcpServers={
-            'same': MCPRemoteServerConfig(url='http://old.com', transport='sse'),
+            'same': RemoteMCPServer(url='http://old.com', transport='sse'),
         }
     )
     c2 = MCPConfig(
         mcpServers={
-            'same': MCPRemoteServerConfig(url='http://new.com', transport='http'),
+            'same': RemoteMCPServer(url='http://new.com', transport='http'),
         }
     )
     merged = merge_mcp_configs(c1, c2)
@@ -206,14 +202,14 @@ def test_merge_mcp_configs_override():
 
 
 def test_stdio_server_equality():
-    """Test MCPStdioServerConfig equality."""
-    server1 = MCPStdioServerConfig(
+    """Test StdioMCPServer equality."""
+    server1 = StdioMCPServer(
         command='python',
         args=['--verbose', '--debug', '--port=8080'],
         env={'DEBUG': 'true', 'PORT': '8080'},
     )
 
-    server2 = MCPStdioServerConfig(
+    server2 = StdioMCPServer(
         command='python',
         args=['--verbose', '--debug', '--port=8080'],
         env={'PORT': '8080', 'DEBUG': 'true'},
@@ -221,7 +217,7 @@ def test_stdio_server_equality():
 
     assert server1 == server2
 
-    server3 = MCPStdioServerConfig(
+    server3 = StdioMCPServer(
         command='python',
         args=['--debug', '--port=8080', '--verbose'],
         env={'DEBUG': 'true', 'PORT': '8080'},

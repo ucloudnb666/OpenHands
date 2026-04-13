@@ -106,14 +106,14 @@ class BaseMicroagent(BaseModel):
 
             # Validate MCP tools configuration if present
             if metadata.mcp_tools and metadata.mcp_tools.mcpServers:
-                from openhands.core.config.mcp_config import MCPStdioServerConfig
+                from openhands.core.config.mcp_config import StdioMCPServer
 
                 has_stdio = any(
-                    isinstance(s, MCPStdioServerConfig)
+                    isinstance(s, StdioMCPServer)
                     for s in metadata.mcp_tools.mcpServers.values()
                 )
                 has_non_stdio = any(
-                    not isinstance(s, MCPStdioServerConfig)
+                    not isinstance(s, StdioMCPServer)
                     for s in metadata.mcp_tools.mcpServers.values()
                 )
                 if has_non_stdio:

@@ -7,8 +7,8 @@ import pytest
 import openhands.mcp.utils
 from openhands.core.config.mcp_config import (
     MCPConfig,
-    MCPRemoteServerConfig,
-    MCPStdioServerConfig,
+    RemoteMCPServer,
+    StdioMCPServer,
 )
 from openhands.events.action.mcp import MCPAction
 from openhands.events.observation.mcp import MCPObservation
@@ -29,10 +29,8 @@ async def test_create_mcp_clients_success(mock_mcp_client):
     mock_mcp_client.return_value = mock_client_instance
     mock_client_instance.connect_http = AsyncMock()
 
-    s1 = MCPRemoteServerConfig(url='http://server1:8080', transport='sse')
-    s2 = MCPRemoteServerConfig(
-        url='http://server2:8080', transport='sse', auth='test-key'
-    )
+    s1 = RemoteMCPServer(url='http://server1:8080', transport='sse')
+    s2 = RemoteMCPServer(url='http://server2:8080', transport='sse', auth='test-key')
     mcp_config = MCPConfig(mcpServers={'s1': s1, 's2': s2})
 
     clients = await openhands.mcp.utils.create_mcp_clients(mcp_config)
@@ -53,8 +51,8 @@ async def test_create_mcp_clients_connection_failure(mock_mcp_client):
         Exception('Connection failed'),
     ]
 
-    s1 = MCPRemoteServerConfig(url='http://server1:8080', transport='sse')
-    s2 = MCPRemoteServerConfig(url='http://server2:8080', transport='sse')
+    s1 = RemoteMCPServer(url='http://server1:8080', transport='sse')
+    s2 = RemoteMCPServer(url='http://server2:8080', transport='sse')
     mcp_config = MCPConfig(mcpServers={'s1': s1, 's2': s2})
 
     clients = await openhands.mcp.utils.create_mcp_clients(mcp_config)
@@ -163,12 +161,12 @@ async def test_create_mcp_clients_stdio_success(mock_mcp_client):
 
     mcp_config = MCPConfig(
         mcpServers={
-            'test-server-1': MCPStdioServerConfig(
+            'test-server-1': StdioMCPServer(
                 command='python',
                 args=['-m', 'server1'],
                 env={'DEBUG': 'true'},
             ),
-            'test-server-2': MCPStdioServerConfig(
+            'test-server-2': StdioMCPServer(
                 command='node',
                 args=['server2.js'],
                 env={'NODE_ENV': 'development'},
@@ -196,8 +194,8 @@ async def test_create_mcp_clients_stdio_connection_failure(mock_mcp_client):
 
     mcp_config = MCPConfig(
         mcpServers={
-            'server1': MCPStdioServerConfig(command='python'),
-            'server2': MCPStdioServerConfig(command='invalid_command'),
+            'server1': StdioMCPServer(command='python'),
+            'server2': StdioMCPServer(command='invalid_command'),
         }
     )
 
@@ -216,9 +214,7 @@ async def test_fetch_mcp_tools_from_config_with_stdio(mock_create_clients):
     mock_client.tools = [mock_tool]
     mock_create_clients.return_value = [mock_client]
 
-    mcp_config = MCPConfig(
-        mcpServers={'test-server': MCPStdioServerConfig(command='python')}
-    )
+    mcp_config = MCPConfig(mcpServers={'test-server': StdioMCPServer(command='python')})
 
     tools = await openhands.mcp.utils.fetch_mcp_tools_from_config(
         mcp_config, conversation_id='test-conv'

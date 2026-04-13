@@ -9,11 +9,15 @@ from pydantic import SecretStr
 from openhands.integrations.provider import ProviderToken, ProviderType
 from openhands.integrations.service_types import UserGitInfo
 from openhands.sdk.llm import LLM
-from openhands.sdk.settings import AgentSettings, ConversationSettings, VerificationSettings
+from openhands.sdk.settings import (
+    AgentSettings,
+    ConversationSettings,
+    VerificationSettings,
+)
 from openhands.server.app import app
 from openhands.server.user_auth.user_auth import UserAuth
-from openhands.storage.data_models.settings import Settings
 from openhands.storage.data_models.secrets import Secrets
+from openhands.storage.data_models.settings import Settings
 from openhands.storage.memory import InMemoryFileStore
 from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.file_settings_store import FileSettingsStore
@@ -130,7 +134,6 @@ def test_get_conversation_settings_schema_endpoint(test_client):
 @pytest.mark.asyncio
 async def test_settings_api_endpoints(test_client):
     """Test that the settings API endpoints work with the new auth system."""
-
     settings = Settings(
         language='en',
         remote_runtime_resource_factor=2,
@@ -209,10 +212,12 @@ async def test_saving_settings_with_frozen_secrets_store(test_client):
 
     See https://github.com/OpenHands/OpenHands/issues/13306.
     """
-    payload = _dump(Settings(
-        language='en',
-        agent_settings=AgentSettings(llm=LLM(model='gpt-4')),
-    ))
+    payload = _dump(
+        Settings(
+            language='en',
+            agent_settings=AgentSettings(llm=LLM(model='gpt-4')),
+        )
+    )
     # Inject an extra key the API should ignore gracefully
     payload['secrets_store'] = {'provider_tokens': {}}
     response = test_client.post('/api/settings', json=payload)
@@ -224,10 +229,12 @@ async def test_search_api_key_explicit_clear(test_client):
     """Explicit empty search_api_key payloads should clear the stored secret."""
     response = test_client.post(
         '/api/settings',
-        json=_dump(Settings(
-            search_api_key='initial-secret-key',
-            agent_settings=AgentSettings(llm=LLM(model='gpt-4')),
-        )),
+        json=_dump(
+            Settings(
+                search_api_key='initial-secret-key',
+                agent_settings=AgentSettings(llm=LLM(model='gpt-4')),
+            )
+        ),
     )
     assert response.status_code == 200
 
@@ -237,10 +244,12 @@ async def test_search_api_key_explicit_clear(test_client):
 
     response = test_client.post(
         '/api/settings',
-        json=_dump(Settings(
-            search_api_key='',
-            agent_settings=AgentSettings(llm=LLM(model='claude-3-opus')),
-        )),
+        json=_dump(
+            Settings(
+                search_api_key='',
+                agent_settings=AgentSettings(llm=LLM(model='claude-3-opus')),
+            )
+        ),
     )
     assert response.status_code == 200
 
@@ -255,10 +264,12 @@ async def test_disabled_skills_persistence(test_client):
     """Test that disabled_skills can be saved and retrieved via the settings API."""
     response = test_client.post(
         '/api/settings',
-        json=_dump(Settings(
-            disabled_skills=['skill_a', 'skill_b'],
-            agent_settings=AgentSettings(llm=LLM(model='test-model')),
-        )),
+        json=_dump(
+            Settings(
+                disabled_skills=['skill_a', 'skill_b'],
+                agent_settings=AgentSettings(llm=LLM(model='test-model')),
+            )
+        ),
     )
     assert response.status_code == 200
 

@@ -24,8 +24,7 @@ from openhands.app_server.app_conversation.app_conversation_service import (
     AppConversationService,
 )
 from openhands.app_server.sandbox.sandbox_models import SandboxStatus
-from openhands.core.config.mcp_config import MCPConfig
-from openhands.core.config.mcp_config import MCPStdioServerConfig as StdioServer
+from openhands.core.config.mcp_config import MCPConfig, StdioMCPServer
 from openhands.microagent.microagent import KnowledgeMicroagent, RepoMicroagent
 from openhands.microagent.types import MicroagentMetadata, MicroagentType
 from openhands.runtime.runtime_status import RuntimeStatus
@@ -71,8 +70,8 @@ async def test_get_microagents():
             inputs=[],  # Empty inputs to match the expected behavior
             mcp_tools=MCPConfig(
                 mcpServers={
-                    'git': StdioServer(command='git'),
-                    'file_editor': StdioServer(command='editor'),
+                    'git': StdioMCPServer(command='git'),
+                    'file_editor': StdioMCPServer(command='editor'),
                 }
             ),
         ),
@@ -90,8 +89,8 @@ async def test_get_microagents():
             inputs=[],  # Empty inputs to match the expected behavior
             mcp_tools=MCPConfig(
                 mcpServers={
-                    'search': StdioServer(command='search'),
-                    'fetch': StdioServer(command='fetch'),
+                    'search': StdioMCPServer(command='search'),
+                    'fetch': StdioMCPServer(command='fetch'),
                 }
             ),
         ),

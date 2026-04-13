@@ -12,8 +12,8 @@ from mcp import McpError
 
 from openhands.core.config.mcp_config import (
     MCPConfig,
-    MCPRemoteServerConfig,
-    MCPStdioServerConfig,
+    RemoteMCPServer,
+    StdioMCPServer,
 )
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action.mcp import MCPAction
@@ -88,7 +88,7 @@ async def create_mcp_clients(
     mcp_clients: list[MCPClient] = []
 
     for name, server in mcp_config.mcpServers.items():
-        if isinstance(server, MCPStdioServerConfig):
+        if isinstance(server, StdioMCPServer):
             if not shutil.which(server.command):
                 logger.error(
                     f'Skipping MCP stdio server "{name}": command "{server.command}" not found. '
@@ -115,7 +115,7 @@ async def create_mcp_clients(
                 )
             continue
 
-        if isinstance(server, MCPRemoteServerConfig):
+        if isinstance(server, RemoteMCPServer):
             transport = server.transport or 'http'
             logger.info(
                 f'Initializing MCP agent for {redact_text_secrets(str(server))} with {transport} connection...'
@@ -287,13 +287,13 @@ async def add_mcp_tools_to_agent(
         'Runtime must be initialized before adding MCP tools'
     )
 
-    extra_stdio_servers: dict[str, MCPStdioServerConfig] = {}
+    extra_stdio_servers: dict[str, StdioMCPServer] = {}
 
     # Add microagent MCP tools if available
     microagent_mcp_configs = memory.get_microagent_mcp_tools()
     for mcp_cfg in microagent_mcp_configs:
         for name, server in mcp_cfg.mcpServers.items():
-            if isinstance(server, MCPStdioServerConfig):
+            if isinstance(server, StdioMCPServer):
                 if name not in extra_stdio_servers:
                     extra_stdio_servers[name] = server
                     logger.warning(f'Added microagent stdio server: {name}')
