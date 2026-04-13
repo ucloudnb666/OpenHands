@@ -166,7 +166,6 @@ class TestLiveStatusAppConversationService:
             confirmation_mode=False,
             security_analyzer='llm',
             search_api_key=None,
-            condenser_max_size=None,
             mcp_config=None,
             agent_settings={},
             disabled_skills=[],
@@ -938,7 +937,6 @@ class TestLiveStatusAppConversationService:
             AgentType.PLAN,
             'Test suffix',
             mcp_config,
-            condenser_max_size=None,
             working_dir='/workspace/project',
             git_provider=ProviderType.GITHUB,
         )
@@ -965,7 +963,6 @@ class TestLiveStatusAppConversationService:
             AgentType.DEFAULT,
             None,
             {},
-            condenser_max_size=None,
         )
 
         assert agent.system_prompt_kwargs['cli_mode'] is False
@@ -2246,7 +2243,6 @@ class TestPluginHandling:
             llm_api_key='test_api_key',
             confirmation_mode=False,
             search_api_key=None,
-            condenser_max_size=None,
             mcp_config=None,
             security_analyzer=None,
             agent_settings={},

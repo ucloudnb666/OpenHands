@@ -14,12 +14,20 @@ from openhands.integrations.service_types import ProviderType
 from openhands.server.routes.secrets import (
     app as secrets_router,
 )
-from openhands.server.routes.settings import _apply_settings_payload
 from openhands.server.settings import POSTProviderModel
 from openhands.storage import get_file_store
 from openhands.storage.data_models.secrets import Secrets
 from openhands.storage.data_models.settings import Settings
 from openhands.storage.secrets.file_secrets_store import FileSecretsStore
+
+
+def _apply_settings_payload(
+    payload: dict, existing_settings: Settings | None
+) -> Settings:
+    """Test helper — mirrors the inlined logic in the settings route."""
+    settings = existing_settings.model_copy() if existing_settings else Settings()
+    settings.update(payload)
+    return settings
 
 
 def _make_settings(agent_settings: dict[str, Any] | None = None) -> Settings:

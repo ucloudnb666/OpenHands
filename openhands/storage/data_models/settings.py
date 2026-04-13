@@ -251,14 +251,18 @@ class Settings(BaseModel):
         if isinstance(secrets_store, dict):
             custom_secrets = secrets_store.get('custom_secrets')
             tokens = secrets_store.get('provider_tokens')
-            secret_store = Secrets(provider_tokens={}, custom_secrets={})  # type: ignore[arg-type]
+            secret_store = Secrets.model_validate(
+                {'provider_tokens': {}, 'custom_secrets': {}}
+            )
             if isinstance(tokens, dict):
-                converted_store = Secrets(provider_tokens=tokens)  # type: ignore[arg-type]
+                converted_store = Secrets.model_validate({'provider_tokens': tokens})
                 secret_store = secret_store.model_copy(
                     update={'provider_tokens': converted_store.provider_tokens}
                 )
             if isinstance(custom_secrets, dict):
-                converted_store = Secrets(custom_secrets=custom_secrets)  # type: ignore[arg-type]
+                converted_store = Secrets.model_validate(
+                    {'custom_secrets': custom_secrets}
+                )
                 secret_store = secret_store.model_copy(
                     update={'custom_secrets': converted_store.custom_secrets}
                 )
@@ -299,11 +303,13 @@ class Settings(BaseModel):
             remote_runtime_resource_factor=app_config.sandbox.remote_runtime_resource_factor,
             search_api_key=app_config.search_api_key,
             max_budget_per_task=app_config.max_budget_per_task,
-            agent_settings=agent_settings_dict,  # type: ignore[arg-type]
-            conversation_settings=ConversationSettings(
-                confirmation_mode=bool(app_config.security.confirmation_mode),
-                security_analyzer=app_config.security.security_analyzer,  # type: ignore[arg-type]
-                max_iterations=app_config.max_iterations,
+            agent_settings=AgentSettings(**agent_settings_dict),
+            conversation_settings=ConversationSettings.model_validate(
+                {
+                    'confirmation_mode': bool(app_config.security.confirmation_mode),
+                    'security_analyzer': app_config.security.security_analyzer,
+                    'max_iterations': app_config.max_iterations,
+                }
             ),
         )
 
@@ -325,3 +331,17 @@ class Settings(BaseModel):
 
     def to_agent_settings(self) -> AgentSettings:
         return self.agent_settings
+
+    def get_agent_settings_display(self) -> dict[str, Any]:
+        """Return agent_settings dict with display-friendly model names.
+
+        ``litellm_proxy/`` prefixes are normalised to ``openhands/``.
+        Secrets are masked by Pydantic's default serialiser.
+        """
+        data = self.agent_settings.model_dump(mode='json')
+        llm = data.get('llm')
+        if isinstance(llm, dict):
+            model = llm.get('model')
+            if isinstance(model, str) and model.startswith('litellm_proxy/'):
+                llm['model'] = f'openhands/{model.removeprefix("litellm_proxy/")}'
+        return data

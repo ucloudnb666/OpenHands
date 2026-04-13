@@ -10,6 +10,8 @@ import uuid
 from types import MappingProxyType
 from typing import Any
 
+from pydantic import SecretStr
+
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action.message import MessageAction
@@ -113,11 +115,11 @@ async def start_conversation(
         is_bedrock_model = model_name.startswith('bedrock/')
         is_lemonade_model = model_name.startswith('lemonade/')
 
-        key_value: str | None = (
-            llm_api_key.get_secret_value()  # type: ignore[union-attr]
-            if llm_api_key
-            else None
-        )
+        key_value: str | None = None
+        if isinstance(llm_api_key, SecretStr):
+            key_value = llm_api_key.get_secret_value()
+        elif isinstance(llm_api_key, str):
+            key_value = llm_api_key
         if (
             not is_bedrock_model
             and not is_lemonade_model

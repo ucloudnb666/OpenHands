@@ -120,107 +120,6 @@ def test_get_conversation_settings_schema_endpoint(test_client):
 @pytest.mark.asyncio
 async def test_settings_api_endpoints(test_client):
     """Test that the settings API endpoints work with the new auth system."""
-    agent_settings_schema = {
-        'model_name': 'AgentSettings',
-        'sections': [
-            {
-                'key': 'llm',
-                'label': 'LLM',
-                'fields': [
-                    {
-                        'key': 'llm.model',
-                        'value_type': 'string',
-                        'prominence': 'critical',
-                    },
-                    {
-                        'key': 'llm.base_url',
-                        'value_type': 'string',
-                        'prominence': 'major',
-                    },
-                    {
-                        'key': 'llm.timeout',
-                        'value_type': 'integer',
-                        'prominence': 'minor',
-                    },
-                    {
-                        'key': 'llm.litellm_extra_body',
-                        'value_type': 'object',
-                        'prominence': 'minor',
-                    },
-                    {
-                        'key': 'llm.api_key',
-                        'value_type': 'string',
-                        'prominence': 'critical',
-                        'secret': True,
-                    },
-                ],
-            },
-            {
-                'key': 'verification',
-                'label': 'Verification',
-                'fields': [
-                    {
-                        'key': 'verification.critic_enabled',
-                        'value_type': 'boolean',
-                        'prominence': 'critical',
-                    },
-                    {
-                        'key': 'verification.critic_mode',
-                        'value_type': 'string',
-                        'prominence': 'minor',
-                    },
-                    {
-                        'key': 'verification.enable_iterative_refinement',
-                        'value_type': 'boolean',
-                        'prominence': 'major',
-                    },
-                    {
-                        'key': 'verification.critic_threshold',
-                        'value_type': 'number',
-                        'prominence': 'minor',
-                    },
-                    {
-                        'key': 'verification.max_refinement_iterations',
-                        'value_type': 'integer',
-                        'prominence': 'minor',
-                    },
-                ],
-            },
-        ],
-    }
-
-    conversation_settings_schema = {
-        'model_name': 'ConversationSettings',
-        'sections': [
-            {
-                'key': 'general',
-                'label': 'General',
-                'fields': [
-                    {
-                        'key': 'max_iterations',
-                        'value_type': 'integer',
-                        'prominence': 'major',
-                    },
-                ],
-            },
-            {
-                'key': 'verification',
-                'label': 'Verification',
-                'fields': [
-                    {
-                        'key': 'confirmation_mode',
-                        'value_type': 'boolean',
-                        'prominence': 'major',
-                    },
-                    {
-                        'key': 'security_analyzer',
-                        'value_type': 'string',
-                        'prominence': 'major',
-                    },
-                ],
-            },
-        ],
-    }
 
     # Test data using nested format
     settings_data = {
@@ -250,64 +149,54 @@ async def test_settings_api_endpoints(test_client):
         },
     }
 
-    with (
-        patch(
-            'openhands.server.routes.settings._get_agent_settings_schema',
-            return_value=agent_settings_schema,
-        ),
-        patch(
-            'openhands.server.routes.settings._get_conversation_settings_schema',
-            return_value=conversation_settings_schema,
-        ),
-    ):
-        # Make the POST request to store settings
-        response = test_client.post('/api/settings', json=settings_data)
+    # Make the POST request to store settings
+    response = test_client.post('/api/settings', json=settings_data)
 
-        # We're not checking the exact response, just that it doesn't error
-        assert response.status_code == 200
+    # We're not checking the exact response, just that it doesn't error
+    assert response.status_code == 200
 
-        # Test the GET settings endpoint
-        response = test_client.get('/api/settings')
-        assert response.status_code == 200
-        response_data = response.json()
-        assert 'agent_settings_schema' not in response_data
-        vals = response_data['agent_settings']
-        assert vals['llm']['model'] == 'test-model'
-        assert vals['llm']['timeout'] == 123
-        assert vals['llm']['litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
-        assert vals['verification']['critic_enabled'] is True
-        assert vals['verification']['critic_mode'] == 'all_actions'
-        assert vals['verification']['enable_iterative_refinement'] is True
-        assert vals['verification']['critic_threshold'] == 0.7
-        assert vals['verification']['max_refinement_iterations'] == 4
-        cs = response_data['conversation_settings']
-        assert cs['confirmation_mode'] is True
-        assert cs['security_analyzer'] == 'llm'
-        assert cs == {
-            'schema_version': 1,
-            'max_iterations': 100,
-            'confirmation_mode': True,
-            'security_analyzer': 'llm',
-        }
-        assert vals['llm']['api_key'] == '**********'
+    # Test the GET settings endpoint
+    response = test_client.get('/api/settings')
+    assert response.status_code == 200
+    response_data = response.json()
+    assert 'agent_settings_schema' not in response_data
+    vals = response_data['agent_settings']
+    assert vals['llm']['model'] == 'test-model'
+    assert vals['llm']['timeout'] == 123
+    assert vals['llm']['litellm_extra_body'] == {'metadata': {'tier': 'pro'}}
+    assert vals['verification']['critic_enabled'] is True
+    assert vals['verification']['critic_mode'] == 'all_actions'
+    assert vals['verification']['enable_iterative_refinement'] is True
+    assert vals['verification']['critic_threshold'] == 0.7
+    assert vals['verification']['max_refinement_iterations'] == 4
+    cs = response_data['conversation_settings']
+    assert cs['confirmation_mode'] is True
+    assert cs['security_analyzer'] == 'llm'
+    assert cs == {
+        'schema_version': 1,
+        'max_iterations': 100,
+        'confirmation_mode': True,
+        'security_analyzer': 'llm',
+    }
+    assert vals['llm']['api_key'] == '**********'
 
-        # Test updating with partial settings
-        partial_settings = {
-            'language': 'fr',
-            'llm_model': None,  # Should preserve existing value
-            'llm_api_key': None,  # Should preserve existing value
-        }
+    # Test updating with partial settings
+    partial_settings = {
+        'language': 'fr',
+        'llm_model': None,  # Should preserve existing value
+        'llm_api_key': None,  # Should preserve existing value
+    }
 
-        response = test_client.post('/api/settings', json=partial_settings)
-        assert response.status_code == 200
+    response = test_client.post('/api/settings', json=partial_settings)
+    assert response.status_code == 200
 
-        response = test_client.get('/api/settings')
-        assert response.status_code == 200
-        assert response.json()['agent_settings']['llm']['timeout'] == 123
+    response = test_client.get('/api/settings')
+    assert response.status_code == 200
+    assert response.json()['agent_settings']['llm']['timeout'] == 123
 
-        # Test the unset-provider-tokens endpoint
-        response = test_client.post('/api/unset-provider-tokens')
-        assert response.status_code == 200
+    # Test the unset-provider-tokens endpoint
+    response = test_client.post('/api/unset-provider-tokens')
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio

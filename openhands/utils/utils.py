@@ -1,6 +1,8 @@
 import os
 from copy import deepcopy
 
+from pydantic import SecretStr
+
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.server.services.conversation_stats import ConversationStats
@@ -16,7 +18,11 @@ def setup_llm_config(config: OpenHandsConfig, settings: Settings) -> OpenHandsCo
     agent_settings = settings.agent_settings
     llm_config = config.get_llm_config()
     llm_config.model = agent_settings.llm.model
-    llm_config.api_key = settings.agent_settings.llm.api_key  # type: ignore[assignment]
+    raw_key = settings.agent_settings.llm.api_key
+    if isinstance(raw_key, str):
+        llm_config.api_key = SecretStr(raw_key)
+    else:
+        llm_config.api_key = raw_key
     env_base_url = os.environ.get('LLM_BASE_URL')
     settings_base_url = agent_settings.llm.base_url
 

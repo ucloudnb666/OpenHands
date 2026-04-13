@@ -91,6 +91,7 @@ from openhands.sdk.hooks import HookConfig
 from openhands.sdk.llm import LLM
 from openhands.sdk.plugin import PluginSource
 from openhands.sdk.secret import LookupSecret, SecretValue, StaticSecret
+from openhands.sdk.settings import AgentSettings
 from openhands.sdk.utils.paging import page_iterator
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 from openhands.server.types import AppMode
@@ -1052,25 +1053,13 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         return llm, mcp_config
 
-    def _create_llm_summarizing_condenser(
-        self, llm: LLM, condenser_max_size: int | None
-    ):
-        from openhands.sdk.context.condenser.llm_summarizing_condenser import (
-            LLMSummarizingCondenser,
-        )
-
-        if condenser_max_size is None:
-            return LLMSummarizingCondenser(llm=llm)
-
-        return LLMSummarizingCondenser(llm=llm, max_size=condenser_max_size)
-
     def _create_agent_with_context(
         self,
         llm: LLM,
         agent_type: AgentType,
         system_message_suffix: str | None,
         mcp_config: dict,
-        condenser_max_size: int | None,
+        agent_settings: AgentSettings,
         secrets: dict[str, SecretValue] | None = None,
         git_provider: ProviderType | None = None,
         working_dir: str | None = None,
@@ -1082,7 +1071,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             agent_type: Type of agent to create (PLAN or DEFAULT)
             system_message_suffix: Optional suffix for system messages
             mcp_config: MCP configuration dictionary
-            condenser_max_size: condenser_max_size setting
+            agent_settings: SDK AgentSettings (used to build condenser)
             secrets: Optional dictionary of secrets for authentication
             git_provider: Optional git provider type for computing plan path
             working_dir: Optional working directory for computing plan path
@@ -1090,8 +1079,8 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         Returns:
             Configured Agent instance with context
         """
-        # Create condenser with user's settings
-        condenser = self._create_llm_summarizing_condenser(llm, condenser_max_size)
+        # Build condenser from SDK AgentSettings
+        condenser = agent_settings.build_condenser(llm)
 
         # Create agent based on type
         if agent_type == AgentType.PLAN:
@@ -1457,7 +1446,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             agent_type,
             system_message_suffix,
             mcp_config,
-            user.agent_settings.condenser.max_size,
+            user.agent_settings,
             secrets=secrets,
             git_provider=git_provider,
             working_dir=project_dir,

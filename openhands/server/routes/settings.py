@@ -32,57 +32,17 @@ from openhands.storage.data_models.settings import Settings
 from openhands.storage.secrets.secrets_store import SecretsStore
 from openhands.storage.settings.settings_store import SettingsStore
 
-
-def _extract_agent_settings(settings: Settings) -> dict[str, Any]:
-    """Build the nested agent_settings dict for the GET response.
-
-    Model names with ``litellm_proxy/`` prefix are normalised to ``openhands/``
-    for display purposes. Secrets are masked by Pydantic's default serialiser.
-    """
-    data = settings.agent_settings.model_dump(mode='json')
-    llm = data.get('llm')
-    if isinstance(llm, dict):
-        model = llm.get('model')
-        if isinstance(model, str) and model.startswith('litellm_proxy/'):
-            llm['model'] = f'openhands/{model.removeprefix("litellm_proxy/")}'
-    return data
-
-
-def _apply_settings_payload(
-    payload: dict[str, Any],
-    existing_settings: Settings | None,
-) -> Settings:
-    """Apply an incoming settings payload using Settings.update().
-
-    Expects ``agent_settings`` and ``conversation_settings`` as nested dicts.
-    Everything else is a top-level Settings field.
-    """
-    settings = existing_settings.model_copy() if existing_settings else Settings()
-    settings.update(payload)
-    return settings
-
-
-def _get_agent_settings_schema() -> dict[str, Any]:
-    """Return the SDK agent settings schema for the legacy V0 settings API."""
-    return AgentSettings.export_schema().model_dump(mode='json')
-
-
-def _get_conversation_settings_schema() -> dict[str, Any]:
-    """Return the SDK conversation settings schema for the legacy V0 settings API."""
-    return ConversationSettings.export_schema().model_dump(mode='json')
-
-
 app = APIRouter(prefix='/api', dependencies=get_dependencies())
 
 
 @app.get('/settings/agent-schema', deprecated=True)
 async def load_settings_schema() -> dict[str, Any]:
-    return _get_agent_settings_schema()
+    return AgentSettings.export_schema().model_dump(mode='json')
 
 
 @app.get('/settings/conversation-schema', deprecated=True)
 async def load_conversation_settings_schema() -> dict[str, Any]:
-    return _get_conversation_settings_schema()
+    return ConversationSettings.export_schema().model_dump(mode='json')
 
 
 @app.get(
@@ -121,7 +81,7 @@ async def load_settings(
                 if provider_token.token or provider_token.user_id:
                     provider_tokens_set[provider_type.value] = provider_token.host
 
-        agent_vals = _extract_agent_settings(settings)
+        agent_vals = settings.get_agent_settings_display()
         settings_payload = settings.model_dump(
             mode='json', exclude={'agent_settings', 'conversation_settings'}
         )
@@ -168,7 +128,8 @@ async def store_settings(
 ) -> JSONResponse:
     try:
         existing_settings = await settings_store.load()
-        settings = _apply_settings_payload(payload, existing_settings)
+        settings = existing_settings.model_copy() if existing_settings else Settings()
+        settings.update(payload)
 
         if existing_settings:
             if 'search_api_key' not in payload and settings.search_api_key is None:
