@@ -3,9 +3,9 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+from integrations.utils import get_summary_instruction
 from pydantic import Field
 
-from integrations.utils import get_summary_instruction
 from openhands.agent_server.models import AskAgentRequest, AskAgentResponse
 from openhands.app_server.event_callback.event_callback_models import (
     EventCallback,
