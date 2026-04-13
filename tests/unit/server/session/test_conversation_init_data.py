@@ -11,6 +11,7 @@ import pytest
 from pydantic import SecretStr
 
 from openhands.integrations.provider import CustomSecret, ProviderToken, ProviderType
+from openhands.sdk.settings import AGENT_SETTINGS_SCHEMA_VERSION
 from openhands.server.session.conversation_init_data import ConversationInitData
 from openhands.storage.data_models.settings import Settings
 
@@ -277,7 +278,7 @@ def test_conversation_init_data_default_agent_settings_initializes():
     """Frozen subclasses should still normalize default agent_settings."""
     init_data = ConversationInitData()
 
-    assert init_data.agent_settings.schema_version == 1
+    assert init_data.agent_settings.schema_version == AGENT_SETTINGS_SCHEMA_VERSION
     assert init_data.agent_settings.agent == 'CodeActAgent'
 
 

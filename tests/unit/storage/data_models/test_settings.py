@@ -9,7 +9,11 @@ from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.core.config.sandbox_config import SandboxConfig
 from openhands.core.config.security_config import SecurityConfig
 from openhands.sdk.llm import LLM
-from openhands.sdk.settings import AgentSettings, ConversationSettings
+from openhands.sdk.settings import (
+    AGENT_SETTINGS_SCHEMA_VERSION,
+    AgentSettings,
+    ConversationSettings,
+)
 from openhands.sdk.settings.model import CondenserSettings, VerificationSettings
 from openhands.storage.data_models.settings import Settings
 
@@ -136,7 +140,7 @@ def test_settings_preserve_agent_settings():
         mode='json', context={'expose_secrets': True}
     )
 
-    assert dump['schema_version'] == 1
+    assert dump['schema_version'] == AGENT_SETTINGS_SCHEMA_VERSION
     assert dump['llm']['model'] == 'test-model'
     assert dump['llm']['api_key'] == 'test-key'
     assert dump['verification']['critic_enabled'] is True
