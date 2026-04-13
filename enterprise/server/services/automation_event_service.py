@@ -25,13 +25,13 @@ from typing import Any
 from uuid import UUID
 
 import aiohttp
+from integrations.resolver_org_router import resolve_org_for_repo
 from server.auth.constants import (
     AUTOMATION_SERVICE_TIMEOUT,
     AUTOMATION_SERVICE_URL,
     AUTOMATION_WEBHOOK_SECRET,
 )
 from server.auth.token_manager import TokenManager
-from storage.org_git_claim_store import OrgGitClaimStore
 
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderType
@@ -221,18 +221,19 @@ class AutomationEventService:
             )
             return UUID(cached)
 
-        # Cache miss - query DB (using normalized lowercase org name)
-        claim = await OrgGitClaimStore.get_claim_by_provider_and_git_org(
+        # Cache miss - use resolve_org_for_repo without user_id (no membership check)
+        # Construct a minimal repo name since resolve_org_for_repo extracts the org
+        org_id = await resolve_org_for_repo(
             provider='github',
-            git_organization=normalized_org,
+            full_repo_name=f'{normalized_org}/',
         )
 
         # Cache the result (including negative results)
-        if claim:
+        if org_id:
             await self._set_cached_value(
-                cache_key, str(claim.org_id), ORG_CLAIM_CACHE_TTL_SECONDS
+                cache_key, str(org_id), ORG_CLAIM_CACHE_TTL_SECONDS
             )
-            return claim.org_id
+            return org_id
         else:
             # Cache negative result to avoid repeated DB queries
             await self._set_cached_value(cache_key, 'none', ORG_CLAIM_CACHE_TTL_SECONDS)
