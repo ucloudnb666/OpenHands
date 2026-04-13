@@ -13,15 +13,15 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from openhands.agent_server.models import EventPage, EventSortOrder
+from openhands.sdk import Event
+from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
 from server.sharing.shared_event_service import (
     SharedEventService,
     SharedEventServiceInjector,
 )
 
-from openhands.agent_server.models import EventPage, EventSortOrder
 from openhands.app_server.event_callback.event_callback_models import EventKind
-from openhands.sdk import Event
-from openhands.sdk.event.conversation_state import ConversationStateUpdateEvent
 from openhands.utils.environment import StorageProvider, get_storage_provider
 
 
@@ -62,42 +62,42 @@ def get_shared_event_service_injector() -> SharedEventServiceInjector:
         return GoogleCloudSharedEventServiceInjector()
 
 
-router = APIRouter(prefix="/api/shared-events", tags=["Sharing"])
+router = APIRouter(prefix='/api/shared-events', tags=['Sharing'])
 shared_event_service_dependency = Depends(get_shared_event_service_injector().depends)
 
 
 # Read methods
 
 
-@router.get("/search")
+@router.get('/search')
 async def search_shared_events(
     conversation_id: Annotated[
         str,
-        Query(title="Conversation ID to search events for"),
+        Query(title='Conversation ID to search events for'),
     ],
     kind__eq: Annotated[
         EventKind | None,
-        Query(title="Optional filter by event kind"),
+        Query(title='Optional filter by event kind'),
     ] = None,
     timestamp__gte: Annotated[
         datetime | None,
-        Query(title="Optional filter by timestamp greater than or equal to"),
+        Query(title='Optional filter by timestamp greater than or equal to'),
     ] = None,
     timestamp__lt: Annotated[
         datetime | None,
-        Query(title="Optional filter by timestamp less than"),
+        Query(title='Optional filter by timestamp less than'),
     ] = None,
     sort_order: Annotated[
         EventSortOrder,
-        Query(title="Sort order for results"),
+        Query(title='Sort order for results'),
     ] = EventSortOrder.TIMESTAMP,
     page_id: Annotated[
         str | None,
-        Query(title="Optional next_page_id from the previously returned page"),
+        Query(title='Optional next_page_id from the previously returned page'),
     ] = None,
     limit: Annotated[
         int,
-        Query(title="The max number of results in the page", gt=0, le=100),
+        Query(title='The max number of results in the page', gt=0, le=100),
     ] = 100,
     shared_event_service: SharedEventService = shared_event_service_dependency,
 ) -> EventPage:
@@ -134,23 +134,23 @@ async def search_shared_events(
     )
 
 
-@router.get("/count")
+@router.get('/count')
 async def count_shared_events(
     conversation_id: Annotated[
         str,
-        Query(title="Conversation ID to count events for"),
+        Query(title='Conversation ID to count events for'),
     ],
     kind__eq: Annotated[
         EventKind | None,
-        Query(title="Optional filter by event kind"),
+        Query(title='Optional filter by event kind'),
     ] = None,
     timestamp__gte: Annotated[
         datetime | None,
-        Query(title="Optional filter by timestamp greater than or equal to"),
+        Query(title='Optional filter by timestamp greater than or equal to'),
     ] = None,
     timestamp__lt: Annotated[
         datetime | None,
-        Query(title="Optional filter by timestamp less than"),
+        Query(title='Optional filter by timestamp less than'),
     ] = None,
     shared_event_service: SharedEventService = shared_event_service_dependency,
 ) -> int:
@@ -163,11 +163,11 @@ async def count_shared_events(
     )
 
 
-@router.get("")
+@router.get('')
 async def batch_get_shared_events(
     conversation_id: Annotated[
         str,
-        Query(title="Conversation ID to get events for"),
+        Query(title='Conversation ID to get events for'),
     ],
     id: Annotated[list[str], Query()],
     shared_event_service: SharedEventService = shared_event_service_dependency,
@@ -176,7 +176,7 @@ async def batch_get_shared_events(
     if len(id) > 100:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot request more than 100 events at once, got {len(id)}",
+            detail=f'Cannot request more than 100 events at once, got {len(id)}',
         )
     event_ids = [UUID(id_) for id_ in id]
     events = await shared_event_service.batch_get_shared_events(
@@ -185,7 +185,7 @@ async def batch_get_shared_events(
     return [e if e is not None and _is_viewable(e) else None for e in events]
 
 
-@router.get("/{conversation_id}/{event_id}")
+@router.get('/{conversation_id}/{event_id}')
 async def get_shared_event(
     conversation_id: str,
     event_id: str,
