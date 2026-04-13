@@ -21,11 +21,10 @@ from integrations.resolver_org_router import resolve_org_for_repo
 from integrations.utils import (
     CONVERSATION_URL,
     ENABLE_V1_JIRA_RESOLVER,
-    infer_repo_from_message,
     get_user_v1_enabled_setting,
+    infer_repo_from_message,
 )
 from jinja2 import Environment
-from pydantic import Field
 from server.config import get_config
 from storage.jira_conversation import JiraConversation
 from storage.jira_integration_store import JiraIntegrationStore
@@ -202,9 +201,7 @@ class JiraNewConversationView(JiraViewInterface):
         if self.v1_enabled:
             # Use V1 app conversation service
             conversation_metadata = await self._create_v1_metadata()
-            await self._create_v1_conversation(
-                jinja_env, conversation_metadata
-            )
+            await self._create_v1_conversation(jinja_env, conversation_metadata)
             return self.conversation_id
 
         # V0 conversation creation
@@ -419,9 +416,7 @@ class JiraNewConversationView(JiraViewInterface):
 
         try:
             provider_handler = ProviderHandler(provider_tokens)
-            repository = await provider_handler.verify_repo_provider(
-                self.selected_repo
-            )
+            repository = await provider_handler.verify_repo_provider(self.selected_repo)
             resolved_org_id = await resolve_org_for_repo(
                 provider=repository.git_provider.value,
                 full_repo_name=self.selected_repo,
@@ -636,9 +631,7 @@ class JiraFactory:
         user_id = user.keycloak_user_id
         view.v1_enabled = await is_v1_enabled_for_jira_resolver(user_id)
 
-        logger.info(
-            f'[Jira V1]: User flag found for {user_id} is {view.v1_enabled}'
-        )
+        logger.info(f'[Jira V1]: User flag found for {user_id} is {view.v1_enabled}')
 
         # Fetch issue details (needed for repo inference)
         try:

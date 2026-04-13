@@ -81,7 +81,9 @@ class JiraV1CallbackProcessor(EventCallbackProcessor):
     async def _request_summary(self, conversation_id: UUID) -> str:
         """Request the conversation summary."""
         from openhands.app_server.config import get_agent_server_url_from_conversation
-        from openhands.app_server.event_callback.util import get_agent_server_url_from_sandbox
+        from openhands.app_server.event_callback.util import (
+            get_agent_server_url_from_sandbox,
+        )
 
         agent_server_url = await get_agent_server_url_from_conversation(
             str(conversation_id)
@@ -124,9 +126,9 @@ class JiraV1CallbackProcessor(EventCallbackProcessor):
                                 'type': 'text',
                                 'text': f'OpenHands resolved this issue:\n\n{summary}',
                             }
-                        ]
+                        ],
                     }
-                ]
+                ],
             }
         }
 
