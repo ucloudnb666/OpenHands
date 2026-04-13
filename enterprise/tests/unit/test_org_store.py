@@ -306,7 +306,10 @@ def test_get_kwargs_from_settings():
     assert 'agent' not in kwargs
     assert 'default_llm_model' not in kwargs
     assert kwargs['agent_settings']['agent'] == 'CodeActAgent'
-    assert kwargs['agent_settings']['llm']['model'] == 'anthropic/claude-sonnet-4-5-20250929'
+    assert (
+        kwargs['agent_settings']['llm']['model']
+        == 'anthropic/claude-sonnet-4-5-20250929'
+    )
     # Should not include fields that don't exist in Org model
     assert 'language' not in kwargs  # language is not in Org model
     assert 'llm_api_key' not in kwargs
