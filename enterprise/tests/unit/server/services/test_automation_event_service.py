@@ -118,9 +118,9 @@ class TestResolveGithubOrg:
         mock_redis.setex = AsyncMock()
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
-            return_value=mock_org_git_claim,
+            return_value=mock_org_git_claim.org_id,
         ), patch('server.services.automation_event_service.sio') as mock_sio:
             mock_sio.manager.redis = mock_redis
 
@@ -136,24 +136,26 @@ class TestResolveGithubOrg:
         """
         GIVEN: Org ID is cached in Redis
         WHEN: _resolve_github_org is called
-        THEN: Cached value is returned without DB query
+        THEN: Cached value is returned without calling resolve_org_for_repo
         """
         cached_org_id = '12345678-1234-5678-1234-567812345678'
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=cached_org_id.encode())
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
-        ) as mock_db, patch('server.services.automation_event_service.sio') as mock_sio:
+        ) as mock_resolver, patch(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio:
             mock_sio.manager.redis = mock_redis
 
             service = create_service(mock_token_manager)
             result = await service._resolve_github_org('test-org')
 
             assert result == uuid.UUID(cached_org_id)
-            # DB should NOT be queried
-            mock_db.assert_not_called()
+            # resolve_org_for_repo should NOT be called
+            mock_resolver.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_resolve_github_org_cache_miss_not_found(self, mock_token_manager):
@@ -167,7 +169,7 @@ class TestResolveGithubOrg:
         mock_redis.setex = AsyncMock()
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
             return_value=None,
         ), patch('server.services.automation_event_service.sio') as mock_sio:
@@ -188,22 +190,24 @@ class TestResolveGithubOrg:
         """
         GIVEN: Negative result is cached (org not claimed)
         WHEN: _resolve_github_org is called
-        THEN: None is returned without DB query
+        THEN: None is returned without calling resolve_org_for_repo
         """
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value=b'none')  # Cached negative
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
-        ) as mock_db, patch('server.services.automation_event_service.sio') as mock_sio:
+        ) as mock_resolver, patch(
+            'server.services.automation_event_service.sio'
+        ) as mock_sio:
             mock_sio.manager.redis = mock_redis
 
             service = create_service(mock_token_manager)
             result = await service._resolve_github_org('unclaimed-org')
 
             assert result is None
-            mock_db.assert_not_called()
+            mock_resolver.assert_not_called()
 
 
 class TestResolvePersonalOrg:
@@ -287,9 +291,9 @@ class TestForwardGithubEvent:
         mock_redis.setex = AsyncMock()
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
-            return_value=mock_org_git_claim,
+            return_value=mock_org_git_claim.org_id,
         ), patch(
             'server.services.automation_event_service.sio'
         ) as mock_sio, patch.object(
@@ -336,7 +340,7 @@ class TestForwardGithubEvent:
         mock_redis.setex = AsyncMock()
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
             return_value=None,  # No org claim for personal repo
         ), patch(
@@ -409,7 +413,7 @@ class TestForwardGithubEvent:
         mock_redis.setex = AsyncMock()
 
         with patch(
-            'server.services.automation_event_service.OrgGitClaimStore.get_claim_by_provider_and_git_org',
+            'server.services.automation_event_service.resolve_org_for_repo',
             new_callable=AsyncMock,
             return_value=None,
         ), patch('server.services.automation_event_service.sio') as mock_sio, patch(
