@@ -466,7 +466,9 @@ async def keycloak_callback(
         response = RedirectResponse(tos_redirect_url, status_code=302)
     else:
         # User has accepted TOS - check if they need onboarding
-        if await _should_redirect_to_onboarding(user_id, user):
+        # Only redirect to onboarding if user has a valid offline token,
+        # otherwise they need to complete the Keycloak offline token flow first
+        if valid_offline_token and await _should_redirect_to_onboarding(user_id, user):
             redirect_url = f'{web_url}/onboarding'
             logger.info(
                 'Redirecting returning user to onboarding',

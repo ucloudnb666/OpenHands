@@ -508,13 +508,13 @@ async def test_keycloak_callback_success_without_offline_token(
 
 
 @pytest.mark.asyncio
-async def test_keycloak_callback_early_return_when_offline_token_invalid(
+async def test_keycloak_callback_redirects_to_keycloak_when_offline_token_invalid(
     mock_request, create_keycloak_user_info
 ):
-    """Test that keycloak_callback returns early when offline token is invalid.
+    """Test that keycloak_callback redirects to Keycloak when offline token is invalid.
 
-    This ensures that invitation processing and TOS checks don't happen
-    when the user needs to go through the offline token flow first.
+    When a user doesn't have a valid offline token, they should be redirected
+    to Keycloak to obtain one, rather than proceeding with invitation processing.
     """
     with (
         patch('server.routes.auth.token_manager') as mock_token_manager,
