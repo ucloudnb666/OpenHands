@@ -6,6 +6,7 @@ import OptionService from "#/api/option-service/option-service.api";
 import { queryClient } from "#/query-client-config";
 import { SettingsLayout } from "#/components/features/settings";
 import { WebClientConfig } from "#/api/option-service/option.types";
+import { QUERY_KEYS } from "#/hooks/query/query-keys";
 import { Organization } from "#/types/org";
 import { Typography } from "#/ui/typography";
 import { useSettingsNavItems } from "#/hooks/use-settings-nav-items";
@@ -31,15 +32,24 @@ const SAAS_ONLY_PATHS = [
   "/settings/org",
 ];
 
+const CONFIG_STALE_TIME = 1000 * 60 * 5; // 5 minutes
+const CONFIG_GC_TIME = 1000 * 60 * 15; // 15 minutes
+
 export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const url = new URL(request.url);
   const { pathname } = url;
 
   // Step 1: Get config first (needed for all checks, no user data required)
-  let config = queryClient.getQueryData<WebClientConfig>(["web-client-config"]);
+  let config = queryClient.getQueryData<WebClientConfig>(
+    QUERY_KEYS.WEB_CLIENT_CONFIG,
+  );
   if (!config) {
-    config = await OptionService.getConfig();
-    queryClient.setQueryData<WebClientConfig>(["web-client-config"], config);
+    config = await queryClient.fetchQuery<WebClientConfig>({
+      queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
+      queryFn: OptionService.getConfig,
+      staleTime: CONFIG_STALE_TIME,
+      gcTime: CONFIG_GC_TIME,
+    });
   }
 
   const isSaas = config?.app_mode === "saas";
