@@ -37,16 +37,11 @@ export const clientLoader = async ({ request }: Route.ClientLoaderArgs) => {
   const { pathname } = url;
 
   // Step 1: Get config first (needed for all checks, no user data required)
-  let config = queryClient.getQueryData<WebClientConfig>(
-    QUERY_KEYS.WEB_CLIENT_CONFIG,
-  );
-  if (!config) {
-    config = await queryClient.fetchQuery<WebClientConfig>({
-      queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
-      queryFn: OptionService.getConfig,
-      ...CONFIG_CACHE_OPTIONS,
-    });
-  }
+  const config = await queryClient.fetchQuery<WebClientConfig>({
+    queryKey: QUERY_KEYS.WEB_CLIENT_CONFIG,
+    queryFn: OptionService.getConfig,
+    ...CONFIG_CACHE_OPTIONS,
+  });
 
   const isSaas = config?.app_mode === "saas";
   const featureFlags = config?.feature_flags;
