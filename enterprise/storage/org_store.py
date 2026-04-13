@@ -252,13 +252,14 @@ class OrgStore:
 
     @staticmethod
     def get_kwargs_from_settings(settings: Settings):
+        dumped = settings.model_dump(mode='json', context={'expose_secrets': True})
         kwargs = {
-            field: getattr(settings, field)
+            field: dumped[field]
             for field in _ORG_SETTINGS_FIELDS
-            if hasattr(settings, field)
+            if field in dumped
         }
-        kwargs['agent_settings'] = settings.agent_settings
-        kwargs['conversation_settings'] = settings.conversation_settings
+        kwargs['agent_settings'] = dumped['agent_settings']
+        kwargs['conversation_settings'] = dumped['conversation_settings']
         return kwargs
 
     @staticmethod
@@ -270,8 +271,11 @@ class OrgStore:
         }
         kwargs['org_version'] = user_settings.user_version
         full_settings = user_settings.to_settings()
-        kwargs['agent_settings'] = full_settings.agent_settings
-        kwargs['conversation_settings'] = full_settings.conversation_settings
+        dumped = full_settings.model_dump(
+            mode='json', context={'expose_secrets': True}
+        )
+        kwargs['agent_settings'] = dumped['agent_settings']
+        kwargs['conversation_settings'] = dumped['conversation_settings']
         return kwargs
 
     @staticmethod
