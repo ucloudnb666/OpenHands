@@ -1296,109 +1296,6 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             httpx_client=self.httpx_client,
         )
 
-    async def _finalize_conversation_request(
-        self,
-        agent: Agent,
-        conversation_id: UUID,
-        user: UserInfo,
-        workspace: LocalWorkspace,
-        initial_message: SendMessageRequest | None,
-        secrets: dict[str, SecretValue],
-        sandbox: SandboxInfo,
-        remote_workspace: AsyncRemoteWorkspace | None,
-        selected_repository: str | None,
-        working_dir: str,
-        plugins: list[PluginSpec] | None = None,
-    ) -> StartConversationRequest:
-        """Finalize the conversation request with skills and metadata.
-
-        Args:
-            agent: The configured agent
-            conversation_id: Conversation ID
-            user: User information
-            workspace: Local workspace instance
-            initial_message: Optional initial message for the conversation
-            secrets: Dictionary of secrets for authentication
-            sandbox: Sandbox information
-            remote_workspace: Optional remote workspace for skills loading
-            selected_repository: Optional repository name
-            working_dir: Working directory path
-            plugins: Optional list of plugin specifications to load
-
-        Returns:
-            Complete StartConversationRequest ready for use
-        """
-        # Update agent's LLM with litellm_extra_body metadata for tracing
-        agent = self._update_agent_with_llm_metadata(agent, conversation_id, user.id)
-
-        # Load and merge skills if remote workspace is available
-        hook_config: HookConfig | None = None
-        if remote_workspace:
-            try:
-                agent = await self._load_skills_and_update_agent(
-                    sandbox,
-                    agent,
-                    remote_workspace,
-                    selected_repository,
-                    working_dir,
-                    disabled_skills=user.disabled_skills,
-                )
-            except Exception as e:
-                _logger.warning(f'Failed to load skills: {e}', exc_info=True)
-                # Continue without skills - don't fail conversation startup
-
-            # Load hooks from workspace (.openhands/hooks.json)
-            # Note: working_dir is already the resolved project_dir
-            # (includes repo name when a repo is selected), so we pass
-            # it directly without appending the repo name again.
-            try:
-                _logger.debug(
-                    f'Attempting to load hooks from workspace: '
-                    f'project_dir={working_dir}'
-                )
-                hook_config = await self._load_hooks_from_workspace(
-                    remote_workspace, working_dir
-                )
-                if hook_config:
-                    _logger.debug(
-                        f'Successfully loaded hooks: {hook_config.model_dump()}'
-                    )
-                else:
-                    _logger.debug('No hooks found in workspace')
-            except Exception as e:
-                _logger.warning(f'Failed to load hooks: {e}', exc_info=True)
-                # Continue without hooks - don't fail conversation startup
-
-        # Incorporate plugin parameters into initial message if specified
-        final_initial_message = self._construct_initial_message_with_plugin_params(
-            initial_message, plugins
-        )
-
-        # Convert PluginSpec list to SDK PluginSource list for agent server
-        sdk_plugins: list[PluginSource] | None = None
-        if plugins:
-            sdk_plugins = [
-                PluginSource(
-                    source=p.source,
-                    ref=p.ref,
-                    repo_path=p.repo_path,
-                )
-                for p in plugins
-            ]
-
-        # Delegate confirmation_policy / security_analyzer / max_iterations
-        # construction to the SDK's ConversationSettings.create_request().
-        return user.conversation_settings.create_request(
-            StartConversationRequest,
-            conversation_id=conversation_id,
-            agent=agent,
-            workspace=workspace,
-            initial_message=final_initial_message,
-            secrets=secrets,
-            plugins=sdk_plugins,
-            hook_config=hook_config,
-        )
-
     async def _build_start_conversation_request_for_user(
         self,
         sandbox: SandboxInfo,
@@ -1413,32 +1310,29 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         selected_repository: str | None = None,
         plugins: list[PluginSpec] | None = None,
     ) -> StartConversationRequest:
-        """Build a complete conversation request for a user.
+        """Build a complete StartConversationRequest for a user.
 
-        This method orchestrates the creation of a conversation request by:
-        1. Setting up git provider secrets
-        2. Configuring LLM and MCP settings
-        3. Creating an agent with appropriate context
-        4. Finalizing the request with skills and metadata
-        5. Passing plugins to the agent server for remote plugin loading
+        Orchestrates every server-side concern (secrets, LLM, MCP, agent,
+        skills, hooks, plugins) and then delegates policy / analyzer /
+        max-iterations construction to the SDK's
+        ``ConversationSettings.create_request()``.
         """
         user = await self.user_context.get_user_info()
 
         # Compute the project root — this is the repo directory when a repo is
-        # selected, or the sandbox working_dir otherwise. All tools, hooks,
-        # setup scripts, and plan paths must use this consistently.
+        # selected, or the sandbox working_dir otherwise.
         project_dir = get_project_dir(working_dir, selected_repository)
         workspace = LocalWorkspace(working_dir=project_dir)
 
-        # Set up secrets for all git providers
+        # --- secrets --------------------------------------------------------
         secrets = await self._setup_secrets_for_git_providers(user)
 
-        # Configure LLM and MCP
+        # --- LLM + MCP -----------------------------------------------------
         llm, mcp_config = await self._configure_llm_and_mcp(
             user, llm_model, conversation_id
         )
 
-        # Create agent with context
+        # --- agent ----------------------------------------------------------
         agent = self._create_agent_with_context(
             llm,
             agent_type,
@@ -1450,19 +1344,66 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             working_dir=project_dir,
         )
 
-        # Finalize and return the conversation request
-        return await self._finalize_conversation_request(
-            agent,
-            conversation_id,
-            user,
-            workspace,
-            initial_message,
-            secrets,
-            sandbox,
-            remote_workspace,
-            selected_repository,
-            project_dir,
-            plugins=plugins,
+        # --- LLM tracing metadata ------------------------------------------
+        agent = self._update_agent_with_llm_metadata(agent, conversation_id, user.id)
+
+        # --- skills + hooks (require remote workspace) ----------------------
+        hook_config: HookConfig | None = None
+        if remote_workspace:
+            try:
+                agent = await self._load_skills_and_update_agent(
+                    sandbox,
+                    agent,
+                    remote_workspace,
+                    selected_repository,
+                    project_dir,
+                    disabled_skills=user.disabled_skills,
+                )
+            except Exception as e:
+                _logger.warning(f'Failed to load skills: {e}', exc_info=True)
+
+            try:
+                _logger.debug(
+                    f'Attempting to load hooks from workspace: '
+                    f'project_dir={project_dir}'
+                )
+                hook_config = await self._load_hooks_from_workspace(
+                    remote_workspace, project_dir
+                )
+                if hook_config:
+                    _logger.debug(
+                        f'Successfully loaded hooks: {hook_config.model_dump()}'
+                    )
+                else:
+                    _logger.debug('No hooks found in workspace')
+            except Exception as e:
+                _logger.warning(f'Failed to load hooks: {e}', exc_info=True)
+
+        # --- plugins --------------------------------------------------------
+        final_initial_message = self._construct_initial_message_with_plugin_params(
+            initial_message, plugins
+        )
+        sdk_plugins: list[PluginSource] | None = None
+        if plugins:
+            sdk_plugins = [
+                PluginSource(
+                    source=p.source,
+                    ref=p.ref,
+                    repo_path=p.repo_path,
+                )
+                for p in plugins
+            ]
+
+        # --- build request via SDK ------------------------------------------
+        return user.conversation_settings.create_request(
+            StartConversationRequest,
+            conversation_id=conversation_id,
+            agent=agent,
+            workspace=workspace,
+            initial_message=final_initial_message,
+            secrets=secrets,
+            plugins=sdk_plugins,
+            hook_config=hook_config,
         )
 
     async def _process_pending_messages(

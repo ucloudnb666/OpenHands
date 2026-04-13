@@ -41,7 +41,6 @@ from openhands.sdk import Agent, Event
 from openhands.sdk.llm import LLM
 from openhands.sdk.secret import LookupSecret, StaticSecret
 from openhands.sdk.settings import AgentSettings, ConversationSettings
-from openhands.sdk.workspace import LocalWorkspace
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
 from openhands.server.types import AppMode
 from openhands.storage.data_models.conversation_metadata import ConversationTrigger
@@ -970,127 +969,107 @@ class TestLiveStatusAppConversationService:
         assert agent.agent_context.system_message_suffix is None
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_with_skills(self):
-        """Test _finalize_conversation_request with skills loading."""
-        # Create mock LLM with required attributes for _update_agent_with_llm_metadata
-        mock_llm = Mock(spec=LLM)
-        mock_llm.model = 'gpt-4'  # Non-openhands model, so no metadata update
-        mock_llm.usage_id = 'agent'
+    async def test_build_request_with_skills(self):
+        """Skills are loaded when a remote_workspace is provided."""
+        self.mock_user_context.get_user_info.return_value = self.mock_user
 
-        # Arrange
         mock_agent = Mock(spec=Agent)
+        mock_llm = Mock(spec=LLM)
+        mock_llm.model = 'gpt-4'
+        mock_llm.usage_id = 'agent'
         mock_agent.llm = mock_llm
-        mock_agent.condenser = None  # No condenser
+        mock_agent.condenser = None
 
-        conversation_id = uuid4()
-        workspace = LocalWorkspace(working_dir='/test')
-        initial_message = Mock(spec=SendMessageRequest)
-        secrets = {'test': StaticSecret(value='secret')}
-        remote_workspace = Mock(spec=AsyncRemoteWorkspace)
-
-        # Mock the skills loading method
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
         self.service._load_skills_and_update_agent = AsyncMock(return_value=mock_agent)
 
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            initial_message,
-            secrets,
-            self.mock_sandbox,
-            remote_workspace,
-            'test_repo',
-            '/test/dir',
+        remote_workspace = Mock(spec=AsyncRemoteWorkspace)
+        conversation_id = uuid4()
+
+        result = await self.service._build_start_conversation_request_for_user(
+            sandbox=self.mock_sandbox,
+            conversation_id=conversation_id,
+            initial_message=None,
+            system_message_suffix=None,
+            git_provider=None,
+            working_dir='/test/dir',
+            remote_workspace=remote_workspace,
+            selected_repository='test_repo',
         )
 
-        # Assert
         assert isinstance(result, StartConversationRequest)
         assert result.conversation_id == conversation_id
-        assert result.workspace == workspace
-        assert result.initial_message == initial_message
-        assert result.secrets == secrets
-
         self.service._load_skills_and_update_agent.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_without_skills(self):
-        """Test _finalize_conversation_request without remote workspace (no skills)."""
-        # Create mock LLM with required attributes for _update_agent_with_llm_metadata
-        mock_llm = Mock(spec=LLM)
-        mock_llm.model = 'gpt-4'  # Non-openhands model, so no metadata update
-        mock_llm.usage_id = 'agent'
+    async def test_build_request_without_remote_workspace(self):
+        """Skills loading is skipped when no remote_workspace is provided."""
+        self.mock_user_context.get_user_info.return_value = self.mock_user
 
-        # Arrange
         mock_agent = Mock(spec=Agent)
+        mock_llm = Mock(spec=LLM)
+        mock_llm.model = 'gpt-4'
+        mock_llm.usage_id = 'agent'
         mock_agent.llm = mock_llm
-        mock_agent.condenser = None  # No condenser
+        mock_agent.condenser = None
 
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {'test': StaticSecret(value='secret')}
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
+
         conversation_id = uuid4()
 
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            None,
-            secrets,
-            self.mock_sandbox,
-            None,
-            None,
-            '/test/dir',
+        result = await self.service._build_start_conversation_request_for_user(
+            sandbox=self.mock_sandbox,
+            conversation_id=conversation_id,
+            initial_message=None,
+            system_message_suffix=None,
+            git_provider=None,
+            working_dir='/test/dir',
+            remote_workspace=None,
         )
 
-        # Assert
         assert isinstance(result, StartConversationRequest)
         assert result.conversation_id == conversation_id
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_skills_loading_fails(self):
-        """Test _finalize_conversation_request when skills loading fails."""
-        # Create mock LLM with required attributes for _update_agent_with_llm_metadata
-        mock_llm = Mock(spec=LLM)
-        mock_llm.model = 'gpt-4'  # Non-openhands model, so no metadata update
-        mock_llm.usage_id = 'agent'
+    async def test_build_request_skills_loading_fails_gracefully(self):
+        """Conversation still starts when skills loading raises."""
+        self.mock_user_context.get_user_info.return_value = self.mock_user
 
         mock_agent = Mock(spec=Agent)
+        mock_llm = Mock(spec=LLM)
+        mock_llm.model = 'gpt-4'
+        mock_llm.usage_id = 'agent'
         mock_agent.llm = mock_llm
-        mock_agent.condenser = None  # No condenser
+        mock_agent.condenser = None
 
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {'test': StaticSecret(value='secret')}
-        remote_workspace = Mock(spec=AsyncRemoteWorkspace)
-        conversation_id = uuid4()
-
-        # Mock skills loading to raise an exception
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
         self.service._load_skills_and_update_agent = AsyncMock(
             side_effect=Exception('Skills loading failed')
         )
 
-        # Note: hooks loading is already mocked in setup_method() to return None
+        remote_workspace = Mock(spec=AsyncRemoteWorkspace)
+        conversation_id = uuid4()
 
-        # Act
         with patch(
             'openhands.app_server.app_conversation.live_status_app_conversation_service._logger'
         ) as mock_logger:
-            result = await self.service._finalize_conversation_request(
-                mock_agent,
-                conversation_id,
-                self.mock_user,
-                workspace,
-                None,
-                secrets,
-                self.mock_sandbox,
-                remote_workspace,
-                'test_repo',
-                '/test/dir',
+            result = await self.service._build_start_conversation_request_for_user(
+                sandbox=self.mock_sandbox,
+                conversation_id=conversation_id,
+                initial_message=None,
+                system_message_suffix=None,
+                git_provider=None,
+                working_dir='/test/dir',
+                remote_workspace=remote_workspace,
+                selected_repository='test_repo',
             )
 
-            # Assert
             assert isinstance(result, StartConversationRequest)
             mock_logger.warning.assert_called_once()
 
@@ -1131,7 +1110,7 @@ class TestLiveStatusAppConversationService:
         mock_llm = Mock(spec=LLM)
         mock_mcp_config = {'default': {'url': 'test'}}
         mock_agent = Mock(spec=Agent)
-        mock_final_request = Mock(spec=StartConversationRequest)
+        Mock(spec=StartConversationRequest)
         test_conversation_id = uuid4()
 
         self.service._setup_secrets_for_git_providers = AsyncMock(
@@ -1141,9 +1120,6 @@ class TestLiveStatusAppConversationService:
             return_value=(mock_llm, mock_mcp_config)
         )
         self.service._create_agent_with_context = Mock(return_value=mock_agent)
-        self.service._finalize_conversation_request = AsyncMock(
-            return_value=mock_final_request
-        )
 
         # Act
         result = await self.service._build_start_conversation_request_for_user(
@@ -1159,8 +1135,10 @@ class TestLiveStatusAppConversationService:
             selected_repository='test/repo',
         )
 
-        # Assert
-        assert result == mock_final_request
+        # Assert — the result is a real StartConversationRequest built by
+        # ConversationSettings.create_request()
+        assert isinstance(result, StartConversationRequest)
+        assert result.conversation_id == test_conversation_id
 
         self.service._setup_secrets_for_git_providers.assert_called_once_with(
             self.mock_user
@@ -1176,15 +1154,10 @@ class TestLiveStatusAppConversationService:
             AgentType.DEFAULT,
             'Test suffix',
             mock_mcp_config,
-            self.mock_user.agent_settings.condenser.max_size,
+            self.mock_user.agent_settings,
             secrets=mock_secrets,
             git_provider=ProviderType.GITHUB,
             working_dir='/test/dir/repo',
-        )
-        self.service._finalize_conversation_request.assert_called_once()
-        assert (
-            self.service._finalize_conversation_request.call_args.args[1]
-            == test_conversation_id
         )
 
     @pytest.mark.asyncio
@@ -2018,19 +1991,7 @@ class TestLiveStatusAppConversationService:
         self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
         self.service._create_agent_with_context = Mock(return_value=mock_agent)
 
-        captured = {}
-
-        async def capture_finalize(
-            agent, conversation_id, user, workspace, *args, **kwargs
-        ):
-            captured['workspace_working_dir'] = workspace.working_dir
-            return Mock(spec=StartConversationRequest)
-
-        self.service._finalize_conversation_request = AsyncMock(
-            side_effect=capture_finalize
-        )
-
-        await self.service._build_start_conversation_request_for_user(
+        result = await self.service._build_start_conversation_request_for_user(
             sandbox=self.mock_sandbox,
             conversation_id=uuid4(),
             initial_message=None,
@@ -2041,7 +2002,7 @@ class TestLiveStatusAppConversationService:
         )
 
         assert (
-            captured['workspace_working_dir'] == '/workspace/project/software-agent-sdk'
+            result.workspace.working_dir == '/workspace/project/software-agent-sdk'
         ), 'workspace.working_dir must point to the repo root, not the sandbox mount'
 
     @pytest.mark.asyncio
@@ -2055,19 +2016,7 @@ class TestLiveStatusAppConversationService:
         )
         self.service._create_agent_with_context = Mock(return_value=Mock(spec=Agent))
 
-        captured = {}
-
-        async def capture_finalize(
-            agent, conversation_id, user, workspace, *args, **kwargs
-        ):
-            captured['workspace_working_dir'] = workspace.working_dir
-            return Mock(spec=StartConversationRequest)
-
-        self.service._finalize_conversation_request = AsyncMock(
-            side_effect=capture_finalize
-        )
-
-        await self.service._build_start_conversation_request_for_user(
+        result = await self.service._build_start_conversation_request_for_user(
             sandbox=self.mock_sandbox,
             conversation_id=uuid4(),
             initial_message=None,
@@ -2077,7 +2026,7 @@ class TestLiveStatusAppConversationService:
             selected_repository=None,
         )
 
-        assert captured['workspace_working_dir'] == '/workspace/project'
+        assert result.workspace.working_dir == '/workspace/project'
 
     @pytest.mark.asyncio
     async def test_search_app_conversations_with_sandbox_id_filter(self):
@@ -2426,13 +2375,14 @@ class TestPluginHandling:
         assert 'key2: value2' in text
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_with_plugins(self):
-        """Test _finalize_conversation_request passes plugins list to StartConversationRequest."""
+    async def test_build_request_with_plugins(self):
+        """Plugins are converted to PluginSource and included in the request."""
         from openhands.app_server.app_conversation.app_conversation_models import (
             PluginSpec,
         )
 
-        # Arrange
+        self.mock_user_context.get_user_info.return_value = self.mock_user
+
         mock_agent = Mock(spec=Agent)
         mock_llm = Mock(spec=LLM)
         mock_llm.model = 'gpt-4'
@@ -2440,14 +2390,9 @@ class TestPluginHandling:
         mock_agent.llm = mock_llm
         mock_agent.condenser = None
 
-        mock_updated_agent = Mock(spec=Agent)
-        mock_updated_agent.llm = mock_llm
-        mock_updated_agent.condenser = None
-        mock_agent.model_copy = Mock(return_value=mock_updated_agent)
-
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {'test': StaticSecret(value='secret')}
-        conversation_id = uuid4()
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
 
         plugins = [
             PluginSpec(
@@ -2457,28 +2402,22 @@ class TestPluginHandling:
             )
         ]
 
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            None,
-            secrets,
-            self.mock_sandbox,
-            None,
-            None,
-            '/test/dir',
+        result = await self.service._build_start_conversation_request_for_user(
+            sandbox=self.mock_sandbox,
+            conversation_id=uuid4(),
+            initial_message=None,
+            system_message_suffix=None,
+            git_provider=None,
+            working_dir='/workspace',
             plugins=plugins,
         )
 
-        # Assert
         assert isinstance(result, StartConversationRequest)
         assert result.plugins is not None
         assert len(result.plugins) == 1
         assert result.plugins[0].source == 'github:owner/my-plugin'
         assert result.plugins[0].ref == 'v1.0.0'
-        # Also verify initial message contains plugin params
+        # Plugin params are folded into the initial message
         assert result.initial_message is not None
         assert (
             'Plugin Configuration Parameters:' in result.initial_message.content[0].text
@@ -2486,9 +2425,10 @@ class TestPluginHandling:
         assert '- api_key: test123' in result.initial_message.content[0].text
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_without_plugins(self):
-        """Test _finalize_conversation_request without plugins sets plugins to None."""
-        # Arrange
+    async def test_build_request_without_plugins(self):
+        """Without plugins, result.plugins is None."""
+        self.mock_user_context.get_user_info.return_value = self.mock_user
+
         mock_agent = Mock(spec=Agent)
         mock_llm = Mock(spec=LLM)
         mock_llm.model = 'gpt-4'
@@ -2496,42 +2436,31 @@ class TestPluginHandling:
         mock_agent.llm = mock_llm
         mock_agent.condenser = None
 
-        mock_updated_agent = Mock(spec=Agent)
-        mock_updated_agent.llm = mock_llm
-        mock_updated_agent.condenser = None
-        mock_agent.model_copy = Mock(return_value=mock_updated_agent)
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
 
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {}
-        conversation_id = uuid4()
-
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            None,
-            secrets,
-            self.mock_sandbox,
-            None,
-            None,
-            '/test/dir',
-            plugins=None,
+        result = await self.service._build_start_conversation_request_for_user(
+            sandbox=self.mock_sandbox,
+            conversation_id=uuid4(),
+            initial_message=None,
+            system_message_suffix=None,
+            git_provider=None,
+            working_dir='/workspace',
         )
 
-        # Assert
         assert isinstance(result, StartConversationRequest)
         assert result.plugins is None
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_plugin_without_ref(self):
-        """Test _finalize_conversation_request with plugin that has no ref."""
+    async def test_build_request_plugin_with_repo_path(self):
+        """repo_path is propagated through to PluginSource."""
         from openhands.app_server.app_conversation.app_conversation_models import (
             PluginSpec,
         )
 
-        # Arrange
+        self.mock_user_context.get_user_info.return_value = self.mock_user
+
         mock_agent = Mock(spec=Agent)
         mock_llm = Mock(spec=LLM)
         mock_llm.model = 'gpt-4'
@@ -2539,67 +2468,10 @@ class TestPluginHandling:
         mock_agent.llm = mock_llm
         mock_agent.condenser = None
 
-        mock_updated_agent = Mock(spec=Agent)
-        mock_updated_agent.llm = mock_llm
-        mock_updated_agent.condenser = None
-        mock_agent.model_copy = Mock(return_value=mock_updated_agent)
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
 
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {}
-        conversation_id = uuid4()
-
-        # Plugin without ref or parameters
-        plugins = [PluginSpec(source='github:owner/my-plugin')]
-
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            None,
-            secrets,
-            self.mock_sandbox,
-            None,
-            None,
-            '/test/dir',
-            plugins=plugins,
-        )
-
-        # Assert
-        assert isinstance(result, StartConversationRequest)
-        assert result.plugins is not None
-        assert len(result.plugins) == 1
-        assert result.plugins[0].source == 'github:owner/my-plugin'
-        assert result.plugins[0].ref is None
-        # No parameters, so initial message should be None
-        assert result.initial_message is None
-
-    @pytest.mark.asyncio
-    async def test_finalize_conversation_request_plugin_with_repo_path(self):
-        """Test _finalize_conversation_request passes repo_path to PluginSource."""
-        from openhands.app_server.app_conversation.app_conversation_models import (
-            PluginSpec,
-        )
-
-        # Arrange
-        mock_agent = Mock(spec=Agent)
-        mock_llm = Mock(spec=LLM)
-        mock_llm.model = 'gpt-4'
-        mock_llm.usage_id = 'agent'
-        mock_agent.llm = mock_llm
-        mock_agent.condenser = None
-
-        mock_updated_agent = Mock(spec=Agent)
-        mock_updated_agent.llm = mock_llm
-        mock_updated_agent.condenser = None
-        mock_agent.model_copy = Mock(return_value=mock_updated_agent)
-
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {}
-        conversation_id = uuid4()
-
-        # Plugin with repo_path (for marketplace repos containing multiple plugins)
         plugins = [
             PluginSpec(
                 source='github:owner/marketplace-repo',
@@ -2608,23 +2480,16 @@ class TestPluginHandling:
             )
         ]
 
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            None,
-            secrets,
-            self.mock_sandbox,
-            None,
-            None,
-            '/test/dir',
+        result = await self.service._build_start_conversation_request_for_user(
+            sandbox=self.mock_sandbox,
+            conversation_id=uuid4(),
+            initial_message=None,
+            system_message_suffix=None,
+            git_provider=None,
+            working_dir='/workspace',
             plugins=plugins,
         )
 
-        # Assert
-        assert isinstance(result, StartConversationRequest)
         assert result.plugins is not None
         assert len(result.plugins) == 1
         assert result.plugins[0].source == 'github:owner/marketplace-repo'
@@ -2632,13 +2497,14 @@ class TestPluginHandling:
         assert result.plugins[0].repo_path == 'plugins/city-weather'
 
     @pytest.mark.asyncio
-    async def test_finalize_conversation_request_multiple_plugins(self):
-        """Test _finalize_conversation_request with multiple plugins."""
+    async def test_build_request_multiple_plugins(self):
+        """Multiple plugins are all converted correctly."""
         from openhands.app_server.app_conversation.app_conversation_models import (
             PluginSpec,
         )
 
-        # Arrange
+        self.mock_user_context.get_user_info.return_value = self.mock_user
+
         mock_agent = Mock(spec=Agent)
         mock_llm = Mock(spec=LLM)
         mock_llm.model = 'gpt-4'
@@ -2646,16 +2512,10 @@ class TestPluginHandling:
         mock_agent.llm = mock_llm
         mock_agent.condenser = None
 
-        mock_updated_agent = Mock(spec=Agent)
-        mock_updated_agent.llm = mock_llm
-        mock_updated_agent.condenser = None
-        mock_agent.model_copy = Mock(return_value=mock_updated_agent)
+        self.service._setup_secrets_for_git_providers = AsyncMock(return_value={})
+        self.service._configure_llm_and_mcp = AsyncMock(return_value=(mock_llm, {}))
+        self.service._create_agent_with_context = Mock(return_value=mock_agent)
 
-        workspace = LocalWorkspace(working_dir='/test')
-        secrets = {}
-        conversation_id = uuid4()
-
-        # Multiple plugins
         plugins = [
             PluginSpec(source='github:owner/security-plugin', ref='v2.0.0'),
             PluginSpec(
@@ -2665,23 +2525,16 @@ class TestPluginHandling:
             PluginSpec(source='/local/path/to/plugin'),
         ]
 
-        # Act
-        result = await self.service._finalize_conversation_request(
-            mock_agent,
-            conversation_id,
-            self.mock_user,
-            workspace,
-            None,
-            secrets,
-            self.mock_sandbox,
-            None,
-            None,
-            '/test/dir',
+        result = await self.service._build_start_conversation_request_for_user(
+            sandbox=self.mock_sandbox,
+            conversation_id=uuid4(),
+            initial_message=None,
+            system_message_suffix=None,
+            git_provider=None,
+            working_dir='/workspace',
             plugins=plugins,
         )
 
-        # Assert
-        assert isinstance(result, StartConversationRequest)
         assert result.plugins is not None
         assert len(result.plugins) == 3
         assert result.plugins[0].source == 'github:owner/security-plugin'
@@ -2689,75 +2542,6 @@ class TestPluginHandling:
         assert result.plugins[1].source == 'github:owner/monorepo'
         assert result.plugins[1].repo_path == 'plugins/logging'
         assert result.plugins[2].source == '/local/path/to/plugin'
-
-    @pytest.mark.asyncio
-    async def test_build_start_conversation_request_for_user_with_plugins(self):
-        """Test _build_start_conversation_request_for_user passes plugins to finalize method."""
-        from openhands.app_server.app_conversation.app_conversation_models import (
-            PluginSpec,
-        )
-
-        # Arrange
-        self.mock_user_context.get_user_info.return_value = self.mock_user
-        self.mock_user_context.get_secrets.return_value = {}
-        self.mock_user_context.get_provider_tokens = AsyncMock(return_value=None)
-        self.mock_user_context.get_mcp_api_key.return_value = None
-
-        plugins = [
-            PluginSpec(
-                source='https://github.com/org/plugin.git',
-                ref='main',
-                parameters={'config_file': 'custom.yaml'},
-            )
-        ]
-
-        # Mock _finalize_conversation_request to capture the call
-        mock_finalize = AsyncMock(return_value=Mock(spec=StartConversationRequest))
-        self.service._finalize_conversation_request = mock_finalize
-
-        # Act
-        await self.service._build_start_conversation_request_for_user(
-            sandbox=self.mock_sandbox,
-            conversation_id=uuid4(),
-            initial_message=None,
-            system_message_suffix=None,
-            git_provider=None,
-            working_dir='/workspace',
-            plugins=plugins,
-        )
-
-        # Assert
-        mock_finalize.assert_called_once()
-        call_kwargs = mock_finalize.call_args.kwargs
-        assert call_kwargs['plugins'] == plugins
-
-    @pytest.mark.asyncio
-    async def test_build_start_conversation_request_for_user_without_plugins(self):
-        """Test _build_start_conversation_request_for_user works without plugins."""
-        # Arrange
-        self.mock_user_context.get_user_info.return_value = self.mock_user
-        self.mock_user_context.get_secrets.return_value = {}
-        self.mock_user_context.get_provider_tokens = AsyncMock(return_value=None)
-        self.mock_user_context.get_mcp_api_key.return_value = None
-
-        # Mock _finalize_conversation_request
-        mock_finalize = AsyncMock(return_value=Mock(spec=StartConversationRequest))
-        self.service._finalize_conversation_request = mock_finalize
-
-        # Act
-        await self.service._build_start_conversation_request_for_user(
-            sandbox=self.mock_sandbox,
-            conversation_id=uuid4(),
-            initial_message=None,
-            system_message_suffix=None,
-            git_provider=None,
-            working_dir='/workspace',
-        )
-
-        # Assert
-        mock_finalize.assert_called_once()
-        call_kwargs = mock_finalize.call_args.kwargs
-        assert call_kwargs.get('plugins') is None
 
 
 class TestPluginSpecModel:
