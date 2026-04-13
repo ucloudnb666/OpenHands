@@ -1375,20 +1375,21 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 for p in plugins
             ]
 
-        # --- build request via SDK ------------------------------------------
-        # agent + secrets are passed explicitly because the server applies
-        # post-creation overrides (LLM metadata, skills). The SDK auto-fills
-        # confirmation_policy, security_analyzer, and max_iterations from
-        # ConversationSettings.
-        return user.conversation_settings.create_request(
-            StartConversationRequest,
-            conversation_id=conversation_id,
-            agent=agent,
-            workspace=workspace,
-            initial_message=final_initial_message,
-            plugins=sdk_plugins,
-            hook_config=hook_config,
+        # --- populate ConversationSettings and build request ----------------
+        conv_settings = user.conversation_settings.model_copy(
+            update={
+                'agent_settings': configured_agent_settings,
+                'workspace': workspace,
+                'conversation_id': conversation_id,
+                'initial_message': final_initial_message,
+                'plugins': sdk_plugins,
+                'hook_config': hook_config,
+            }
         )
+
+        # Pass agent explicitly — it has server-only overrides (system
+        # prompts, LLM metadata, skills) applied after create_agent().
+        return conv_settings.create_request(StartConversationRequest, agent=agent)
 
     async def _process_pending_messages(
         self,
