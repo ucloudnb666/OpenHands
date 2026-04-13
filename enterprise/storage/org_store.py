@@ -32,8 +32,6 @@ _ORG_SETTINGS_EXCLUDED_FIELDS = {
     'contact_name',
     'contact_email',
     'org_version',
-    'agent_settings',
-    'conversation_settings',
     'llm_api_key',
 }
 _ORG_SETTINGS_FIELDS = {
@@ -253,12 +251,9 @@ class OrgStore:
     @staticmethod
     def get_kwargs_from_settings(settings: Settings):
         dumped = settings.model_dump(mode='json', context={'expose_secrets': True})
-        kwargs = {
+        return {
             field: dumped[field] for field in _ORG_SETTINGS_FIELDS if field in dumped
         }
-        kwargs['agent_settings'] = dumped['agent_settings']
-        kwargs['conversation_settings'] = dumped['conversation_settings']
-        return kwargs
 
     @staticmethod
     def get_kwargs_from_user_settings(user_settings: UserSettings):
@@ -268,10 +263,6 @@ class OrgStore:
             if hasattr(user_settings, field)
         }
         kwargs['org_version'] = user_settings.user_version
-        full_settings = user_settings.to_settings()
-        dumped = full_settings.model_dump(mode='json', context={'expose_secrets': True})
-        kwargs['agent_settings'] = dumped['agent_settings']
-        kwargs['conversation_settings'] = dumped['conversation_settings']
         return kwargs
 
     @staticmethod
