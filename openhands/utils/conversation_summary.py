@@ -2,6 +2,8 @@
 
 from typing import Optional
 
+from pydantic import SecretStr
+
 from openhands.core.config import LLMConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action.message import MessageAction
@@ -120,9 +122,15 @@ async def auto_generate_title(
                         agent_settings.llm.model,
                         settings_base_url,
                     )
+                    raw_api_key = settings.agent_settings.llm.api_key
+                    api_key = (
+                        SecretStr(raw_api_key)
+                        if isinstance(raw_api_key, str)
+                        else raw_api_key
+                    )
                     llm_config = LLMConfig(
                         model=agent_settings.llm.model,
-                        api_key=settings.agent_settings.llm.api_key,  # type: ignore[arg-type]
+                        api_key=api_key,
                         base_url=effective_base_url,
                     )
 

@@ -102,6 +102,7 @@ class Settings(BaseModel):
     language: str | None = None
     user_version: int | None = None
     remote_runtime_resource_factor: int | None = None
+    # Planned to be removed from settings
     secrets_store: Annotated[Secrets, Field(frozen=True)] = Field(
         default_factory=Secrets
     )

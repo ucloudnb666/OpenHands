@@ -22,7 +22,7 @@ import httpx
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from jinja2 import Environment, FileSystemLoader
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from openhands.app_server.app_conversation.app_conversation_info_service import (
@@ -741,9 +741,11 @@ async def get_prompt(
         agent_settings.llm.model,
         settings_base_url,
     )
+    raw_api_key = settings.agent_settings.llm.api_key
+    api_key = SecretStr(raw_api_key) if isinstance(raw_api_key, str) else raw_api_key
     llm_config = LLMConfig(
         model=agent_settings.llm.model,
-        api_key=settings.agent_settings.llm.api_key,  # type: ignore[arg-type]
+        api_key=api_key,
         base_url=effective_base_url,
     )
 
