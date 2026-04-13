@@ -386,7 +386,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 agent_server_url,
                 sandbox.session_api_key,
                 info.id,
-                user.conversation_settings.security_analyzer,
+                user.conversation_settings,
                 self.httpx_client,
             )
 
@@ -1386,15 +1386,13 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 for p in plugins
             ]
 
-        # Create and return the final request
-        return StartConversationRequest(
+        # Delegate confirmation_policy / security_analyzer / max_iterations
+        # construction to the SDK's ConversationSettings.create_request().
+        return user.conversation_settings.create_request(
+            StartConversationRequest,
             conversation_id=conversation_id,
             agent=agent,
             workspace=workspace,
-            confirmation_policy=self._select_confirmation_policy(
-                bool(user.conversation_settings.confirmation_mode),
-                user.conversation_settings.security_analyzer,
-            ),
             initial_message=final_initial_message,
             secrets=secrets,
             plugins=sdk_plugins,
