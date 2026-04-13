@@ -723,10 +723,8 @@ class CLIRuntime(Runtime):
                 f'{len(mcp_config.mcpServers)} servers',
             )
 
-            # Create clients for this specific operation (include stdio for CLI)
-            mcp_clients = await create_mcp_clients(
-                mcp_config, self.sid, include_stdio=True
-            )
+            # Create clients for this specific operation
+            mcp_clients = await create_mcp_clients(mcp_config, self.sid)
 
             if not mcp_clients:
                 self.log('warning', 'No MCP clients could be created')

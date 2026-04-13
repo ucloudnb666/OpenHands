@@ -1052,11 +1052,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         return llm, mcp_config
 
-    def _create_condenser(
-        self, llm: LLM, agent_type: AgentType, condenser_max_size: int | None
+    def _create_llm_summarizing_condenser(
+        self, llm: LLM, condenser_max_size: int | None
     ):
-        del agent_type
-
         from openhands.sdk.context.condenser.llm_summarizing_condenser import (
             LLMSummarizingCondenser,
         )
@@ -1093,7 +1091,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             Configured Agent instance with context
         """
         # Create condenser with user's settings
-        condenser = self._create_condenser(llm, agent_type, condenser_max_size)
+        condenser = self._create_llm_summarizing_condenser(llm, condenser_max_size)
 
         # Create agent based on type
         if agent_type == AgentType.PLAN:

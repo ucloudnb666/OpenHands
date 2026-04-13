@@ -3,8 +3,6 @@ import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
 import { ModelSelector } from "#/components/shared/modals/settings/model-selector";
 import { createPermissionGuard } from "#/utils/org/permission-guard";
-import { organizeModelsAndProviders } from "#/utils/organize-models-and-providers";
-import { useAIConfigOptions } from "#/hooks/query/use-ai-config-options";
 import { useAgentSettingsSchema } from "#/hooks/query/use-agent-settings-schema";
 import { useSettings } from "#/hooks/query/use-settings";
 import { SettingsInput } from "#/components/features/settings/settings-input";
@@ -29,7 +27,6 @@ import {
   inferInitialView,
   type SettingsView,
 } from "#/utils/sdk-settings-schema";
-import { isCustomModel } from "#/utils/is-custom-model";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 
 const LLM_EXCLUDED_KEYS = new Set([
@@ -141,7 +138,6 @@ export function LlmSettingsScreen({
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const { data: resources } = useAIConfigOptions();
   const { data: settings } = useSettings(scope);
   const { data: schema } = useAgentSettingsSchema(
     settings?.agent_settings_schema,
@@ -155,18 +151,10 @@ export function LlmSettingsScreen({
   const [searchApiKey, setSearchApiKey] = React.useState("");
   const [searchApiKeyDirty, setSearchApiKeyDirty] = React.useState(false);
 
-  const modelsAndProviders = React.useMemo(
-    () => organizeModelsAndProviders(resources?.models || []),
-    [resources?.models],
+  const defaultModel = String(
+    (DEFAULT_SETTINGS.agent_settings?.llm as Record<string, unknown>)?.model ??
+      "",
   );
-  const verifiedModels = resources?.verifiedModels || [];
-  const verifiedProviders = resources?.verifiedProviders || [];
-  const defaultModel =
-    resources?.defaultModel ||
-    String(
-      (DEFAULT_SETTINGS.agent_settings?.llm as Record<string, unknown>)
-        ?.model ?? "",
-    );
 
   const isSaasMode = config?.app_mode === "saas";
   const hasAgentField = hasSchemaField(schema, "agent");
@@ -213,9 +201,6 @@ export function LlmSettingsScreen({
       }
 
       const currentModel = currentSettings.llm_model ?? "";
-      const hasCustomModel = resources?.models
-        ? isCustomModel(resources.models, currentModel)
-        : false;
       const trimmedBaseUrl = currentSettings.llm_base_url?.trim() ?? "";
       const hasCustomBaseUrl =
         trimmedBaseUrl.length > 0 &&
@@ -223,11 +208,9 @@ export function LlmSettingsScreen({
       const hasVisibleSearchApiKey =
         !isSaasMode && currentSettings.search_api_key_set === true;
 
-      return hasCustomModel || hasCustomBaseUrl || hasVisibleSearchApiKey
-        ? "all"
-        : "basic";
+      return hasCustomBaseUrl || hasVisibleSearchApiKey ? "all" : "basic";
     },
-    [isSaasMode, resources?.models],
+    [isSaasMode],
   );
 
   const buildHeader = React.useCallback(
@@ -307,9 +290,6 @@ export function LlmSettingsScreen({
               data-testid="llm-settings-form-basic"
             >
               <ModelSelector
-                models={modelsAndProviders}
-                verifiedModels={verifiedModels}
-                verifiedProviders={verifiedProviders}
                 currentModel={modelValue || undefined}
                 onChange={(provider, model) => {
                   setSelectedProvider(provider);
@@ -430,9 +410,6 @@ export function LlmSettingsScreen({
       hasAgentField,
       infoMessageKey,
       isSaasMode,
-      modelsAndProviders,
-      verifiedModels,
-      verifiedProviders,
       defaultModel,
       schema,
       searchApiKey,

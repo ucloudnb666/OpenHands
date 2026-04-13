@@ -22,7 +22,6 @@ from openhands.events.observation.observation import Observation
 from openhands.mcp.client import MCPClient
 from openhands.mcp.error_collector import mcp_error_collector
 from openhands.runtime.base import Runtime
-from openhands.runtime.impl.cli.cli_runtime import CLIRuntime
 from openhands.utils._redact_compat import (
     redact_text_secrets,
     redact_url_params,
@@ -68,14 +67,12 @@ def convert_mcp_clients_to_tools(mcp_clients: list[MCPClient] | None) -> list[di
 async def create_mcp_clients(
     mcp_config: MCPConfig,
     conversation_id: str | None = None,
-    include_stdio: bool = False,
 ) -> list[MCPClient]:
     """Create MCP clients from an MCPConfig.
 
     Args:
         mcp_config: Unified MCP configuration.
         conversation_id: Optional conversation ID for remote servers.
-        include_stdio: If True, also connect to stdio servers (used for CLI runtime).
     """
     import sys
 
@@ -92,8 +89,6 @@ async def create_mcp_clients(
 
     for name, server in mcp_config.mcpServers.items():
         if isinstance(server, MCPStdioServerConfig):
-            if not include_stdio:
-                continue
             if not shutil.which(server.command):
                 logger.error(
                     f'Skipping MCP stdio server "{name}": command "{server.command}" not found. '
@@ -149,14 +144,13 @@ async def create_mcp_clients(
 
 
 async def fetch_mcp_tools_from_config(
-    mcp_config: MCPConfig, conversation_id: str | None = None, use_stdio: bool = False
+    mcp_config: MCPConfig, conversation_id: str | None = None
 ) -> list[dict]:
     """Retrieves the list of MCP tools from the MCP clients.
 
     Args:
         mcp_config: The MCP configuration
         conversation_id: Optional conversation ID to associate with the MCP clients
-        use_stdio: Whether to use stdio servers for MCP clients, set to True when running from a CLI runtime
 
     Returns:
         A list of tool dictionaries. Returns an empty list if no connections could be established.
@@ -176,9 +170,7 @@ async def fetch_mcp_tools_from_config(
         )
 
         # Create clients - this will fetch tools but not maintain active connections
-        mcp_clients = await create_mcp_clients(
-            mcp_config, conversation_id, include_stdio=use_stdio
-        )
+        mcp_clients = await create_mcp_clients(mcp_config, conversation_id)
 
         if not mcp_clients:
             logger.debug('No MCP clients were successfully connected')
@@ -314,10 +306,7 @@ async def add_mcp_tools_to_agent(
     updated_mcp_config = runtime.get_mcp_config(extra_stdio_servers or None)
 
     # Fetch the MCP tools
-    # Only use stdio if run from a CLI runtime
-    mcp_tools = await fetch_mcp_tools_from_config(
-        updated_mcp_config, use_stdio=isinstance(runtime, CLIRuntime)
-    )
+    mcp_tools = await fetch_mcp_tools_from_config(updated_mcp_config)
 
     tool_names = [tool['function']['name'] for tool in mcp_tools]
     logger.info(f'Loaded {len(mcp_tools)} MCP tools: {tool_names}')
