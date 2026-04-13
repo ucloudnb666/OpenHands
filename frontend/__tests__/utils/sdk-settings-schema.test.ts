@@ -110,6 +110,25 @@ const BASE_SETTINGS: Settings = {
           },
         ],
       },
+      {
+        key: "general",
+        label: "General",
+        fields: [
+          {
+            key: "mcp_config",
+            label: "MCP configuration",
+            section: "general",
+            section_label: "General",
+            value_type: "object",
+            default: null,
+            choices: [],
+            depends_on: [],
+            prominence: "minor",
+            secret: false,
+            required: false,
+          },
+        ],
+      },
     ],
   },
   agent_settings: {
@@ -141,6 +160,7 @@ describe("sdk settings schema helpers", () => {
       "llm.base_url": "",
       "llm.litellm_extra_body": "{}",
       "llm.model": "openai/gpt-4o",
+      mcp_config: "",
     });
   });
 
@@ -161,6 +181,20 @@ describe("sdk settings schema helpers", () => {
     };
     expect(hasAdvancedSettingsOverrides(withMinorOverride)).toBe(true);
     expect(inferInitialView(withMinorOverride)).toBe("all");
+  });
+
+  it("treats empty object value as equivalent to null default (mcp_config serializer artifact)", () => {
+    // The backend serialises mcp_config=None as {} via a custom Pydantic
+    // serializer, but the schema default is null.  The view should stay
+    // "basic" because an empty object is semantically the same as null.
+    const withEmptyMcpConfig: Settings = {
+      ...BASE_SETTINGS,
+      agent_settings: {
+        ...BASE_SETTINGS.agent_settings,
+        mcp_config: {},
+      },
+    };
+    expect(inferInitialView(withEmptyMcpConfig)).toBe("basic");
   });
 
   it("filters fields by view tier and excludes specially-rendered keys", () => {
@@ -276,6 +310,7 @@ describe("sdk settings schema helpers", () => {
         litellm_extra_body: {},
       },
       critic: { enabled: true, mode: "finish_and_message" },
+      mcp_config: null,
     });
 
     expect(
@@ -287,6 +322,7 @@ describe("sdk settings schema helpers", () => {
         litellm_extra_body: {},
       },
       critic: { enabled: true, mode: "finish_and_message" },
+      mcp_config: null,
     });
 
     expect(buildSdkSettingsPayloadForView(schema, values, dirty, "all")).toEqual({

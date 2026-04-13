@@ -170,13 +170,36 @@ function normalizeComparableValue(
       return null;
     }
 
+    // Treat empty objects as null so that serializer artifacts
+    // (e.g. mcp_config: {} vs schema default null) don't trigger
+    // a spurious view escalation in inferInitialView.
+    if (
+      field.value_type === "object" &&
+      typeof rawValue === "object" &&
+      !Array.isArray(rawValue) &&
+      Object.keys(rawValue as Record<string, unknown>).length === 0
+    ) {
+      return null;
+    }
+
     if (typeof rawValue === "string") {
       const trimmedValue = rawValue.trim();
       if (!trimmedValue) {
         return null;
       }
       try {
-        return JSON.stringify(JSON.parse(trimmedValue));
+        const parsed: unknown = JSON.parse(trimmedValue);
+        // Also normalise stringified empty objects
+        if (
+          field.value_type === "object" &&
+          parsed !== null &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed) &&
+          Object.keys(parsed as Record<string, unknown>).length === 0
+        ) {
+          return null;
+        }
+        return JSON.stringify(parsed);
       } catch {
         return trimmedValue;
       }
