@@ -140,6 +140,49 @@ def load_from_env(
     default_agent_config = cfg.get_agent_config()
     set_attr_from_env(default_agent_config, 'AGENT_')
 
+    # ---------------------------------------------------------------------------
+    # Astraflow (UCloud ModelVerse) provider – auto-register named LLM configs
+    # from dedicated env vars so users don't have to write TOML.
+    # ---------------------------------------------------------------------------
+    _ASTRAFLOW_GLOBAL_BASE_URL = 'https://api-us-ca.umodelverse.ai/v1'
+    _ASTRAFLOW_CN_BASE_URL = 'https://api.umodelverse.ai/v1'
+
+    # primary key → (env var for api_key, base_url, list of alias keys)
+    _ASTRAFLOW_PROVIDERS: list[tuple[str, str, str, list[str]]] = [
+        (
+            'astraflow',
+            'ASTRAFLOW_API_KEY',
+            _ASTRAFLOW_GLOBAL_BASE_URL,
+            ['astra-flow', 'astra_flow', 'modelverse'],
+        ),
+        (
+            'astraflow-cn',
+            'ASTRAFLOW_CN_API_KEY',
+            _ASTRAFLOW_CN_BASE_URL,
+            ['astraflow-china', 'astraflow_cn'],
+        ),
+    ]
+
+    for primary_key, api_key_env, base_url, aliases in _ASTRAFLOW_PROVIDERS:
+        raw_api_key = env_or_toml_dict.get(api_key_env, '') or os.environ.get(
+            api_key_env, ''
+        )
+        if not raw_api_key:
+            continue
+        # Build a minimal LLMConfig for this provider if not already present
+        for config_key in [primary_key] + aliases:
+            if cfg.llms.get(config_key) is None:
+                try:
+                    named_cfg = LLMConfig(
+                        model=f'{primary_key}/deepseek-v3',
+                        api_key=SecretStr(raw_api_key),
+                        base_url=base_url,
+                        custom_llm_provider='openai',
+                    )
+                    cfg.set_llm_config(named_cfg, config_key)
+                except Exception:
+                    pass  # never crash startup due to provider registration
+
 
 def load_from_toml(cfg: OpenHandsConfig, toml_file: str = 'config.toml') -> None:
     """Load the config from the toml file. Supports both styles of config vars.
