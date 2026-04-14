@@ -24,8 +24,12 @@ from openhands.app_server.app_conversation.app_conversation_service import (
     AppConversationService,
 )
 from openhands.app_server.sandbox.sandbox_models import SandboxStatus
+from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
 from openhands.microagent.microagent import KnowledgeMicroagent, RepoMicroagent
 from openhands.microagent.types import MicroagentMetadata, MicroagentType
+from openhands.runtime.runtime_status import RuntimeStatus
+from openhands.sdk.conversation.state import ConversationExecutionStatus
+from openhands.server.data_models.agent_loop_info import AgentLoopInfo
 from openhands.server.data_models.conversation_info import ConversationStatus
 from openhands.server.data_models.conversation_info_result_set import (
     ConversationInfoResultSet,
@@ -34,10 +38,13 @@ from openhands.server.routes.conversation import (
     AddMessageRequest,
     add_message,
     get_microagents,
+    get_remote_runtime_config,
 )
 from openhands.server.routes.manage_conversations import (
     _RESUME_GRACE_PERIOD,
     UpdateConversationRequest,
+    _get_conversation_info,
+    _to_conversation_info,
     get_conversation,
     search_conversations,
     update_conversation,
@@ -54,8 +61,6 @@ from openhands.storage.data_models.conversation_metadata import (
 async def test_get_microagents():
     """Test the get_microagents function directly."""
     # Create mock microagents
-    from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
-
     repo_microagent = RepoMicroagent(
         name='test_repo',
         content='This is a test repo microagent',
@@ -1152,8 +1157,6 @@ async def test_add_message_empty_message():
 @pytest.mark.asyncio
 async def test_create_sub_conversation_with_planning_agent():
     """Test creating a sub-conversation from a parent conversation with planning agent."""
-    from uuid import uuid4
-
     parent_conversation_id = uuid4()
     user_id = 'test_user_456'
     sandbox_id = 'test_sandbox_123'
@@ -1513,8 +1516,6 @@ async def test_get_conversation_resume_status_handling(
     should_call_server,
 ):
     """Test get_conversation handles resume status correctly for various scenarios."""
-    from openhands.sdk.conversation.state import ConversationExecutionStatus
-
     conversation_id = uuid4()
 
     # Convert string execution_status to enum if provided
@@ -1564,3 +1565,330 @@ async def test_get_conversation_resume_status_handling(
         )
     else:
         mock_httpx_client.get.assert_not_called()
+
+
+# Tests for _to_conversation_info and _get_conversation_info sandbox_id mapping
+
+
+@pytest.mark.asyncio
+async def test_to_conversation_info_maps_sandbox_id():
+    """Test that _to_conversation_info correctly maps sandbox_id from V1 AppConversation."""
+    conversation_id = uuid4()
+    test_sandbox_id = 'test-sandbox-123'
+
+    # Create a mock V1 AppConversation with sandbox_id
+    mock_app_conversation = AppConversation(
+        id=conversation_id,
+        created_by_user_id='test_user',
+        sandbox_id=test_sandbox_id,
+        sandbox_status=SandboxStatus.RUNNING,
+        execution_status=ConversationExecutionStatus.RUNNING,
+        conversation_url='https://sandbox.example.com/conversation',
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+        title='Test Conversation',
+        selected_repository='test/repo',
+        selected_branch='main',
+        git_provider='github',
+        trigger=ConversationTrigger.GUI,
+        sub_conversation_ids=[],
+        public=False,
+    )
+
+    result = _to_conversation_info(mock_app_conversation)
+
+    assert result is not None
+    assert result.conversation_id == conversation_id.hex
+    assert result.sandbox_id == test_sandbox_id
+    assert result.conversation_version == 'V1'
+
+
+@pytest.mark.asyncio
+async def test_get_conversation_info_v0_has_null_sandbox_id():
+    """Test that _get_conversation_info returns null sandbox_id for V0 conversations."""
+    conversation_id = 'test-conversation-v0'
+
+    # Create mock V0 conversation metadata (no sandbox_id field)
+    mock_metadata = ConversationMetadata(
+        conversation_id=conversation_id,
+        user_id='test_user',
+        title='V0 Test Conversation',
+        selected_repository=None,
+        last_updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+    )
+
+    # Create mock agent_loop_info
+    mock_agent_loop_info = AgentLoopInfo(
+        conversation_id=conversation_id,
+        runtime_status=RuntimeStatus.READY,
+        status=ConversationStatus.STOPPED,
+        event_store=None,
+        url=None,
+        session_api_key=None,
+    )
+
+    result = await _get_conversation_info(
+        conversation=mock_metadata,
+        num_connections=0,
+        agent_loop_info=mock_agent_loop_info,
+    )
+
+    assert result is not None
+    assert result.sandbox_id is None
+    assert result.conversation_version == 'V0'
+
+
+@pytest.mark.asyncio
+async def test_get_conversation_info_returns_all_fields():
+    """Test that _get_conversation_info returns all expected fields for V0 conversations."""
+    conversation_id = 'test-conversation-full'
+
+    # Create mock V0 conversation metadata
+    mock_metadata = ConversationMetadata(
+        conversation_id=conversation_id,
+        user_id='test_user',
+        title='Full Test Conversation',
+        selected_repository='test/repo',
+        selected_branch='main',
+        git_provider='github',
+        trigger=ConversationTrigger.GUI,
+        last_updated_at=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+        pr_number=[123],
+    )
+
+    # Create mock agent_loop_info
+    mock_agent_loop_info = AgentLoopInfo(
+        conversation_id=conversation_id,
+        runtime_status=RuntimeStatus.READY,
+        status=ConversationStatus.STOPPED,
+        event_store=None,
+        url='https://example.com/conversation',
+        session_api_key='test-key',
+    )
+
+    result = await _get_conversation_info(
+        conversation=mock_metadata,
+        num_connections=5,
+        agent_loop_info=mock_agent_loop_info,
+    )
+
+    assert result is not None
+    assert result.conversation_id == conversation_id
+    assert result.title == 'Full Test Conversation'
+    assert result.selected_repository == 'test/repo'
+    assert result.selected_branch == 'main'
+    assert result.git_provider == 'github'
+    assert result.trigger == ConversationTrigger.GUI
+    assert result.num_connections == 5
+    assert result.url == 'https://example.com/conversation'
+    assert result.session_api_key == 'test-key'
+    assert result.pr_number == [123]
+    assert result.sandbox_id is None  # V0 should have null sandbox_id
+    assert result.conversation_version == 'V0'
+
+
+# Tests for get_remote_runtime_config endpoint (/config)
+
+
+@pytest.mark.asyncio
+async def test_get_remote_runtime_config_v1_conversation():
+    """Test get_remote_runtime_config returns correct config for V1 conversations."""
+    from uuid import UUID
+
+    conversation_id = str(uuid4())
+    test_sandbox_id = 'test-sandbox-v1-123'
+
+    # Create mock AppConversationInfo
+    mock_info = AppConversationInfo(
+        id=UUID(conversation_id),
+        created_by_user_id='test_user',
+        sandbox_id=test_sandbox_id,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    # Mock the AppConversationInfoService - use AsyncMock for the method
+    mock_info_service = AsyncMock(spec=AppConversationInfoService)
+    mock_info_service.get_app_conversation_info = AsyncMock(return_value=mock_info)
+
+    # Call the function directly
+    result = await get_remote_runtime_config(
+        conversation_id=conversation_id,
+        app_conversation_info_service=mock_info_service,
+    )
+
+    # Verify the response - V1 returns a JSONResponse
+    assert isinstance(result, JSONResponse)
+    content = json.loads(result.body)
+    assert isinstance(content, dict)
+    assert content['runtime_id'] == test_sandbox_id
+    assert content['session_id'] == conversation_id
+
+    # Verify the service was called with correct UUID
+    mock_info_service.get_app_conversation_info.assert_called_once_with(
+        UUID(conversation_id)
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_remote_runtime_config_v0_conversation():
+    """Test get_remote_runtime_config returns correct config for V0 conversations."""
+    from openhands.runtime.base import Runtime
+    from openhands.server.session.conversation import ServerConversation
+
+    conversation_id = 'test-conversation-v0'
+    test_runtime_id = 'test-runtime-456'
+    test_session_id = 'test-sid-789'
+
+    # Create mock Runtime with runtime_id and sid
+    mock_runtime = MagicMock(spec=Runtime)
+    mock_runtime.runtime_id = test_runtime_id
+    mock_runtime.sid = test_session_id
+
+    # Create mock ServerConversation
+    mock_conversation = MagicMock(spec=ServerConversation)
+    mock_conversation.runtime = mock_runtime
+
+    # Mock the conversation_manager - use AsyncMock for attach_to_conversation
+    with patch(
+        'openhands.server.routes.conversation.conversation_manager'
+    ) as mock_manager:
+        mock_manager.attach_to_conversation = AsyncMock(return_value=mock_conversation)
+        mock_manager.detach_from_conversation = AsyncMock()
+
+        # Mock the AppConversationInfoService to return None (not V1)
+        mock_info_service = AsyncMock(spec=AppConversationInfoService)
+        mock_info_service.get_app_conversation_info = AsyncMock(return_value=None)
+
+        # Call the function directly
+        result = await get_remote_runtime_config(
+            conversation_id=conversation_id,
+            app_conversation_info_service=mock_info_service,
+        )
+
+        # Verify the response
+        assert isinstance(result, JSONResponse)
+        assert result.status_code == 200
+        content = json.loads(result.body)
+        assert content['runtime_id'] == test_runtime_id
+        assert content['session_id'] == test_session_id
+
+
+@pytest.mark.asyncio
+async def test_get_remote_runtime_config_v1_not_found_falls_back_to_v0():
+    """Test get_remote_runtime_config falls back to V0 when V1 conversation not found."""
+    from openhands.runtime.base import Runtime
+    from openhands.server.session.conversation import ServerConversation
+
+    conversation_id = 'test-conversation-v0'
+    test_runtime_id = 'test-runtime-abc'
+    test_session_id = 'test-sid-xyz'
+
+    # Create mock Runtime
+    mock_runtime = MagicMock(spec=Runtime)
+    mock_runtime.runtime_id = test_runtime_id
+    mock_runtime.sid = test_session_id
+
+    # Create mock ServerConversation
+    mock_conversation = MagicMock(spec=ServerConversation)
+    mock_conversation.runtime = mock_runtime
+
+    # Mock the conversation_manager - use AsyncMock
+    with patch(
+        'openhands.server.routes.conversation.conversation_manager'
+    ) as mock_manager:
+        mock_manager.attach_to_conversation = AsyncMock(return_value=mock_conversation)
+        mock_manager.detach_from_conversation = AsyncMock()
+
+        # Mock the AppConversationInfoService to return None (not found)
+        mock_info_service = AsyncMock(spec=AppConversationInfoService)
+        mock_info_service.get_app_conversation_info = AsyncMock(return_value=None)
+
+        # Call the function directly
+        result = await get_remote_runtime_config(
+            conversation_id=conversation_id,
+            app_conversation_info_service=mock_info_service,
+        )
+
+        # Verify the response - should fall back to V0 config
+        assert isinstance(result, JSONResponse)
+        assert result.status_code == 200
+        content = json.loads(result.body)
+        assert content['runtime_id'] == test_runtime_id
+        assert content['session_id'] == test_session_id
+
+
+@pytest.mark.asyncio
+async def test_get_remote_runtime_config_invalid_uuid_falls_back_to_v0():
+    """Test get_remote_runtime_config falls back to V0 for invalid UUID."""
+    from openhands.runtime.base import Runtime
+    from openhands.server.session.conversation import ServerConversation
+
+    conversation_id = 'not-a-valid-uuid'
+    test_runtime_id = 'test-runtime-def'
+    test_session_id = 'test-sid-ghi'
+
+    # Create mock Runtime
+    mock_runtime = MagicMock(spec=Runtime)
+    mock_runtime.runtime_id = test_runtime_id
+    mock_runtime.sid = test_session_id
+
+    # Create mock ServerConversation
+    mock_conversation = MagicMock(spec=ServerConversation)
+    mock_conversation.runtime = mock_runtime
+
+    # Mock the conversation_manager - use AsyncMock
+    with patch(
+        'openhands.server.routes.conversation.conversation_manager'
+    ) as mock_manager:
+        mock_manager.attach_to_conversation = AsyncMock(return_value=mock_conversation)
+        mock_manager.detach_from_conversation = AsyncMock()
+
+        # Mock the AppConversationInfoService - use AsyncMock for the method
+        mock_info_service = AsyncMock(spec=AppConversationInfoService)
+        mock_info_service.get_app_conversation_info = AsyncMock(
+            side_effect=ValueError('Invalid UUID')
+        )
+
+        # Call the function directly
+        result = await get_remote_runtime_config(
+            conversation_id=conversation_id,
+            app_conversation_info_service=mock_info_service,
+        )
+
+        # Verify the response - should fall back to V0 config
+        assert isinstance(result, JSONResponse)
+        assert result.status_code == 200
+        content = json.loads(result.body)
+        assert content['runtime_id'] == test_runtime_id
+        assert content['session_id'] == test_session_id
+
+
+@pytest.mark.asyncio
+async def test_get_remote_runtime_config_v0_not_found():
+    """Test get_remote_runtime_config returns 404 when V0 conversation not found."""
+    from fastapi import HTTPException
+
+    conversation_id = 'test-conversation-v0'
+
+    # Mock the conversation_manager - use AsyncMock
+    with patch(
+        'openhands.server.routes.conversation.conversation_manager'
+    ) as mock_manager:
+        mock_manager.attach_to_conversation = AsyncMock(return_value=None)
+
+        # Mock the AppConversationInfoService to return None (not V1)
+        mock_info_service = AsyncMock(spec=AppConversationInfoService)
+        mock_info_service.get_app_conversation_info = AsyncMock(return_value=None)
+
+        # Call the function and expect HTTPException
+        with pytest.raises(HTTPException) as exc_info:
+            await get_remote_runtime_config(
+                conversation_id=conversation_id,
+                app_conversation_info_service=mock_info_service,
+            )
+
+        assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+        assert f'Conversation {conversation_id} not found' in str(exc_info.value.detail)

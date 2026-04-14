@@ -5,6 +5,7 @@ and the recent bug fixes for git checkout operations.
 """
 
 import subprocess
+from pathlib import Path
 from types import MethodType
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from uuid import uuid4
@@ -762,6 +763,33 @@ def mock_workspace():
 
 
 @pytest.mark.asyncio
+async def test_clone_or_init_git_repo_quotes_selected_branch_before_checkout(
+    mock_workspace,
+):
+    user_info = MockUserInfo()
+    service, mock_user_context = _create_service_with_mock_user_context(
+        user_info, bind_methods=('clone_or_init_git_repo',)
+    )
+    service.init_git_in_empty_workspace = True
+    mock_user_context.get_authenticated_git_url = AsyncMock(
+        return_value='https://github.com/owner/repo.git'
+    )
+
+    task = Mock()
+    task.request = Mock(
+        selected_repository='owner/repo',
+        selected_branch='feature>tmp',
+    )
+
+    await service.clone_or_init_git_repo(task, mock_workspace)
+
+    mock_workspace.execute_command.assert_any_call(
+        "git checkout 'feature>tmp'",
+        Path(mock_workspace.working_dir) / 'repo',
+    )
+
+
+@pytest.mark.asyncio
 async def test_configure_git_user_settings_both_name_and_email(mock_workspace):
     """Test configuring both git user name and email."""
     user_info = MockUserInfo(
@@ -1035,7 +1063,7 @@ class TestLoadAndMergeAllSkills:
 
             # Act
             result = await service.load_and_merge_all_skills(
-                sandbox, 'owner/repo', '/workspace', 'http://localhost:8000'
+                sandbox, 'owner/repo', '/workspace/repo', 'http://localhost:8000'
             )
 
             # Assert
@@ -1073,7 +1101,7 @@ class TestLoadAndMergeAllSkills:
             # Act - pass empty string to simulate no agent server URL
             # This should still call load_skills_from_agent_server but it will fail
             result = await service.load_and_merge_all_skills(
-                sandbox, 'owner/repo', '/workspace', ''
+                sandbox, 'owner/repo', '/workspace/repo', ''
             )
 
             # Assert - should return empty list when agent_server_url is empty
@@ -1089,13 +1117,13 @@ class TestLoadAndMergeAllSkills:
     @patch(
         'openhands.app_server.app_conversation.app_conversation_service_base.build_sandbox_config'
     )
-    async def test_uses_working_dir_when_no_repository(
+    async def test_uses_project_dir_when_no_repository(
         self,
         mock_build_sandbox_config,
         mock_build_org_config,
         mock_load_skills,
     ):
-        """Test uses working_dir as project_dir when no repository is selected."""
+        """Test uses project_dir directly when no repository is selected."""
         # Arrange
         mock_user_context = Mock(spec=UserContext)
         with patch.object(AppConversationServiceBase, '__abstractmethods__', set()):
@@ -1164,7 +1192,7 @@ class TestLoadAndMergeAllSkills:
 
             # Act
             result = await service.load_and_merge_all_skills(
-                sandbox, 'owner/repo', '/workspace', 'http://localhost:8000'
+                sandbox, 'owner/repo', '/workspace/repo', 'http://localhost:8000'
             )
 
             # Assert

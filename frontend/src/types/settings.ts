@@ -2,10 +2,22 @@ export const ProviderOptions = {
   github: "github",
   gitlab: "gitlab",
   bitbucket: "bitbucket",
+  bitbucket_data_center: "bitbucket_data_center",
   azure_devops: "azure_devops",
   forgejo: "forgejo",
   enterprise_sso: "enterprise_sso",
 } as const;
+
+export const SandboxGroupingStrategyOptions = {
+  NO_GROUPING: "NO_GROUPING",
+  GROUP_BY_NEWEST: "GROUP_BY_NEWEST",
+  LEAST_RECENTLY_USED: "LEAST_RECENTLY_USED",
+  FEWEST_CONVERSATIONS: "FEWEST_CONVERSATIONS",
+  ADD_TO_ANY: "ADD_TO_ANY",
+} as const;
+
+export type SandboxGroupingStrategy =
+  keyof typeof SandboxGroupingStrategyOptions;
 
 export type Provider = keyof typeof ProviderOptions;
 
@@ -38,6 +50,13 @@ export type MCPConfig = {
   shttp_servers: (string | MCPSHTTPServer)[];
 };
 
+export type SkillInfo = {
+  name: string;
+  type: string;
+  source: string;
+  triggers?: string[];
+};
+
 export type Settings = {
   llm_model: string;
   llm_base_url: string;
@@ -60,10 +79,12 @@ export type Settings = {
   search_api_key?: string;
   is_new_user?: boolean;
   mcp_config?: MCPConfig;
+  disabled_skills?: string[];
   max_budget_per_task: number | null;
   email?: string;
   email_verified?: boolean;
   git_user_name?: string;
   git_user_email?: string;
   v1_enabled?: boolean;
+  sandbox_grouping_strategy?: SandboxGroupingStrategy;
 };

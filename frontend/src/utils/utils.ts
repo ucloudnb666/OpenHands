@@ -56,15 +56,31 @@ export const setStyleHeightPx = (el: HTMLElement, height: number): void => {
 };
 
 /**
- * Detect if the user is on a mobile device
- * @returns True if the user is on a mobile device, false otherwise
+ * Detect if the user is on a mobile device.
+ * Touch support alone is not sufficient — touchscreen laptops have touch
+ * but use a mouse/trackpad as primary input. We check that the primary
+ * pointing device is coarse (finger) to avoid false positives.
  */
-export const isMobileDevice = (): boolean =>
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent,
-  ) ||
-  "ontouchstart" in window ||
-  navigator.maxTouchPoints > 0;
+export const isMobileDevice = (): boolean => {
+  if (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
+    )
+  )
+    return true;
+
+  const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+  if (!hasTouch) return false;
+
+  // If matchMedia is available, check whether the primary pointer is fine
+  // (mouse/trackpad). Touchscreen laptops report fine, real mobile devices don't.
+  if (typeof window.matchMedia === "function") {
+    return !window.matchMedia("(pointer: fine)").matches;
+  }
+
+  // Fallback: touch present but no matchMedia — assume mobile
+  return true;
+};
 
 /**
  * Checks if the current domain is the production domain
@@ -130,28 +146,6 @@ export const removeUnwantedKeys = (
     });
 };
 
-export const removeApiKey = (
-  data: EventActionHistory[],
-): EventActionHistory[] =>
-  data.map((item) => {
-    // Create a shallow copy of item
-    const newItem = { ...item };
-
-    // Check if LLM_API_KEY exists and delete it from a new args object
-    if (newItem.args?.LLM_API_KEY) {
-      const newArgs = { ...newItem.args };
-      delete newArgs.LLM_API_KEY;
-      newItem.args = newArgs;
-    }
-
-    return newItem;
-  });
-
-export const getExtension = (code: string) => {
-  if (code.includes(".")) return code.split(".").pop() || "";
-  return "";
-};
-
 /**
  * Get file extension from file name in uppercase format
  * @param fileName The file name to extract extension from
@@ -167,25 +161,6 @@ export const getFileExtension = (fileName: string): string => {
   return extension || "FILE";
 };
 
-/**
- * Format a timestamp to a human-readable format
- * @param timestamp The timestamp to format (ISO 8601)
- * @returns The formatted timestamp
- *
- * @example
- * formatTimestamp("2021-10-10T10:10:10.000") // "10/10/2021, 10:10:10"
- * formatTimestamp("2021-10-10T22:10:10.000") // "10/10/2021, 22:10:10"
- */
-export const formatTimestamp = (timestamp: string) =>
-  new Date(timestamp).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-
 export const shouldUseInstallationRepos = (
   provider: Provider,
   app_mode: "saas" | "oss" | undefined,
@@ -194,6 +169,7 @@ export const shouldUseInstallationRepos = (
 
   switch (provider) {
     case "bitbucket":
+    case "bitbucket_data_center":
       return true;
     case "gitlab":
       return false;
@@ -206,7 +182,16 @@ export const shouldUseInstallationRepos = (
   }
 };
 
-export const getGitProviderBaseUrl = (gitProvider: Provider): string => {
+export const getGitProviderBaseUrl = (
+  gitProvider: Provider,
+  host?: string | null,
+): string => {
+  // If custom host provided, use it (with https:// prefix if needed)
+  if (host && host.trim() !== "") {
+    return host.startsWith("http") ? host : `https://${host}`;
+  }
+
+  // Fall back to defaults
   switch (gitProvider) {
     case "github":
       return "https://github.com";
@@ -233,6 +218,7 @@ export const getGitProviderBaseUrl = (gitProvider: Provider): string => {
 export const getProviderName = (gitProvider: Provider) => {
   if (gitProvider === "gitlab") return "GitLab";
   if (gitProvider === "bitbucket") return "Bitbucket";
+  if (gitProvider === "bitbucket_data_center") return "Bitbucket Data Center";
   if (gitProvider === "azure_devops") return "Azure DevOps";
   if (gitProvider === "forgejo") return "Forgejo";
   return "GitHub";
@@ -264,13 +250,15 @@ export const getPRShort = (isGitLab: boolean) => (isGitLab ? "MR" : "PR");
  * constructPullRequestUrl(123, "github", "owner/repo") // "https://github.com/owner/repo/pull/123"
  * constructPullRequestUrl(456, "gitlab", "owner/repo") // "https://gitlab.com/owner/repo/-/merge_requests/456"
  * constructPullRequestUrl(789, "bitbucket", "owner/repo") // "https://bitbucket.org/owner/repo/pull-requests/789"
+ * constructPullRequestUrl(789, "bitbucket", "PROJECT/repo", "server.com") // "https://server.com/projects/PROJECT/repos/repo/pull-requests/789"
  */
 export const constructPullRequestUrl = (
   prNumber: number,
   provider: Provider,
   repositoryName: string,
+  host?: string | null,
 ): string => {
-  const baseUrl = getGitProviderBaseUrl(provider);
+  const baseUrl = getGitProviderBaseUrl(provider, host);
 
   switch (provider) {
     case "github":
@@ -281,6 +269,10 @@ export const constructPullRequestUrl = (
       return `${baseUrl}/${repositoryName}/-/merge_requests/${prNumber}`;
     case "bitbucket":
       return `${baseUrl}/${repositoryName}/pull-requests/${prNumber}`;
+    case "bitbucket_data_center": {
+      const [project, repo] = repositoryName.split("/");
+      return `${baseUrl}/projects/${project}/repos/${repo}/pull-requests/${prNumber}`;
+    }
     case "azure_devops": {
       // Azure DevOps format: org/project/repo
       const parts = repositoryName.split("/");
@@ -314,8 +306,9 @@ export const constructMicroagentUrl = (
   gitProvider: Provider,
   repositoryName: string,
   microagentPath: string,
+  host?: string | null,
 ): string => {
-  const baseUrl = getGitProviderBaseUrl(gitProvider);
+  const baseUrl = getGitProviderBaseUrl(gitProvider, host);
 
   switch (gitProvider) {
     case "github":
@@ -326,6 +319,10 @@ export const constructMicroagentUrl = (
       return `${baseUrl}/${repositoryName}/-/blob/main/${microagentPath}`;
     case "bitbucket":
       return `${baseUrl}/${repositoryName}/src/main/${microagentPath}`;
+    case "bitbucket_data_center": {
+      const [project, repo] = repositoryName.split("/");
+      return `${baseUrl}/projects/${project}/repos/${repo}/browse/${microagentPath}?at=refs/heads/main`;
+    }
     case "azure_devops": {
       // Azure DevOps format: org/project/repo
       const parts = repositoryName.split("/");
@@ -373,8 +370,13 @@ export const extractRepositoryInfo = (
 export const constructRepositoryUrl = (
   provider: Provider,
   repositoryName: string,
+  host?: string | null,
 ): string => {
-  const baseUrl = getGitProviderBaseUrl(provider);
+  const baseUrl = getGitProviderBaseUrl(provider, host);
+  if (provider === "bitbucket_data_center") {
+    const [project, repo] = repositoryName.split("/");
+    return `${baseUrl}/projects/${project}/repos/${repo}`;
+  }
   return `${baseUrl}/${repositoryName}`;
 };
 
@@ -383,19 +385,22 @@ export const constructRepositoryUrl = (
  * @param provider The git provider
  * @param repositoryName The repository name in format "owner/repo"
  * @param branchName The branch name
+ * @param host Optional custom host for self-hosted instances
  * @returns The branch URL
  *
  * @example
  * constructBranchUrl("github", "owner/repo", "main") // "https://github.com/owner/repo/tree/main"
  * constructBranchUrl("gitlab", "owner/repo", "develop") // "https://gitlab.com/owner/repo/-/tree/develop"
  * constructBranchUrl("bitbucket", "owner/repo", "feature") // "https://bitbucket.org/owner/repo/src/feature"
+ * constructBranchUrl("bitbucket", "PROJECT/repo", "feature", "server.com") // "https://server.com/projects/PROJECT/repos/repo/browse?at=refs/heads/feature"
  */
 export const constructBranchUrl = (
   provider: Provider,
   repositoryName: string,
   branchName: string,
+  host?: string | null,
 ): string => {
-  const baseUrl = getGitProviderBaseUrl(provider);
+  const baseUrl = getGitProviderBaseUrl(provider, host);
 
   switch (provider) {
     case "github":
@@ -406,6 +411,15 @@ export const constructBranchUrl = (
       return `${baseUrl}/${repositoryName}/-/tree/${branchName}`;
     case "bitbucket":
       return `${baseUrl}/${repositoryName}/src/${branchName}`;
+    case "bitbucket_data_center": {
+      // Bitbucket Server format: /projects/{PROJECT}/repos/{repo}/browse?at=refs/heads/{branch}
+      const parts = repositoryName.split("/");
+      if (parts.length >= 2) {
+        const [project, repo] = parts;
+        return `${baseUrl}/projects/${project}/repos/${repo}/browse?at=refs/heads/${branchName}`;
+      }
+      return "";
+    }
     case "azure_devops": {
       // Azure DevOps format: org/project/repo
       const parts = repositoryName.split("/");
@@ -783,7 +797,7 @@ interface GetStatusTextArgs {
  *   isStartingStatus: false,
  *   isStopStatus: false,
  *   curAgentState: AgentState.RUNNING
- * }) // Returns "Waiting For Sandbox"
+ * }) // Returns "Waiting for sandbox"
  */
 export function getStatusText({
   isPausing = false,
@@ -811,13 +825,13 @@ export function getStatusText({
       return t(I18nKey.CONVERSATION$READY);
     }
 
-    // Format status text: "WAITING_FOR_SANDBOX" -> "Waiting for sandbox"
+    // Format status text with sentence case: "WAITING_FOR_SANDBOX" -> "Waiting for sandbox"
     return (
       taskDetail ||
       taskStatus
         .toLowerCase()
         .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
+        .replace(/^\w/, (c) => c.toUpperCase())
     );
   }
 

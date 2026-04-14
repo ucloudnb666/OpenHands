@@ -37,6 +37,7 @@ from openhands.events.serialization import event_from_dict, event_to_dict
 from openhands.events.stream import EventStreamSubscriber
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.runtime_status import RuntimeStatus
+from openhands.sdk.utils.redact import sanitize_dict
 from openhands.server.constants import ROOM_KEY
 from openhands.server.services.conversation_stats import ConversationStats
 from openhands.server.session.agent_session import AgentSession
@@ -108,13 +109,6 @@ class WebSession:
             EventStreamSubscriber.SERVER, self.on_event, self.sid
         )
         self.config = config
-
-        # Lazy import to avoid circular dependency
-        from openhands.experiments.experiment_manager import ExperimentManagerImpl
-
-        self.config = ExperimentManagerImpl.run_config_variant_test(
-            user_id, sid, self.config
-        )
         self.loop = asyncio.get_event_loop()
         self.user_id = user_id
 
@@ -191,7 +185,7 @@ class WebSession:
 
         # NOTE: this need to happen AFTER the config is updated with the search_api_key
         self.logger.debug(
-            f'MCP configuration before setup - self.config.mcp_config: {self.config.mcp}'
+            f'MCP configuration before setup - self.config.mcp_config: {sanitize_dict(self.config.mcp.model_dump())}'
         )
 
         # Check if settings has custom mcp_config
@@ -199,7 +193,9 @@ class WebSession:
         if mcp_config is not None:
             # Use the provided MCP SHTTP servers instead of default setup
             self.config.mcp = self.config.mcp.merge(mcp_config)
-            self.logger.debug(f'Merged custom MCP Config: {mcp_config}')
+            self.logger.debug(
+                f'Merged custom MCP Config: {sanitize_dict(mcp_config.model_dump())}'
+            )
 
         # Add OpenHands' MCP server by default
         (
@@ -216,7 +212,7 @@ class WebSession:
             self.config.mcp.stdio_servers.extend(openhands_mcp_stdio_servers)
 
         self.logger.debug(
-            f'MCP configuration after setup - self.config.mcp: {self.config.mcp}'
+            f'MCP configuration after setup - self.config.mcp: {sanitize_dict(self.config.mcp.model_dump())}'
         )
 
         # TODO: override other LLM config & agent config groups (#2075)

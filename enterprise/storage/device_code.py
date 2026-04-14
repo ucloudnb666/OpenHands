@@ -3,7 +3,8 @@
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
 from storage.base import Base
 
 
@@ -25,21 +26,33 @@ class DeviceCode(Base):
 
     __tablename__ = 'device_codes'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    device_code = Column(String(128), unique=True, nullable=False, index=True)
-    user_code = Column(String(16), unique=True, nullable=False, index=True)
-    status = Column(String(32), nullable=False, default=DeviceCodeStatus.PENDING.value)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    device_code: Mapped[str] = mapped_column(
+        String(128), unique=True, nullable=False, index=True
+    )
+    user_code: Mapped[str] = mapped_column(
+        String(16), unique=True, nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=DeviceCodeStatus.PENDING.value
+    )
 
     # Keycloak user ID who authorized the device (set during verification)
-    keycloak_user_id = Column(String(255), nullable=True)
+    keycloak_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Timestamps
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    authorized_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    authorized_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Rate limiting fields for RFC 8628 section 3.5 compliance
-    last_poll_time = Column(DateTime(timezone=True), nullable=True)
-    current_interval = Column(Integer, nullable=False, default=5)
+    last_poll_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    current_interval: Mapped[int] = mapped_column(nullable=False, default=5)
 
     def __repr__(self) -> str:
         return f"<DeviceCode(user_code='{self.user_code}', status='{self.status}')>"
@@ -47,7 +60,11 @@ class DeviceCode(Base):
     def is_expired(self) -> bool:
         """Check if the device code has expired."""
         now = datetime.now(timezone.utc)
-        return now > self.expires_at
+        # Handle timezone-naive datetime from database by assuming it's UTC
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return now > expires_at
 
     def is_pending(self) -> bool:
         """Check if the device code is still pending authorization."""
@@ -85,8 +102,13 @@ class DeviceCode(Base):
         if self.last_poll_time is None:
             return False, self.current_interval
 
+        # Handle timezone-naive datetime from database by assuming it's UTC
+        last_poll_time = self.last_poll_time
+        if last_poll_time.tzinfo is None:
+            last_poll_time = last_poll_time.replace(tzinfo=timezone.utc)
+
         # Calculate time since last poll
-        time_since_last_poll = (now - self.last_poll_time).total_seconds()
+        time_since_last_poll = (now - last_poll_time).total_seconds()
 
         # Check if polling too fast
         if time_since_last_poll < self.current_interval:

@@ -9,7 +9,6 @@ import LessonPlanIcon from "#/icons/lesson-plan.svg?react";
 import { useConversationStore } from "#/stores/conversation-store";
 import { ChangeAgentContextMenu } from "./change-agent-context-menu";
 import { cn } from "#/utils/utils";
-import { USE_PLANNING_AGENT } from "#/utils/feature-flags";
 import { useAgentState } from "#/hooks/use-agent-state";
 import { AgentState } from "#/types/agent-state";
 import { useActiveConversation } from "#/hooks/query/use-active-conversation";
@@ -25,9 +24,7 @@ export function ChangeAgentButton() {
 
   const webSocketStatus = useUnifiedWebSocketStatus();
 
-  const isWebSocketConnected = webSocketStatus === "CONNECTED";
-
-  const shouldUsePlanningAgent = USE_PLANNING_AGENT();
+  const isWebSocketConnected = webSocketStatus === "OPEN";
 
   const { curAgentState } = useAgentState();
 
@@ -45,7 +42,7 @@ export function ChangeAgentButton() {
   // Poll sub-conversation task status
   const { taskStatus, subConversationId } = useSubConversationTaskPolling(
     subConversationTaskId,
-    conversation?.conversation_id || null,
+    conversation?.id || null,
   );
 
   // Invalidate parent conversation cache when task is ready (only once per task)
@@ -53,7 +50,7 @@ export function ChangeAgentButton() {
     if (
       taskStatus === "READY" &&
       subConversationId &&
-      conversation?.conversation_id &&
+      conversation?.id &&
       subConversationTaskId &&
       lastInvalidatedTaskIdRef.current !== subConversationTaskId
     ) {
@@ -61,13 +58,13 @@ export function ChangeAgentButton() {
       lastInvalidatedTaskIdRef.current = subConversationTaskId;
       // Invalidate the parent conversation to refetch with updated sub_conversation_ids
       queryClient.invalidateQueries({
-        queryKey: ["user", "conversation", conversation.conversation_id],
+        queryKey: ["user", "conversation", conversation.id],
       });
     }
   }, [
     taskStatus,
     subConversationId,
-    conversation?.conversation_id,
+    conversation?.id,
     subConversationTaskId,
     queryClient,
   ]);
@@ -83,10 +80,7 @@ export function ChangeAgentButton() {
   }, [isAgentRunning, contextMenuOpen, isWebSocketConnected]);
 
   const isButtonDisabled =
-    isAgentRunning ||
-    isCreatingConversation ||
-    !isWebSocketConnected ||
-    !shouldUsePlanningAgent;
+    isAgentRunning || isCreatingConversation || !isWebSocketConnected;
 
   // Handle Shift + Tab keyboard shortcut to cycle through modes
   useEffect(() => {
@@ -150,10 +144,6 @@ export function ChangeAgentButton() {
     }
     return <LessonPlanIcon width={18} height={18} color="#ffffff" />;
   }, [isExecutionAgent]);
-
-  if (!shouldUsePlanningAgent) {
-    return null;
-  }
 
   return (
     <div className="relative">

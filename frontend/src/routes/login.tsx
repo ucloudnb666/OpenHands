@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams, useLocation } from "react-router";
 import { useIsAuthed } from "#/hooks/query/use-is-authed";
 import { useConfig } from "#/hooks/query/use-config";
 import { useGitHubAuthUrl } from "#/hooks/use-github-auth-url";
@@ -7,11 +7,18 @@ import { useEmailVerification } from "#/hooks/use-email-verification";
 import { useInvitation } from "#/hooks/use-invitation";
 import { LoginContent } from "#/components/features/auth/login-content";
 import { EmailVerificationModal } from "#/components/features/waitlist/email-verification-modal";
+import { RequestSubmittedModal } from "#/components/features/onboarding/request-submitted-modal";
+
+interface LocationState {
+  showRequestSubmittedModal?: boolean;
+}
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/";
+  const locationState = location.state as LocationState | null;
 
   const config = useConfig();
   const { data: isAuthed, isLoading: isAuthLoading } = useIsAuthed();
@@ -19,6 +26,7 @@ export default function LoginPage() {
     emailVerified,
     hasDuplicatedEmail,
     recaptchaBlocked,
+    wasRateLimited,
     emailVerificationModalOpen,
     setEmailVerificationModalOpen,
     userId,
@@ -31,6 +39,15 @@ export default function LoginPage() {
     authUrl: config.data?.auth_url,
   });
 
+  const [showRequestModal, setShowRequestModal] = React.useState(
+    () => locationState?.showRequestSubmittedModal ?? false,
+  );
+
+  const handleRequestModalClose = () => {
+    setShowRequestModal(false);
+    navigate(location.pathname, { replace: true, state: {} });
+  };
+
   // Redirect OSS mode users to home
   React.useEffect(() => {
     if (!config.isLoading && config.data?.app_mode === "oss") {
@@ -39,11 +56,18 @@ export default function LoginPage() {
   }, [config.isLoading, config.data?.app_mode, navigate]);
 
   // Redirect authenticated users away from login page
+  // Preserve login_method param so useAuthCallback can store it for auto-login
   React.useEffect(() => {
     if (!isAuthLoading && isAuthed) {
-      navigate(returnTo, { replace: true });
+      const loginMethod = searchParams.get("login_method");
+      let destination = returnTo;
+      if (loginMethod) {
+        const separator = returnTo.includes("?") ? "&" : "?";
+        destination = `${returnTo}${separator}login_method=${encodeURIComponent(loginMethod)}`;
+      }
+      navigate(destination, { replace: true });
     }
-  }, [isAuthed, isAuthLoading, navigate, returnTo]);
+  }, [isAuthed, isAuthLoading, navigate, returnTo, searchParams]);
 
   if (isAuthLoading || config.isLoading) {
     return (
@@ -83,7 +107,12 @@ export default function LoginPage() {
             setEmailVerificationModalOpen(false);
           }}
           userId={userId}
+          wasRateLimited={wasRateLimited}
         />
+      )}
+
+      {showRequestModal && (
+        <RequestSubmittedModal onClose={handleRequestModalClose} />
       )}
     </>
   );

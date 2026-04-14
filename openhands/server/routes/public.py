@@ -6,40 +6,51 @@
 # Unless you are working on deprecation, please avoid extending this legacy file and consult the V1 codepaths above.
 # Tag: Legacy-V0
 # This module belongs to the old V0 web server. The V1 application server lives under openhands/app_server/.
+
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Request
 
+from openhands.app_server.utils.dependencies import get_dependencies
 from openhands.controller.agent import Agent
 from openhands.security.options import SecurityAnalyzers
-from openhands.server.dependencies import get_dependencies
 from openhands.server.shared import config, server_config
-from openhands.utils.llm import get_supported_llm_models
+from openhands.utils.llm import ModelsResponse, get_supported_llm_models
 
 app = APIRouter(prefix='/api/options', dependencies=get_dependencies())
 
 
-@app.get('/models', response_model=list[str])
-async def get_litellm_models() -> list[str]:
-    """Get all models supported by LiteLLM.
+async def get_llm_models_dependency(request: Request) -> ModelsResponse:
+    """Returns a callable that provides the LLM models implementation.
 
-    This function combines models from litellm and Bedrock, removing any
-    error-prone Bedrock models.
-
-    To get the models:
-    ```sh
-    curl http://localhost:3000/api/litellm-models
-    ```
-
-    Returns:
-        list[str]: A sorted list of unique model names.
+    Returns a factory that produces the actual implementation function.
+    Override this in enterprise/saas mode via app.dependency_overrides.
     """
     return get_supported_llm_models(config)
 
 
-@app.get('/agents', response_model=list[str])
+@app.get('/models', deprecated=True)
+async def get_litellm_models(
+    models: ModelsResponse = Depends(get_llm_models_dependency),
+) -> ModelsResponse:
+    """Get all supported LLM models.
+
+    .. deprecated::
+        This endpoint is deprecated. Use `/api/v1/config/models/search` instead.
+
+    Returns:
+        ModelsResponse: Response containing models, verified_models, verified_providers, and default_model.
+    """
+    return models
+
+
+@app.get('/agents', response_model=list[str], deprecated=True)
 async def get_agents() -> list[str]:
     """Get all agents supported by LiteLLM.
+
+    .. deprecated::
+        This endpoint is deprecated. The agent definitions are now part of the
+        OpenAPI schema so this is no longer required.
 
     To get the agents:
     ```sh
@@ -52,9 +63,13 @@ async def get_agents() -> list[str]:
     return sorted(Agent.list_agents())
 
 
-@app.get('/security-analyzers', response_model=list[str])
+@app.get('/security-analyzers', response_model=list[str], deprecated=True)
 async def get_security_analyzers() -> list[str]:
     """Get all supported security analyzers.
+
+    .. deprecated::
+        This endpoint is deprecated. The security analyzers are now part of the
+        OpenAPI schema so this is no longer required.
 
     To get the security analyzers:
     ```sh

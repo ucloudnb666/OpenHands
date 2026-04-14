@@ -1,7 +1,9 @@
 from datetime import UTC, datetime
+from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
+from server.auth.saas_user_auth import SaasUserAuth
 from storage.api_key import ApiKey
 from storage.api_key_store import ApiKeyStore
 from storage.lite_llm_manager import LiteLlmManager
@@ -11,18 +13,19 @@ from storage.org_service import OrgService
 from storage.user_store import UserStore
 
 from openhands.core.logger import openhands_logger as logger
-from openhands.server.user_auth import get_user_id
+from openhands.server.user_auth import get_user_auth, get_user_id
+from openhands.server.user_auth.user_auth import AuthType
 
 
 # Helper functions for BYOR API key management
 async def get_byor_key_from_db(user_id: str) -> str | None:
     """Get the BYOR key from the database for a user."""
-    user = await UserStore.get_user_by_id_async(user_id)
+    user = await UserStore.get_user_by_id(user_id)
     if not user:
         return None
 
     current_org_id = user.current_org_id
-    current_org_member: OrgMember = None
+    current_org_member: OrgMember | None = None
     for org_member in user.org_members:
         if org_member.org_id == current_org_id:
             current_org_member = org_member
@@ -36,12 +39,12 @@ async def get_byor_key_from_db(user_id: str) -> str | None:
 
 async def store_byor_key_in_db(user_id: str, key: str) -> None:
     """Store the BYOR key in the database for a user."""
-    user = await UserStore.get_user_by_id_async(user_id)
+    user = await UserStore.get_user_by_id(user_id)
     if not user:
         return None
 
     current_org_id = user.current_org_id
-    current_org_member: OrgMember = None
+    current_org_member: OrgMember | None = None
     for org_member in user.org_members:
         if org_member.org_id == current_org_id:
             current_org_member = org_member
@@ -49,13 +52,13 @@ async def store_byor_key_in_db(user_id: str, key: str) -> None:
     if not current_org_member:
         return None
     current_org_member.llm_api_key_for_byor = key
-    OrgMemberStore.update_org_member(current_org_member)
+    await OrgMemberStore.update_org_member(current_org_member)
 
 
 async def generate_byor_key(user_id: str) -> str | None:
     """Generate a new BYOR key for a user."""
     try:
-        user = await UserStore.get_user_by_id_async(user_id)
+        user = await UserStore.get_user_by_id(user_id)
         if not user:
             return None
         current_org_id = str(user.current_org_id)
@@ -66,22 +69,15 @@ async def generate_byor_key(user_id: str) -> str | None:
             {'type': 'byor'},
         )
 
-        if key:
-            logger.info(
-                'Successfully generated new BYOR key',
-                extra={
-                    'user_id': user_id,
-                    'key_length': len(key) if key else 0,
-                    'key_prefix': key[:10] + '...' if key and len(key) > 10 else key,
-                },
-            )
-            return key
-        else:
-            logger.error(
-                'Failed to generate BYOR LLM API key - no key in response',
-                extra={'user_id': user_id},
-            )
-            return None
+        logger.info(
+            'Successfully generated new BYOR key',
+            extra={
+                'user_id': user_id,
+                'key_length': len(key),
+                'key_prefix': key[:10] + '...' if len(key) > 10 else key,
+            },
+        )
+        return key
     except Exception as e:
         logger.exception(
             'Error generating BYOR key',
@@ -98,7 +94,7 @@ async def delete_byor_key_from_litellm(user_id: str, byor_key: str) -> bool:
     """
     try:
         # Get user to construct the key alias
-        user = await UserStore.get_user_by_id_async(user_id)
+        user = await UserStore.get_user_by_id(user_id)
         key_alias = None
         if user and user.current_org_id:
             key_alias = f'BYOR Key - user {user_id}, org {user.current_org_id}'
@@ -155,6 +151,16 @@ class ByorPermittedResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class CurrentApiKeyResponse(BaseModel):
+    """Response model for the current API key endpoint."""
+
+    id: int
+    name: str | None
+    org_id: str
+    user_id: str
+    auth_type: str
 
 
 def api_key_to_response(key: ApiKey) -> ApiKeyResponse:
@@ -251,7 +257,7 @@ async def delete_api_key(
             )
 
         # Delete the key
-        success = api_key_store.delete_api_key_by_id(key_id)
+        success = await api_key_store.delete_api_key_by_id(key_id)
 
         if not success:
             raise HTTPException(
@@ -267,6 +273,46 @@ async def delete_api_key(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to delete API key',
         )
+
+
+@api_router.get('/current', tags=['Keys'])
+async def get_current_api_key(
+    request: Request,
+    user_id: str = Depends(get_user_id),
+) -> CurrentApiKeyResponse:
+    """Get information about the currently authenticated API key.
+
+    This endpoint returns metadata about the API key used for the current request,
+    including the org_id associated with the key. This is useful for API key
+    callers who need to know which organization context their key operates in.
+
+    Returns 400 if not authenticated via API key (e.g., using cookie auth).
+    """
+    user_auth = await get_user_auth(request)
+
+    # Check if authenticated via API key
+    if user_auth.get_auth_type() != AuthType.BEARER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This endpoint requires API key authentication. Not available for cookie-based auth.',
+        )
+
+    # In SaaS context, bearer auth always produces SaasUserAuth
+    saas_user_auth = cast(SaasUserAuth, user_auth)
+
+    if saas_user_auth.api_key_org_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='This API key was created before organization support. Please regenerate your API key to use this endpoint.',
+        )
+
+    return CurrentApiKeyResponse(
+        id=saas_user_auth.api_key_id,
+        name=saas_user_auth.api_key_name,
+        org_id=str(saas_user_auth.api_key_org_id),
+        user_id=user_id,
+        auth_type=saas_user_auth.auth_type.value,
+    )
 
 
 @api_router.get('/llm/byor', tags=['Keys'])

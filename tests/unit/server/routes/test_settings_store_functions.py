@@ -6,15 +6,17 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from openhands.app_server.errors import AuthError
+from openhands.app_server.secrets.secrets_router import (
+    check_provider_tokens,
+)
+from openhands.app_server.settings.settings_router import store_llm_settings
+from openhands.core.config.mcp_config import MCPConfig, MCPStdioServerConfig
 from openhands.integrations.provider import ProviderToken
 from openhands.integrations.service_types import ProviderType
 from openhands.server.routes.secrets import (
     app as secrets_router,
 )
-from openhands.server.routes.secrets import (
-    check_provider_tokens,
-)
-from openhands.server.routes.settings import store_llm_settings
 from openhands.server.settings import POSTProviderModel
 from openhands.storage import get_file_store
 from openhands.storage.data_models.secrets import Secrets
@@ -38,10 +40,10 @@ def test_client():
 
     with (
         patch.dict(os.environ, {'SESSION_API_KEY': ''}, clear=False),
-        patch('openhands.server.dependencies._SESSION_API_KEY', None),
+        patch('openhands.app_server.utils.dependencies._SESSION_API_KEY', None),
         patch(
-            'openhands.server.routes.secrets.check_provider_tokens',
-            AsyncMock(return_value=''),
+            'openhands.app_server.secrets.secrets_router.check_provider_tokens',
+            AsyncMock(return_value=None),
         ),
     ):
         client = TestClient(test_app)
@@ -76,14 +78,10 @@ async def test_check_provider_tokens_valid():
 
     # Mock the validate_provider_token function to return GITHUB for valid tokens
     with patch(
-        'openhands.server.routes.secrets.validate_provider_token'
+        'openhands.app_server.secrets.secrets_router.validate_provider_token'
     ) as mock_validate:
         mock_validate.return_value = ProviderType.GITHUB
-
-        result = await check_provider_tokens(providers, existing_provider_tokens)
-
-        # Should return empty string for valid token
-        assert result == ''
+        await check_provider_tokens(providers, existing_provider_tokens)
         mock_validate.assert_called_once()
 
 
@@ -98,14 +96,14 @@ async def test_check_provider_tokens_invalid():
 
     # Mock the validate_provider_token function to return None for invalid tokens
     with patch(
-        'openhands.server.routes.secrets.validate_provider_token'
+        'openhands.app_server.secrets.secrets_router.validate_provider_token'
     ) as mock_validate:
         mock_validate.return_value = None
 
-        result = await check_provider_tokens(providers, existing_provider_tokens)
+        # Should raise error for invalid token
+        with pytest.raises(AuthError):
+            await check_provider_tokens(providers, existing_provider_tokens)
 
-        # Should return error message for invalid token
-        assert 'Invalid token' in result
         mock_validate.assert_called_once()
 
 
@@ -119,10 +117,7 @@ async def test_check_provider_tokens_wrong_type():
     # Empty existing provider tokens
     existing_provider_tokens = {}
 
-    result = await check_provider_tokens(providers, existing_provider_tokens)
-
-    # Should return empty string for no providers
-    assert result == ''
+    await check_provider_tokens(providers, existing_provider_tokens)
 
 
 @pytest.mark.asyncio
@@ -133,10 +128,7 @@ async def test_check_provider_tokens_no_tokens():
     # Empty existing provider tokens
     existing_provider_tokens = {}
 
-    result = await check_provider_tokens(providers, existing_provider_tokens)
-
-    # Should return empty string when no tokens provided
-    assert result == ''
+    await check_provider_tokens(providers, existing_provider_tokens)
 
 
 # Tests for store_llm_settings
@@ -193,7 +185,8 @@ async def test_store_llm_settings_partial_update():
     For OpenAI models, this returns https://api.openai.com.
     """
     settings = Settings(
-        llm_model='gpt-4'  # Only updating model (not an openhands model)
+        llm_model='gpt-4',  # Only updating model (not an openhands model)
+        llm_base_url='',  # Explicitly cleared (e.g. basic mode save)
     )
 
     # Create existing settings
@@ -209,7 +202,92 @@ async def test_store_llm_settings_partial_update():
     assert result.llm_model == 'gpt-4'
     # For SecretStr objects, we need to compare the secret value
     assert result.llm_api_key.get_secret_value() == 'existing-api-key'
-    # OpenAI models: litellm.get_api_base() returns https://api.openai.com
+    # llm_base_url="" is an explicit clear — must not be repopulated via auto-detection
+    assert result.llm_base_url is None
+
+
+@pytest.mark.asyncio
+async def test_store_llm_settings_advanced_view_clear_removes_base_url():
+    """Regression test for #13420: clearing Base URL in Advanced view must persist.
+
+    Before the fix, llm_base_url="" was treated identically to llm_base_url=None,
+    causing the backend to re-run auto-detection and overwrite the user's intent.
+    """
+    settings = Settings(
+        llm_model='gpt-4',
+        llm_base_url='',  # User deleted the field in Advanced view
+    )
+
+    existing_settings = Settings(
+        llm_model='gpt-4',
+        llm_api_key=SecretStr('my-api-key'),
+        llm_base_url='https://my-custom-proxy.example.com',
+    )
+
+    result = await store_llm_settings(settings, existing_settings)
+
+    # The old custom URL must not come back
+    assert result.llm_base_url is None
+
+
+@pytest.mark.asyncio
+async def test_store_llm_settings_mcp_update_preserves_base_url():
+    """Test that saving MCP config (without LLM fields) preserves existing base URL.
+
+    Regression test: When adding an MCP server, the frontend sends only mcp_config
+    and v1_enabled. This should not wipe out the existing llm_base_url.
+    """
+    # Simulate what the MCP add/update/delete mutations send: mcp_config but no LLM fields
+    settings = Settings(
+        mcp_config=MCPConfig(
+            stdio_servers=[
+                MCPStdioServerConfig(
+                    name='my-server',
+                    command='npx',
+                    args=['-y', '@my/mcp-server'],
+                    env={'API_TOKEN': 'secret123', 'ENDPOINT': 'https://example.com'},
+                )
+            ],
+        ),
+    )
+
+    # Create existing settings with a custom base URL
+    existing_settings = Settings(
+        llm_model='anthropic/claude-sonnet-4-5-20250929',
+        llm_api_key=SecretStr('existing-api-key'),
+        llm_base_url='https://my-custom-proxy.example.com',
+    )
+
+    result = await store_llm_settings(settings, existing_settings)
+
+    # All existing LLM settings should be preserved
+    assert result.llm_model == 'anthropic/claude-sonnet-4-5-20250929'
+    assert result.llm_api_key.get_secret_value() == 'existing-api-key'
+    assert result.llm_base_url == 'https://my-custom-proxy.example.com'
+
+
+@pytest.mark.asyncio
+async def test_store_llm_settings_no_existing_base_url_uses_auto_detection():
+    """Test auto-detection kicks in only when there is no existing base URL.
+
+    When neither the incoming settings nor existing settings have a base URL,
+    auto-detection from litellm should be used.
+    """
+    settings = Settings(
+        llm_model='gpt-4'  # Not an openhands model
+    )
+
+    # Existing settings without a base URL
+    existing_settings = Settings(
+        llm_model='gpt-3.5',
+        llm_api_key=SecretStr('existing-api-key'),
+    )
+
+    result = await store_llm_settings(settings, existing_settings)
+
+    assert result.llm_model == 'gpt-4'
+    assert result.llm_api_key.get_secret_value() == 'existing-api-key'
+    # No existing base URL, so auto-detection should set it
     assert result.llm_base_url == 'https://api.openai.com'
 
 
@@ -252,7 +330,7 @@ async def test_store_llm_settings_litellm_error_logged():
     )
 
     # The function should not raise even if litellm fails
-    with patch('openhands.server.routes.settings.logger') as mock_logger:
+    with patch('openhands.app_server.settings.settings_router.logger') as mock_logger:
         result = await store_llm_settings(settings, existing_settings)
 
         # llm_base_url should remain None since litellm couldn't find the model

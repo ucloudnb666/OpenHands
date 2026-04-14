@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import CircleIcon from "#/icons/u-circle.svg?react";
 import CheckCircleIcon from "#/icons/u-check-circle.svg?react";
-import LoadingIcon from "#/icons/loading.svg?react";
+import CheckCircleHalfIcon from "#/icons/u-check-circle-half.svg?react";
 import { I18nKey } from "#/i18n/declaration";
 import { cn } from "#/utils/utils";
 import { Typography } from "#/ui/typography";
@@ -24,7 +24,7 @@ export function TaskItem({ task }: TaskItemProps) {
       case "todo":
         return <CircleIcon className="w-4 h-4 text-[#ffffff]" />;
       case "in_progress":
-        return <LoadingIcon className="w-4 h-4 text-[#ffffff] animate-spin" />;
+        return <CheckCircleHalfIcon className="w-4 h-4 text-[#ffffff]" />;
       case "done":
         return <CheckCircleIcon className="w-4 h-4 text-[#A3A3A3]" />;
       default:
@@ -35,22 +35,16 @@ export function TaskItem({ task }: TaskItemProps) {
   const isDoneStatus = task.status === "done";
 
   return (
-    <div
-      className="flex gap-[14px] items-center px-4 py-2 w-full"
-      data-name="item"
-    >
+    <div className="flex gap-2 items-center w-full" data-name="item">
       <div className="shrink-0">{icon}</div>
-      <div className="flex flex-col items-start justify-center leading-[20px] text-nowrap whitespace-pre font-normal">
+      <div className="flex flex-col items-start justify-center leading-[16px] text-nowrap whitespace-pre font-normal">
         <Typography.Text
           className={cn(
-            "text-[12px] text-white",
-            isDoneStatus && "text-[#A3A3A3]",
+            "text-[12px]",
+            isDoneStatus ? "text-[#A3A3A3]" : "text-white",
           )}
         >
           {task.title}
-        </Typography.Text>
-        <Typography.Text className="text-[10px] text-[#A3A3A3] font-normal">
-          {t(I18nKey.TASK_TRACKING_OBSERVATION$TASK_ID)}: {task.id}
         </Typography.Text>
         {task.notes && (
           <Typography.Text className="text-[10px] text-[#A3A3A3]">

@@ -21,6 +21,7 @@ class ProviderType(Enum):
     GITHUB = 'github'
     GITLAB = 'gitlab'
     BITBUCKET = 'bitbucket'
+    BITBUCKET_DATA_CENTER = 'bitbucket_data_center'
     FORGEJO = 'forgejo'
     AZURE_DEVOPS = 'azure_devops'
     ENTERPRISE_SSO = 'enterprise_sso'
@@ -78,6 +79,16 @@ class SuggestedTask(BaseModel):
                 'ciProvider': 'Bitbucket',
                 'requestVerb': 'pull request',
             }
+        elif self.git_provider == ProviderType.BITBUCKET_DATA_CENTER:
+            return {
+                'requestType': 'Pull Request',
+                'requestTypeShort': 'PR',
+                'apiName': 'Bitbucket Data Center API',
+                'tokenEnvVar': 'BITBUCKET_DATA_CENTER_TOKEN',
+                'ciSystem': 'Bitbucket Pipelines',
+                'ciProvider': 'Bitbucket Data Center',
+                'requestVerb': 'pull request',
+            }
 
         raise ValueError(f'Provider {self.git_provider} for suggested task prompts')
 
@@ -115,13 +126,17 @@ class CreateMicroagent(BaseModel):
     title: str | None = None
 
 
-class User(BaseModel):
+class UserGitInfo(BaseModel):
     id: str
     login: str
     avatar_url: str
     company: str | None = None
     name: str | None = None
     email: str | None = None
+
+
+# Keep old name of UserGitInfo for now for backwards compatibility
+User = UserGitInfo
 
 
 class Branch(BaseModel):
@@ -176,6 +191,12 @@ class UnknownException(ValueError):
 
 class RateLimitError(ValueError):
     """Raised when the git provider's API rate limits are exceeded."""
+
+    pass
+
+
+class ProviderTimeoutError(ValueError):
+    """Raised when a request to a git provider times out."""
 
     pass
 

@@ -1,8 +1,11 @@
 import { useCallback } from "react";
-import { useWsClient } from "#/context/ws-client-provider";
-import { useActiveConversation } from "#/hooks/query/use-active-conversation";
 import { useConversationWebSocket } from "#/contexts/conversation-websocket-context";
+import { useConversationId } from "#/hooks/use-conversation-id";
 import { V1MessageContent } from "#/api/conversation-service/v1-conversation-service.types";
+
+interface SendResult {
+  queued: boolean; // true if message was queued for later delivery
+}
 
 /**
  * Unified hook for sending messages that works with both V0 and V1 conversations
@@ -10,17 +13,14 @@ import { V1MessageContent } from "#/api/conversation-service/v1-conversation-ser
  * - For V1 conversations: Uses native WebSocket via ConversationWebSocketProvider
  */
 export function useSendMessage() {
-  const { data: conversation } = useActiveConversation();
-  const { send: v0Send } = useWsClient();
+  const { conversationId } = useConversationId();
 
   // Get V1 context (will be null if not in V1 provider)
   const v1Context = useConversationWebSocket();
 
-  const isV1Conversation = conversation?.conversation_version === "V1";
-
   const send = useCallback(
-    async (event: Record<string, unknown>) => {
-      if (isV1Conversation && v1Context) {
+    async (event: Record<string, unknown>): Promise<SendResult> => {
+      if (v1Context) {
         // V1: Convert V0 event format to V1 message format
         const { action, args } = event as {
           action: string;
@@ -50,21 +50,17 @@ export function useSendMessage() {
           }
 
           // Send via V1 WebSocket context (uses correct host/port)
-          await v1Context.sendMessage({
+          const result = await v1Context.sendMessage({
             role: "user",
             content,
           });
-        } else {
-          // For non-message events, fall back to V0 send
-          // (e.g., agent state changes, other control events)
-          v0Send(event);
+          return result;
         }
-      } else {
-        // V0: Use Socket.IO
-        v0Send(event);
+        return { queued: false };
       }
+      return { queued: false };
     },
-    [isV1Conversation, v1Context, v0Send],
+    [v1Context, conversationId],
   );
 
   return { send };

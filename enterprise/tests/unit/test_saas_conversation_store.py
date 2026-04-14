@@ -1,15 +1,13 @@
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID
 
 import pytest
+from storage.saas_conversation_store import SaasConversationStore
+from storage.user import User
 
+from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
-
-# Mock the database module before importing
-with patch('storage.database.engine'), patch('storage.database.a_engine'):
-    from storage.saas_conversation_store import SaasConversationStore
-    from storage.user import User
 
 
 @pytest.fixture(autouse=True)
@@ -166,3 +164,175 @@ async def test_exists(session_maker):
     assert not await store.exists('exists-test')
     await store.save_metadata(metadata)
     assert await store.exists('exists-test')
+
+
+class TestGetInstance:
+    """Tests for SaasConversationStore.get_instance method.
+
+    The get_instance method uses async UserStore.get_user_by_id because
+    callers now use asyncio.run_coroutine_threadsafe() to dispatch to the main
+    event loop where asyncpg connections work properly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_instance_uses_async_get_user_by_id(self):
+        """Verify get_instance calls the async get_user_by_id for proper event loop handling."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        mock_user = MagicMock(spec=User)
+        mock_user.current_org_id = UUID(user_id)
+        mock_config = MagicMock(spec=OpenHandsConfig)
+
+        with patch(
+            'storage.saas_conversation_store.UserStore.get_user_by_id',
+            AsyncMock(return_value=mock_user),
+        ) as mock_async_get_user, patch(
+            'storage.saas_conversation_store.session_maker'
+        ):
+            # Act
+            store = await SaasConversationStore.get_instance(mock_config, user_id)
+
+            # Assert
+            mock_async_get_user.assert_called_once_with(user_id)
+            assert store.user_id == user_id
+            assert store.org_id == mock_user.current_org_id
+
+    @pytest.mark.asyncio
+    async def test_get_instance_handles_none_user(self):
+        """Verify get_instance handles case when user is not found."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        mock_config = MagicMock(spec=OpenHandsConfig)
+
+        with patch(
+            'storage.saas_conversation_store.UserStore.get_user_by_id',
+            AsyncMock(return_value=None),
+        ), patch('storage.saas_conversation_store.session_maker'):
+            # Act
+            store = await SaasConversationStore.get_instance(mock_config, user_id)
+
+            # Assert
+            assert store.user_id == user_id
+            assert store.org_id is None
+
+    @pytest.mark.asyncio
+    async def test_get_resolver_instance_passes_resolver_org_id(self):
+        """Verify get_resolver_instance forwards resolver_org_id to the store."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        resolver_org_id = UUID('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+        mock_user = MagicMock(spec=User)
+        mock_user.current_org_id = UUID(user_id)
+        mock_config = MagicMock(spec=OpenHandsConfig)
+
+        with patch(
+            'storage.saas_conversation_store.UserStore.get_user_by_id',
+            AsyncMock(return_value=mock_user),
+        ), patch('storage.saas_conversation_store.session_maker'):
+            # Act
+            store = await SaasConversationStore.get_resolver_instance(
+                mock_config, user_id, resolver_org_id=resolver_org_id
+            )
+
+            # Assert
+            assert store.resolver_org_id == resolver_org_id
+
+    @pytest.mark.asyncio
+    async def test_get_instance_does_not_have_resolver_org_id(self):
+        """Verify get_instance does not set resolver_org_id (it's not a resolver path)."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        mock_user = MagicMock(spec=User)
+        mock_user.current_org_id = UUID(user_id)
+        mock_config = MagicMock(spec=OpenHandsConfig)
+
+        with patch(
+            'storage.saas_conversation_store.UserStore.get_user_by_id',
+            AsyncMock(return_value=mock_user),
+        ), patch('storage.saas_conversation_store.session_maker'):
+            # Act
+            store = await SaasConversationStore.get_instance(mock_config, user_id)
+
+            # Assert
+            assert store.resolver_org_id is None
+
+
+class TestResolverOrgIdRouting:
+    """Tests for resolver_org_id overriding org_id in save_metadata."""
+
+    @pytest.mark.asyncio
+    async def test_save_metadata_uses_resolver_org_id_over_default(self, session_maker):
+        """When resolver_org_id is set, save_metadata stores it instead of the default org_id."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        default_org_id = UUID('5594c7b6-f959-4b81-92e9-b09c206f5081')
+        resolver_org_id = UUID('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
+        store = SaasConversationStore(
+            user_id, default_org_id, session_maker, resolver_org_id=resolver_org_id
+        )
+        metadata = ConversationMetadata(
+            conversation_id='resolver-routed-conv',
+            user_id=user_id,
+            selected_repository='ClaimedOrg/repo',
+            selected_branch=None,
+            created_at=datetime.now(UTC),
+            last_updated_at=datetime.now(UTC),
+        )
+
+        # Act
+        await store.save_metadata(metadata)
+
+        # Assert - verify the SaaS metadata record has the resolver org, not the default
+        from storage.stored_conversation_metadata_saas import (
+            StoredConversationMetadataSaas,
+        )
+
+        with session_maker() as session:
+            saas_record = (
+                session.query(StoredConversationMetadataSaas)
+                .filter(
+                    StoredConversationMetadataSaas.conversation_id
+                    == 'resolver-routed-conv'
+                )
+                .first()
+            )
+            assert saas_record is not None
+            assert saas_record.org_id == resolver_org_id
+            assert saas_record.org_id != default_org_id
+
+    @pytest.mark.asyncio
+    async def test_save_metadata_uses_default_org_when_no_resolver_org(
+        self, session_maker
+    ):
+        """When resolver_org_id is None, save_metadata uses the default org_id."""
+        # Arrange
+        user_id = '5594c7b6-f959-4b81-92e9-b09c206f5081'
+        default_org_id = UUID('5594c7b6-f959-4b81-92e9-b09c206f5081')
+        store = SaasConversationStore(user_id, default_org_id, session_maker)
+        metadata = ConversationMetadata(
+            conversation_id='default-org-conv',
+            user_id=user_id,
+            selected_repository='PersonalOrg/repo',
+            selected_branch=None,
+            created_at=datetime.now(UTC),
+            last_updated_at=datetime.now(UTC),
+        )
+
+        # Act
+        await store.save_metadata(metadata)
+
+        # Assert
+        from storage.stored_conversation_metadata_saas import (
+            StoredConversationMetadataSaas,
+        )
+
+        with session_maker() as session:
+            saas_record = (
+                session.query(StoredConversationMetadataSaas)
+                .filter(
+                    StoredConversationMetadataSaas.conversation_id == 'default-org-conv'
+                )
+                .first()
+            )
+            assert saas_record is not None
+            assert saas_record.org_id == default_org_id
