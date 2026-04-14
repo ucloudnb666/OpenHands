@@ -101,6 +101,10 @@ FUNCTION_CALLING_PATTERNS: list[str] = [
     # GLM series - verified via official docs and litellm config
     'glm-4*',
     'glm-5*',
+    # Astraflow / UCloud ModelVerse served models
+    'deepseek-r1*',
+    'deepseek-v3*',
+    'llama-3.3-70b*',
 ]
 
 REASONING_EFFORT_PATTERNS: list[str] = [
