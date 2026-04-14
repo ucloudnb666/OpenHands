@@ -141,6 +141,42 @@ class LLM(RetryMixin, DebugMixin):
                 f'Rewrote openhands/{model_name} to {self.config.model} with base URL {self.config.base_url}'
             )
 
+        # Handle Astraflow provider (global) – OpenAI-compatible endpoint
+        elif self.config.model.startswith('astraflow/'):
+            model_name = self.config.model.removeprefix('astraflow/')
+            if not self.config.api_key:
+                import os as _os
+                _key = _os.environ.get('ASTRAFLOW_API_KEY', '')
+                if _key:
+                    from pydantic import SecretStr as _SecretStr
+                    self.config.api_key = _SecretStr(_key)
+            if not self.config.base_url:
+                self.config.base_url = 'https://api-us-ca.umodelverse.ai/v1'
+            self.config.model = model_name
+            self.config.custom_llm_provider = 'openai'
+            logger.debug(
+                f'Rewrote astraflow/{model_name} to openai/{model_name} '
+                f'with base URL {self.config.base_url}'
+            )
+
+        # Handle Astraflow China provider – OpenAI-compatible China endpoint
+        elif self.config.model.startswith('astraflow-cn/'):
+            model_name = self.config.model.removeprefix('astraflow-cn/')
+            if not self.config.api_key:
+                import os as _os
+                _key = _os.environ.get('ASTRAFLOW_CN_API_KEY', '')
+                if _key:
+                    from pydantic import SecretStr as _SecretStr
+                    self.config.api_key = _SecretStr(_key)
+            if not self.config.base_url:
+                self.config.base_url = 'https://api.umodelverse.ai/v1'
+            self.config.model = model_name
+            self.config.custom_llm_provider = 'openai'
+            logger.debug(
+                f'Rewrote astraflow-cn/{model_name} to openai/{model_name} '
+                f'with base URL {self.config.base_url}'
+            )
+
         features = get_features(self.config.model)
         if features.supports_reasoning_effort:
             # For Gemini models, only map 'low' to optimized thinking budget
