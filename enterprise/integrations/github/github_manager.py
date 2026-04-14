@@ -23,8 +23,6 @@ from integrations.utils import (
     CONVERSATION_URL,
     ENABLE_SOLVABILITY_ANALYSIS,
     HOST_URL,
-    LAMINAR_ENABLED,
-    LAMINAR_PROJECT_API_KEY,
     OPENHANDS_RESOLVER_TEMPLATES_DIR,
     get_session_expired_message,
     get_user_not_found_message,
@@ -40,6 +38,7 @@ from server.utils.conversation_callback_utils import register_callback_processor
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderToken, ProviderType
 from openhands.integrations.service_types import AuthenticationError
+from openhands.sdk.observability import init_laminar_for_external
 from openhands.server.types import (
     LLMAuthenticationError,
     MissingSettingsError,
@@ -332,15 +331,8 @@ class GithubManager(Manager[GithubViewType]):
             GithubCallbackProcessor,
         )
 
-        # Initialize Laminar if enabled
-        laminar_span_context = None
-        if LAMINAR_ENABLED:
-            try:
-                Laminar.initialize(project_api_key=LAMINAR_PROJECT_API_KEY)
-                laminar_span_context = Laminar.get_laminar_span_context()
-                logger.info('[Github] Laminar initialized for observability')
-            except Exception as e:
-                logger.warning(f'[Github] Failed to initialize Laminar: {e}')
+        # Initialize Laminar for external caller (webhook) and get parent span context
+        laminar_span_context = init_laminar_for_external()
 
         try:
             msg_info: str = ''
@@ -402,8 +394,8 @@ class GithubManager(Manager[GithubViewType]):
                     github_view.user_info.keycloak_user_id, self.token_manager
                 )
 
-                # Set up Laminar tracing if enabled
-                if LAMINAR_ENABLED and laminar_span_context:
+                # Set up Laminar tracing if enabled (laminar_span_context is None if disabled)
+                if laminar_span_context:
                     try:
                         with Laminar.start_as_current_span(
                             name='github-resolver',
@@ -502,8 +494,8 @@ class GithubManager(Manager[GithubViewType]):
         except Exception:
             logger.warning('[Github]: Error saving interaction data', exc_info=True)
 
-        # Flush Laminar traces if enabled
-        if LAMINAR_ENABLED:
+        # Flush Laminar traces if enabled (laminar_span_context is None if disabled)
+        if laminar_span_context:
             try:
                 Laminar.flush()
             except Exception as e:

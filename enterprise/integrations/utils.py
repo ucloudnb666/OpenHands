@@ -98,10 +98,6 @@ ENABLE_V1_SLACK_RESOLVER = (
     os.getenv('ENABLE_V1_SLACK_RESOLVER', 'false').lower() == 'true'
 )
 
-# Laminar observability settings
-LAMINAR_ENABLED = os.environ.get('LMNR_PROJECT_API_KEY', '') != ''
-LAMINAR_PROJECT_API_KEY = os.environ.get('LMNR_PROJECT_API_KEY', '')
-
 # Toggle for V1 GitLab resolver feature
 ENABLE_V1_GITLAB_RESOLVER = (
     os.getenv('ENABLE_V1_GITLAB_RESOLVER', 'false').lower() == 'true'
