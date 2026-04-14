@@ -92,23 +92,16 @@ class TestJiraNewConversationView:
     @pytest.mark.asyncio
     @patch('integrations.jira.jira_view.resolve_org_for_repo', new_callable=AsyncMock)
     @patch('integrations.jira.jira_view.ProviderHandler')
-    @patch(
-        'integrations.jira.jira_view.SaasConversationStore.get_resolver_instance',
-        new_callable=AsyncMock,
-    )
-    @patch('integrations.jira.jira_view.start_conversation', new_callable=AsyncMock)
-    @patch('integrations.jira.jira_view.integration_store')
+    @patch('integrations.jira.jira_view.get_app_conversation_service')
     async def test_create_or_update_conversation_success(
         self,
-        mock_integration_store,
-        mock_start_convo,
-        mock_get_resolver_instance,
+        mock_get_app_service,
         mock_provider_handler_cls,
         mock_resolve_org,
         new_conversation_view,
         mock_jinja_env,
     ):
-        """Test successful conversation creation"""
+        """Test successful conversation creation using V1 system"""
         new_conversation_view._issue_title = 'Test Issue'
         new_conversation_view._issue_description = 'Test description'
 
@@ -119,10 +112,20 @@ class TestJiraNewConversationView:
         mock_provider_handler_cls.return_value = mock_handler
 
         mock_resolve_org.return_value = None
-        mock_store = MagicMock()
-        mock_store.save_metadata = AsyncMock()
-        mock_get_resolver_instance.return_value = mock_store
-        mock_integration_store.create_conversation = AsyncMock()
+
+        # Mock the V1 app conversation service
+        mock_service = MagicMock()
+        mock_task = MagicMock()
+        mock_task.status = MagicMock()  # Not ERROR status
+
+        async def mock_start_app_conversation(*args, **kwargs):
+            yield mock_task
+
+        mock_service.start_app_conversation = mock_start_app_conversation
+        mock_context_manager = MagicMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_get_app_service.return_value = mock_context_manager
 
         result = await new_conversation_view.create_or_update_conversation(
             mock_jinja_env
@@ -131,8 +134,7 @@ class TestJiraNewConversationView:
         assert result is not None
         assert isinstance(result, str)
         assert len(result) == 32  # uuid4().hex format
-        mock_start_convo.assert_called_once()
-        mock_integration_store.create_conversation.assert_called_once()
+        mock_get_app_service.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_or_update_conversation_no_repo(
@@ -375,8 +377,8 @@ class TestJiraFactory:
 CLAIMING_ORG_ID = UUID('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')
 
 
-class TestJiraV0ConversationRouting:
-    """Test V0 conversation routing logic based on claimed git organizations."""
+class TestJiraV1ConversationRouting:
+    """Test V1 conversation routing logic based on claimed git organizations."""
 
     @pytest.fixture
     def routing_view(
@@ -405,17 +407,10 @@ class TestJiraV0ConversationRouting:
     @pytest.mark.asyncio
     @patch('integrations.jira.jira_view.resolve_org_for_repo', new_callable=AsyncMock)
     @patch('integrations.jira.jira_view.ProviderHandler')
-    @patch(
-        'integrations.jira.jira_view.SaasConversationStore.get_resolver_instance',
-        new_callable=AsyncMock,
-    )
-    @patch('integrations.jira.jira_view.start_conversation', new_callable=AsyncMock)
-    @patch('integrations.jira.jira_view.integration_store')
+    @patch('integrations.jira.jira_view.get_app_conversation_service')
     async def test_routes_to_claimed_org_when_user_is_member(
         self,
-        mock_integration_store,
-        mock_start_convo,
-        mock_get_resolver_instance,
+        mock_get_app_service,
         mock_provider_handler_cls,
         mock_resolve_org,
         routing_view,
@@ -430,10 +425,20 @@ class TestJiraV0ConversationRouting:
         mock_provider_handler_cls.return_value = mock_handler
 
         mock_resolve_org.return_value = CLAIMING_ORG_ID
-        mock_store = MagicMock()
-        mock_store.save_metadata = AsyncMock()
-        mock_get_resolver_instance.return_value = mock_store
-        mock_integration_store.create_conversation = AsyncMock()
+
+        # Mock the V1 app conversation service
+        mock_service = MagicMock()
+        mock_task = MagicMock()
+        mock_task.status = MagicMock()  # Not ERROR status
+
+        async def mock_start_app_conversation(*args, **kwargs):
+            yield mock_task
+
+        mock_service.start_app_conversation = mock_start_app_conversation
+        mock_context_manager = MagicMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_get_app_service.return_value = mock_context_manager
 
         # Act
         await routing_view.create_or_update_conversation(mock_jinja_env)
@@ -444,26 +449,16 @@ class TestJiraV0ConversationRouting:
             full_repo_name='test/repo1',
             keycloak_user_id='test_keycloak_id',
         )
-        call_args = mock_get_resolver_instance.call_args
-        assert call_args[0][1] == 'test_keycloak_id'  # user_id
-        assert call_args[0][2] == CLAIMING_ORG_ID  # resolver_org_id
-        saved_metadata = mock_store.save_metadata.call_args[0][0]
-        assert saved_metadata.git_provider == ProviderType.GITHUB
+        # In V1, the resolved_org_id is set on the view
+        assert routing_view.resolved_org_id == CLAIMING_ORG_ID
 
     @pytest.mark.asyncio
     @patch('integrations.jira.jira_view.resolve_org_for_repo', new_callable=AsyncMock)
     @patch('integrations.jira.jira_view.ProviderHandler')
-    @patch(
-        'integrations.jira.jira_view.SaasConversationStore.get_resolver_instance',
-        new_callable=AsyncMock,
-    )
-    @patch('integrations.jira.jira_view.start_conversation', new_callable=AsyncMock)
-    @patch('integrations.jira.jira_view.integration_store')
+    @patch('integrations.jira.jira_view.get_app_conversation_service')
     async def test_falls_back_to_personal_workspace_when_no_claim(
         self,
-        mock_integration_store,
-        mock_start_convo,
-        mock_get_resolver_instance,
+        mock_get_app_service,
         mock_provider_handler_cls,
         mock_resolve_org,
         routing_view,
@@ -478,17 +473,26 @@ class TestJiraV0ConversationRouting:
         mock_provider_handler_cls.return_value = mock_handler
 
         mock_resolve_org.return_value = None
-        mock_store = MagicMock()
-        mock_store.save_metadata = AsyncMock()
-        mock_get_resolver_instance.return_value = mock_store
-        mock_integration_store.create_conversation = AsyncMock()
+
+        # Mock the V1 app conversation service
+        mock_service = MagicMock()
+        mock_task = MagicMock()
+        mock_task.status = MagicMock()  # Not ERROR status
+
+        async def mock_start_app_conversation(*args, **kwargs):
+            yield mock_task
+
+        mock_service.start_app_conversation = mock_start_app_conversation
+        mock_context_manager = MagicMock()
+        mock_context_manager.__aenter__ = AsyncMock(return_value=mock_service)
+        mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+        mock_get_app_service.return_value = mock_context_manager
 
         # Act
         await routing_view.create_or_update_conversation(mock_jinja_env)
 
-        # Assert
-        call_args = mock_get_resolver_instance.call_args
-        assert call_args[0][2] is None  # resolver_org_id is None
+        # Assert - In V1, resolved_org_id should be None for personal workspace
+        assert routing_view.resolved_org_id is None
 
 
 class TestJiraPayloadParser:
