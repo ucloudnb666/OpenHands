@@ -1,5 +1,4 @@
 import logging
-from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -22,6 +21,7 @@ from openhands.app_server.event_callback.util import (
 )
 from openhands.sdk import Event
 from openhands.sdk.event import ConversationStateUpdateEvent
+from openhands.utils.http_session import httpx_verify_option
 
 _logger = logging.getLogger(__name__)
 
@@ -31,8 +31,11 @@ JIRA_CLOUD_API_URL = 'https://api.atlassian.com/ex/jira'
 class JiraV1CallbackProcessor(EventCallbackProcessor):
     """Callback processor for Jira V1 integrations."""
 
-    jira_view_data: dict[str, Any] = Field(default_factory=dict)
     should_request_summary: bool = Field(default=True)
+    svc_acc_email: str
+    decrypted_api_key: str
+    issue_key: str
+    jira_cloud_id: str
 
     async def __call__(
         self,
@@ -202,24 +205,21 @@ class JiraV1CallbackProcessor(EventCallbackProcessor):
 
     async def _post_summary_to_jira(self, summary: str):
         """Post the summary back to the Jira issue."""
-        from openhands.utils.http_session import httpx_verify_option
-
-        jira_workspace = cast(dict, self.jira_view_data.get('jira_workspace'))
-        svc_acc_email = self.jira_view_data.get('svc_acc_email')
-        decrypted_api_key = self.jira_view_data.get('decrypted_api_key')
-        issue_key = self.jira_view_data.get('issue_key')
-        jira_cloud_id = jira_workspace.get('jira_cloud_id')
-
         if not all(
-            [jira_workspace, svc_acc_email, decrypted_api_key, issue_key, jira_cloud_id]
+            [
+                self.svc_acc_email,
+                self.decrypted_api_key,
+                self.issue_key,
+                self.jira_cloud_id,
+            ]
         ):
             _logger.warning('[Jira V1] Missing required data for posting summary')
             return
 
         # Add a comment to the Jira issue with the summary
         comment_url = (
-            f'{JIRA_CLOUD_API_URL}/{jira_cloud_id}'
-            f'/rest/api/2/issue/{issue_key}/comment'
+            f'{JIRA_CLOUD_API_URL}/{self.jira_cloud_id}'
+            f'/rest/api/2/issue/{self.issue_key}/comment'
         )
 
         comment_body = {
@@ -243,8 +243,8 @@ class JiraV1CallbackProcessor(EventCallbackProcessor):
         async with httpx.AsyncClient(verify=httpx_verify_option()) as client:
             response = await client.post(
                 comment_url,
-                auth=(svc_acc_email, decrypted_api_key),
+                auth=(self.svc_acc_email, self.decrypted_api_key),
                 json=comment_body,
             )
             response.raise_for_status()
-            _logger.info(f'[Jira V1] Posted summary to {issue_key}')
+            _logger.info(f'[Jira V1] Posted summary to {self.issue_key}')

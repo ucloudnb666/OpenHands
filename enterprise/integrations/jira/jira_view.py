@@ -273,13 +273,12 @@ class JiraNewConversationView(JiraViewInterface):
             JiraV1CallbackProcessor,
         )
 
+
         return JiraV1CallbackProcessor(
-            jira_view_data={
-                'issue_key': self.payload.issue_key,
-                'jira_workspace': self.jira_workspace,
-                'svc_acc_email': self.jira_workspace.svc_acc_email,
-                'decrypted_api_key': self._decrypted_api_key,
-            }
+            svc_acc_email=self.jira_workspace.svc_acc_email,
+            decrypted_api_key=self._decrypted_api_key,
+            issue_key=self.payload.issue_key,
+            jira_cloud_id=self.jira_workspace.jira_cloud_id,
         )
 
     async def _get_resolved_org_id(self) -> UUID | None:
