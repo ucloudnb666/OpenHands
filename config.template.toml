@@ -215,6 +215,23 @@ model = "gpt-4o"
 # The number of times llm_editor tries to fix an error when editing.
 correct_num = 5
 
+# Example: Astraflow (UCloud ModelVerse) global endpoint
+# Set ASTRAFLOW_API_KEY in your environment, or fill api_key below.
+# Model prefix "astraflow/" is automatically rewritten to the correct base URL.
+#[llm.astraflow]
+#model = "astraflow/deepseek-v3"
+#api_key = ""  # or set ASTRAFLOW_API_KEY env var
+#base_url = "https://api-us-ca.umodelverse.ai/v1"
+#custom_llm_provider = "openai"
+
+# Example: Astraflow China endpoint
+# Set ASTRAFLOW_CN_API_KEY in your environment, or fill api_key below.
+#[llm.astraflow-cn]
+#model = "astraflow-cn/deepseek-v3"
+#api_key = ""  # or set ASTRAFLOW_CN_API_KEY env var
+#base_url = "https://api.umodelverse.ai/v1"
+#custom_llm_provider = "openai"
+
 [llm.gpt4o-mini]
 api_key = ""
 model = "gpt-4o"
