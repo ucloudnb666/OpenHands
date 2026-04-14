@@ -395,6 +395,13 @@ class GithubManager(Manager[GithubViewType]):
                 )
 
                 # Set up Laminar tracing if enabled (laminar_span_context is None if disabled)
+                create_conversation_coro = github_view.create_new_conversation(
+                    self.jinja_env,
+                    secret_store.provider_tokens,
+                    convo_metadata,
+                    saas_user_auth,
+                )
+
                 if laminar_span_context:
                     try:
                         with Laminar.start_as_current_span(
@@ -408,28 +415,13 @@ class GithubManager(Manager[GithubViewType]):
                                 'username': user_info.username,
                                 'conversation_id': github_view.conversation_id,
                             })
-                            await github_view.create_new_conversation(
-                                self.jinja_env,
-                                secret_store.provider_tokens,
-                                convo_metadata,
-                                saas_user_auth,
-                            )
+                            await create_conversation_coro
                     except Exception as e:
-                        logger.warning(f'[Github] Laminar span error: {e}')
-                        # Fall back to non-Laminar execution
-                        await github_view.create_new_conversation(
-                            self.jinja_env,
-                            secret_store.provider_tokens,
-                            convo_metadata,
-                            saas_user_auth,
-                        )
+                        logger.warning(f'[Github] Laminar tracing error: {e}')
+                        # Fall back to non-Laminar execution if span creation failed
+                        await create_conversation_coro
                 else:
-                    await github_view.create_new_conversation(
-                        self.jinja_env,
-                        secret_store.provider_tokens,
-                        convo_metadata,
-                        saas_user_auth,
-                    )
+                    await create_conversation_coro
 
                 conversation_id = github_view.conversation_id
 
