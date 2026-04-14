@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from types import MappingProxyType
 
 from github import Auth, Github, GithubIntegration
@@ -394,34 +395,35 @@ class GithubManager(Manager[GithubViewType]):
                     github_view.user_info.keycloak_user_id, self.token_manager
                 )
 
-                # Set up Laminar tracing if enabled (laminar_span_context is None if disabled)
-                create_conversation_coro = github_view.create_new_conversation(
-                    self.jinja_env,
-                    secret_store.provider_tokens,
-                    convo_metadata,
-                    saas_user_auth,
-                )
-
+                # Try to set up Laminar span before conversation creation
+                # Note: Only catch Laminar setup errors; conversation errors should propagate
+                span_context = nullcontext()
                 if laminar_span_context:
                     try:
-                        with Laminar.start_as_current_span(
+                        span = Laminar.start_as_current_span(
                             name='github-resolver',
                             parent_span_context=laminar_span_context,
-                        ):
-                            Laminar.set_trace_metadata({
-                                'source': 'github',
-                                'repo': github_view.full_repo_name,
-                                'issue_number': str(github_view.issue_number),
-                                'username': user_info.username,
-                                'conversation_id': github_view.conversation_id,
-                            })
-                            await create_conversation_coro
+                        )
+                        Laminar.set_trace_metadata({
+                            'source': 'github',
+                            'repo': github_view.full_repo_name,
+                            'issue_number': str(github_view.issue_number),
+                            'username': user_info.username,
+                            'conversation_id': github_view.conversation_id,
+                        })
+                        span_context = span
                     except Exception as e:
-                        logger.warning(f'[Github] Laminar tracing error: {e}')
-                        # Fall back to non-Laminar execution if span creation failed
-                        await create_conversation_coro
-                else:
-                    await create_conversation_coro
+                        # Log Laminar setup failure but continue without tracing
+                        logger.warning(f'[Github] Laminar span setup error: {e}')
+
+                # Create conversation (with span if enabled)
+                with span_context:
+                    await github_view.create_new_conversation(
+                        self.jinja_env,
+                        secret_store.provider_tokens,
+                        convo_metadata,
+                        saas_user_auth,
+                    )
 
                 conversation_id = github_view.conversation_id
 

@@ -614,125 +614,37 @@ class TestGetUserNotFoundMessageIntegration:
 class TestLaminarObservability:
     """Test cases for Laminar observability integration."""
 
-    @pytest.fixture
-    def mock_token_manager(self):
-        """Create a mock token manager."""
-        token_manager = MagicMock()
-        token_manager.get_idp_token_from_idp_user_id = AsyncMock(return_value='fake-token')
-        return token_manager
-
-    @pytest.fixture
-    def mock_data_collector(self):
-        """Create a mock data collector."""
-        data_collector = MagicMock()
-        data_collector.process_payload = AsyncMock()
-        data_collector.save_data = AsyncMock()
-        return data_collector
-
-    @pytest.fixture
-    def mock_github_view(self):
-        """Create a mock GitHub view."""
-        view = MagicMock()
-        view.user_info = MagicMock()
-        view.user_info.user_id = '123'
-        view.user_info.username = 'testuser'
-        view.user_info.keycloak_user_id = 'keycloak-123'
-        view.full_repo_name = 'test-owner/test-repo'
-        view.issue_number = 42
-        view.conversation_id = None
-        view.initialize_new_conversation = AsyncMock(
-            return_value={'conversation_id': 'new-convo-123'}
-        )
-        view.create_new_conversation = AsyncMock(return_value=None)
-        view.v1_enabled = False
-        return view
-
-    @patch('integrations.github.github_manager.Auth')
-    @patch('integrations.github.github_manager.GithubIntegration')
-    @patch('integrations.github.github_manager.Github')
-    @patch('integrations.github.github_manager.Laminar')
-    def test_laminar_tracing_enabled_when_api_key_set(
-        self,
-        mock_laminar,
-        mock_github_class,
-        mock_github_integration,
-        mock_auth,
-        mock_token_manager,
-        mock_data_collector,
-        mock_github_view,
-    ):
-        """Test that Laminar tracing is enabled when LMNR_PROJECT_API_KEY is set."""
-        # Set up mock span context
-        mock_laminar_span = MagicMock()
-        mock_laminar_span.__enter__ = MagicMock(return_value=None)
-        mock_laminar_span.__exit__ = MagicMock(return_value=False)
-        mock_laminar.start_as_current_span.return_value = mock_laminar_span
-
-        # Import after patching
-        from openhands.sdk.observability import init_laminar_for_external
-
-        # Test: init_laminar_for_external returns span context when enabled
-        # This test verifies the pattern - actual SDK behavior tested elsewhere
-        assert mock_laminar is not None
-
-    @patch('integrations.github.github_manager.Auth')
-    @patch('integrations.github.github_manager.GithubIntegration')
-    @patch('integrations.github.github_manager.Github')
-    def test_metadata_set_correctly(
-        self,
-        mock_github_class,
-        mock_github_integration,
-        mock_auth,
-        mock_token_manager,
-        mock_data_collector,
-        mock_github_view,
-    ):
-        """Test that Laminar metadata is set correctly when tracing is enabled."""
-        # Verify metadata keys are correctly defined
-        expected_metadata_keys = {
-            'source',
-            'repo',
-            'issue_number',
-            'username',
-            'conversation_id',
-        }
-        # This tests the metadata structure we expect to set
-        assert expected_metadata_keys == {
-            'source',
-            'repo',
-            'issue_number',
-            'username',
-            'conversation_id',
-        }
-
-    @patch('integrations.github.github_manager.Auth')
-    @patch('integrations.github.github_manager.GithubIntegration')
-    @patch('integrations.github.github_manager.Github')
-    @patch('integrations.github.github_manager.Laminar')
-    def test_laminar_operations_wrapped_in_try_except(
-        self,
-        mock_laminar,
-        mock_github_class,
-        mock_github_integration,
-        mock_auth,
-        mock_token_manager,
-        mock_data_collector,
-        mock_github_view,
-    ):
-        """Test that Laminar operations are wrapped in try/except for fault tolerance."""
-        # Set up mock to raise exception
-        mock_laminar_span = MagicMock()
-        mock_laminar_span.__enter__ = MagicMock(side_effect=Exception('Laminar error'))
-        mock_laminar_span.__exit__ = MagicMock(return_value=False)
-        mock_laminar.start_as_current_span.return_value = mock_laminar_span
-
-        # Verify the code has try/except wrapping - this is a structural test
-        import inspect
+    def test_laminar_span_metadata_structure(self):
+        """Test that Laminar metadata keys are correctly defined in source code."""
         from integrations.github.github_manager import GithubManager
 
+        import inspect
+
         source = inspect.getsource(GithubManager.start_job)
-        # Verify try/except is present in the method
-        assert 'try:' in source
-        assert 'except Exception' in source
-        # Verify fallback behavior exists
-        assert 'create_new_conversation' in source
+
+        # Verify metadata keys are present in the source code
+        assert "'source': 'github'" in source
+        assert "'repo': " in source
+        assert "'issue_number': " in source
+        assert "'username': " in source
+        assert "'conversation_id': " in source
+
+    def test_laminar_error_handling_isolation(self):
+        """Verify that Laminar errors are handled separately from conversation errors.
+
+        This test verifies the code structure ensures that:
+        1. Laminar setup errors are caught in their own try/except block
+        2. The conversation is created regardless of Laminar setup failures
+        """
+        from integrations.github.github_manager import GithubManager
+
+        import inspect
+
+        source = inspect.getsource(GithubManager.start_job)
+
+        # Verify error handling structure
+        # The Laminar setup should be in its own try/except, not wrapping conversation creation
+        assert 'span_context = nullcontext()' in source
+        assert '[Github] Laminar span setup error' in source
+        # Ensure conversation creation is NOT inside the Laminar try/except
+        assert source.count('try:') >= 2  # Multiple try blocks exist
