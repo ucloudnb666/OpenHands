@@ -436,12 +436,13 @@ def infer_repo_from_message(user_msg: str) -> list[str]:
         r'(?=\s|$|}}|[\]\)\'",.:`])'  # right boundary
     )
 
-    matches: set[str] = set()
+    # Use dict to preserve ordering
+    matches: dict[str, bool] = {}
 
     # Git URLs first (highest priority)
     for owner, repo in re.findall(git_url_pattern, normalized_msg):
         repo = re.sub(r'\.git$', '', repo)
-        matches.add(f'{owner}/{repo}')
+        matches[f'{owner}/{repo}'] = True
 
     # Direct mentions
     for owner, repo in re.findall(direct_pattern, normalized_msg):
@@ -457,9 +458,10 @@ def infer_repo_from_message(user_msg: str) -> list[str]:
             continue
 
         if full_match not in matches:
-            matches.add(full_match)
+            matches[full_match] = True
 
-    return list(matches)
+    result = list(matches)
+    return result
 
 
 def filter_potential_repos_by_user_msg(
