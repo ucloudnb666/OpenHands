@@ -103,11 +103,6 @@ ENABLE_V1_GITLAB_RESOLVER = (
     os.getenv('ENABLE_V1_GITLAB_RESOLVER', 'false').lower() == 'true'
 )
 
-# Toggle for V1 Jira resolver feature
-ENABLE_V1_JIRA_RESOLVER = (
-    os.getenv('ENABLE_V1_JIRA_RESOLVER', 'false').lower() == 'true'
-)
-
 OPENHANDS_RESOLVER_TEMPLATES_DIR = (
     os.getenv('OPENHANDS_RESOLVER_TEMPLATES_DIR')
     or 'openhands/integrations/templates/resolver/'
@@ -441,12 +436,12 @@ def infer_repo_from_message(user_msg: str) -> list[str]:
         r'(?=\s|$|}}|[\]\)\'",.:`])'  # right boundary
     )
 
-    matches = set()
+    matches: set[str] = set()
 
     # Git URLs first (highest priority)
     for owner, repo in re.findall(git_url_pattern, normalized_msg):
         repo = re.sub(r'\.git$', '', repo)
-        matches.append(f'{owner}/{repo}')
+        matches.add(f'{owner}/{repo}')
 
     # Direct mentions
     for owner, repo in re.findall(direct_pattern, normalized_msg):

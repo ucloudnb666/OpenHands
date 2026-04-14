@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -204,18 +204,21 @@ class JiraV1CallbackProcessor(EventCallbackProcessor):
         """Post the summary back to the Jira issue."""
         from openhands.utils.http_session import httpx_verify_option
 
-        jira_workspace = self.jira_view_data.get('jira_workspace')
+        jira_workspace = cast(dict, self.jira_view_data.get('jira_workspace'))
         svc_acc_email = self.jira_view_data.get('svc_acc_email')
         decrypted_api_key = self.jira_view_data.get('decrypted_api_key')
         issue_key = self.jira_view_data.get('issue_key')
+        jira_cloud_id = jira_workspace.get('jira_cloud_id')
 
-        if not all([jira_workspace, svc_acc_email, decrypted_api_key, issue_key]):
+        if not all(
+            [jira_workspace, svc_acc_email, decrypted_api_key, issue_key, jira_cloud_id]
+        ):
             _logger.warning('[Jira V1] Missing required data for posting summary')
             return
 
         # Add a comment to the Jira issue with the summary
         comment_url = (
-            f'{JIRA_CLOUD_API_URL}/{jira_workspace.jira_cloud_id}'
+            f'{JIRA_CLOUD_API_URL}/{jira_cloud_id}'
             f'/rest/api/2/issue/{issue_key}/comment'
         )
 

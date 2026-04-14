@@ -20,17 +20,12 @@ from integrations.resolver_context import ResolverUserContext
 from integrations.resolver_org_router import resolve_org_for_repo
 from integrations.utils import (
     CONVERSATION_URL,
-    ENABLE_V1_JIRA_RESOLVER,
-    get_user_v1_enabled_setting,
     infer_repo_from_message,
 )
 from jinja2 import Environment
-from server.config import get_config
-from storage.jira_conversation import JiraConversation
 from storage.jira_integration_store import JiraIntegrationStore
 from storage.jira_user import JiraUser
 from storage.jira_workspace import JiraWorkspace
-from storage.saas_conversation_store import SaasConversationStore
 
 from openhands.agent_server.models import SendMessageRequest
 from openhands.app_server.app_conversation.app_conversation_models import (
@@ -43,22 +38,16 @@ from openhands.app_server.user.specifiy_user_context import USER_CONTEXT_ATTR
 from openhands.core.logger import openhands_logger as logger
 from openhands.integrations.provider import ProviderHandler, ProviderType
 from openhands.sdk import TextContent
-from openhands.server.services.conversation_service import start_conversation
 from openhands.server.user_auth.user_auth import UserAuth
 from openhands.storage.data_models.conversation_metadata import (
     ConversationMetadata,
     ConversationTrigger,
 )
-from openhands.utils.conversation_summary import get_default_conversation_title
 from openhands.utils.http_session import httpx_verify_option
 
 JIRA_CLOUD_API_URL = 'https://api.atlassian.com/ex/jira'
 
 integration_store = JiraIntegrationStore.get_instance()
-
-
-async def is_v1_enabled_for_jira_resolver(user_id: str) -> bool:
-    return await get_user_v1_enabled_setting(user_id) and ENABLE_V1_JIRA_RESOLVER
 
 
 @dataclass
@@ -73,7 +62,7 @@ class JiraNewConversationView(JiraViewInterface):
     saas_user_auth: UserAuth
     jira_user: JiraUser
     jira_workspace: JiraWorkspace
-    selected_repo: str | None = None
+    selected_repo: str = ''
     conversation_id: str = ''
 
     # Lazy-loaded issue details (cached after first fetch)
@@ -83,11 +72,8 @@ class JiraNewConversationView(JiraViewInterface):
     # Decrypted API key (set by factory)
     _decrypted_api_key: str = field(default='', repr=False)
 
-    # V1 conversation support
-    v1_enabled: bool = False
-
     # Resolved org ID for V1 conversations
-    resolved_org_id: str | None = None
+    resolved_org_id: UUID | None = None
 
     async def get_issue_details(self) -> tuple[str, str]:
         """Fetch issue details from Jira API (cached after first call).
@@ -194,122 +180,10 @@ class JiraNewConversationView(JiraViewInterface):
         if not self.selected_repo:
             raise StartingConvoException('No repository selected for this conversation')
 
-        logger.info(
-            f'[Jira V1]: User flag check in create_or_update_conversation: {self.v1_enabled}'
-        )
-
-        if self.v1_enabled:
-            # Use V1 app conversation service
-            conversation_metadata = await self._create_v1_metadata()
-            await self._create_v1_conversation(jinja_env, conversation_metadata)
-            return self.conversation_id
-
-        # V0 conversation creation
-        return await self._create_v0_conversation(jinja_env)
-
-    async def _create_v0_conversation(self, jinja_env: Environment) -> str:
-        """Create a conversation using the legacy V0 system."""
-        provider_tokens = await self.saas_user_auth.get_provider_tokens()
-        user_secrets = await self.saas_user_auth.get_secrets()
-        instructions, user_msg = await self._get_instructions(jinja_env)
-
-        try:
-            user_id = self.jira_user.keycloak_user_id
-
-            # Resolve git provider from repository
-            resolved_git_provider = None
-            if provider_tokens:
-                try:
-                    provider_handler = ProviderHandler(provider_tokens)
-                    repository = await provider_handler.verify_repo_provider(
-                        self.selected_repo
-                    )
-                    resolved_git_provider = repository.git_provider
-                except Exception as e:
-                    logger.warning(
-                        f'[Jira] Failed to resolve git provider for {self.selected_repo}: {e}'
-                    )
-
-            # Resolve target org based on claimed git organizations
-            resolved_org_id = None
-            if resolved_git_provider and self.selected_repo:
-                try:
-                    resolved_org_id = await resolve_org_for_repo(
-                        provider=resolved_git_provider.value,
-                        full_repo_name=self.selected_repo,
-                        keycloak_user_id=user_id,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f'[Jira] Failed to resolve org for {self.selected_repo}: {e}'
-                    )
-
-            # Create the conversation store with resolver org routing
-            store = await SaasConversationStore.get_resolver_instance(
-                get_config(),
-                user_id,
-                resolved_org_id,
-            )
-
-            conversation_id = uuid4().hex
-            conversation_metadata = ConversationMetadata(
-                trigger=ConversationTrigger.JIRA,
-                conversation_id=conversation_id,
-                title=get_default_conversation_title(conversation_id),
-                user_id=user_id,
-                selected_repository=self.selected_repo,
-                selected_branch=None,
-                git_provider=resolved_git_provider,
-            )
-            await store.save_metadata(conversation_metadata)
-
-            await start_conversation(
-                user_id=user_id,
-                git_provider_tokens=provider_tokens,
-                custom_secrets=user_secrets.custom_secrets if user_secrets else None,
-                initial_user_msg=user_msg,
-                image_urls=None,
-                replay_json=None,
-                conversation_id=conversation_id,
-                conversation_metadata=conversation_metadata,
-                conversation_instructions=instructions,
-            )
-
-            self.conversation_id = conversation_id
-
-            logger.info(
-                '[Jira] Created conversation',
-                extra={
-                    'conversation_id': self.conversation_id,
-                    'issue_key': self.payload.issue_key,
-                    'selected_repo': self.selected_repo,
-                    'resolved_org_id': str(resolved_org_id)
-                    if resolved_org_id
-                    else None,
-                },
-            )
-
-            # Store Jira conversation mapping
-            jira_conversation = JiraConversation(
-                conversation_id=self.conversation_id,
-                issue_id=self.payload.issue_id,
-                issue_key=self.payload.issue_key,
-                jira_user_id=self.jira_user.id,
-            )
-
-            await integration_store.create_conversation(jira_conversation)
-
-            return self.conversation_id
-
-        except Exception as e:
-            if isinstance(e, StartingConvoException):
-                raise
-            logger.error(
-                '[Jira] Failed to create conversation',
-                extra={'issue_key': self.payload.issue_key, 'error': str(e)},
-                exc_info=True,
-            )
-            raise StartingConvoException(f'Failed to create conversation: {str(e)}')
+        # Use V1 app conversation service
+        conversation_metadata = await self._create_v1_metadata()
+        await self._create_v1_conversation(jinja_env, conversation_metadata)
+        return self.conversation_id
 
     async def _create_v1_metadata(self) -> ConversationMetadata:
         """Create dummy conversation metadata for V1 conversations.
@@ -408,7 +282,7 @@ class JiraNewConversationView(JiraViewInterface):
             }
         )
 
-    async def _get_resolved_org_id(self) -> str | None:
+    async def _get_resolved_org_id(self) -> UUID | None:
         """Resolve the org ID for V1 conversations."""
         provider_tokens = await self.saas_user_auth.get_provider_tokens()
         if not provider_tokens:
@@ -626,12 +500,6 @@ class JiraFactory:
             jira_workspace=workspace,
             _decrypted_api_key=decrypted_api_key,
         )
-
-        # Check if V1 is enabled for this user
-        user_id = user.keycloak_user_id
-        view.v1_enabled = await is_v1_enabled_for_jira_resolver(user_id)
-
-        logger.info(f'[Jira V1]: User flag found for {user_id} is {view.v1_enabled}')
 
         # Fetch issue details (needed for repo inference)
         try:
