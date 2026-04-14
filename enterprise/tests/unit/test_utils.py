@@ -102,8 +102,8 @@ def test_infer_repo_from_message():
             ['user1/repo1', 'user2/repo2'],
         ),
         (
-            'Check facebook/react, microsoft/vscode, and google/angular',
-            ['facebook/react', 'microsoft/vscode', 'google/angular'],
+            'Check google/angular, microsoft/vscode, and facebook/react',
+            ['google/angular', 'microsoft/vscode', 'facebook/react'],
         ),
         (
             'URLs: https://github.com/python/cpython and https://bitbucket.org/atlassian/jira',
