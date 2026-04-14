@@ -16,6 +16,9 @@ from integrations.jira.jira_types import (
     RepositoryNotFoundError,
     StartingConvoException,
 )
+from integrations.jira.jira_v1_callback_processor import (
+    JiraV1CallbackProcessor,
+)
 from integrations.resolver_context import ResolverUserContext
 from integrations.resolver_org_router import resolve_org_for_repo
 from integrations.utils import (
@@ -269,11 +272,6 @@ class JiraNewConversationView(JiraViewInterface):
 
     def _create_jira_v1_callback_processor(self):
         """Create a V1 callback processor for Jira integration."""
-        from integrations.jira.jira_v1_callback_processor import (
-            JiraV1CallbackProcessor,
-        )
-
-
         return JiraV1CallbackProcessor(
             svc_acc_email=self.jira_workspace.svc_acc_email,
             decrypted_api_key=self._decrypted_api_key,
