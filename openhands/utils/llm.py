@@ -56,6 +56,30 @@ CLARIFAI_MODELS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Astraflow (UCloud ModelVerse) models.
+# Two region nodes are registered as independent providers:
+#   astraflow    — Global node: https://api-us-ca.umodelverse.ai/v1  (ASTRAFLOW_API_KEY)
+#   astraflow-cn — China node:  https://api.modelverse.cn/v1         (ASTRAFLOW_CN_API_KEY)
+# Both expose an OpenAI-compatible API and are accessed via litellm's openai/ prefix.
+# ---------------------------------------------------------------------------
+ASTRAFLOW_MODELS: list[str] = [
+    # Global node (api-us-ca.umodelverse.ai)
+    'astraflow/claude-3-5-haiku-20241022',
+    'astraflow/claude-3-5-sonnet-20241022',
+    'astraflow/gpt-4o',
+    'astraflow/gpt-4o-mini',
+    'astraflow/deepseek-ai/DeepSeek-V3',
+    'astraflow/deepseek-ai/DeepSeek-R1',
+    # China node (api.modelverse.cn)
+    'astraflow-cn/deepseek-ai/DeepSeek-V3',
+    'astraflow-cn/deepseek-ai/DeepSeek-R1',
+    'astraflow-cn/claude-3-5-haiku-20241022',
+    'astraflow-cn/claude-3-5-sonnet-20241022',
+    'astraflow-cn/gpt-4o',
+    'astraflow-cn/gpt-4o-mini',
+]
+
+# ---------------------------------------------------------------------------
 # Provider-assignment tables — derived from the SDK.
 #
 # LiteLLM returns some well-known models as *bare* names (e.g. ``gpt-5.2``
@@ -313,7 +337,10 @@ def get_supported_llm_models(
 
     # Assign canonical provider prefixes to bare LiteLLM names, then dedupe.
     all_models = (
-        openhands_models + CLARIFAI_MODELS + [_assign_provider(m) for m in model_list]
+        openhands_models
+        + CLARIFAI_MODELS
+        + ASTRAFLOW_MODELS
+        + [_assign_provider(m) for m in model_list]
     )
     unique_models = sorted(set(all_models))
 
