@@ -219,6 +219,20 @@ correct_num = 5
 api_key = ""
 model = "gpt-4o"
 
+# Astraflow (UCloud ModelVerse) — Global node
+# Sign up at https://www.umodelverse.ai/ and set ASTRAFLOW_API_KEY
+#[llm.astraflow]
+#model = "openai/claude-3-5-haiku-20241022"
+#api_key = ""  # or set env var ASTRAFLOW_API_KEY
+#base_url = "https://api-us-ca.umodelverse.ai/v1"
+
+# Astraflow (UCloud ModelVerse) — China node
+# Sign up at https://www.modelverse.cn/ and set ASTRAFLOW_CN_API_KEY
+#[llm.astraflow-cn]
+#model = "openai/deepseek-ai/DeepSeek-V3"
+#api_key = ""  # or set env var ASTRAFLOW_CN_API_KEY
+#base_url = "https://api.modelverse.cn/v1"
+
 # Example routing LLM configuration for multimodal model routing
 # Uncomment and configure to enable model routing with a secondary model
 #[llm.secondary_model]
